@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.animation.animateColorAsState
@@ -47,7 +48,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.PreparacionIngreso
 
@@ -147,13 +147,17 @@ internal fun HojaIngreso(
         containerColor = MaterialTheme.colorScheme.background,
     ) {
         val focoGafete = remember { FocusRequester() }
-        // El teclado del gafete se abre solo, pero recién cuando la hoja
-        // terminó de subir y la flecha de entrar: las tres cosas a la vez
-        // (hoja, flecha y teclado acomodando la hoja cuadro a cuadro) se
-        // trababan y la flecha no se llegaba a ver.
-        LaunchedEffect(arriba) {
-            if (arriba && preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
-                delay(MS_FLECHA.toLong())
+        // El teclado del gafete se pide apenas la hoja empieza a subir: hoja
+        // y teclado suben en un solo movimiento, y la flecha entra cuando ya
+        // todo quedó quieto ([rememberHojaArriba] espera también al
+        // teclado). Antes se esperaba a la hoja y a la flecha para recién
+        // abrir el teclado, y se veían tres pasos con pausas: subía, se
+        // detenía, la flecha, y otra vez arriba con el teclado (2026-10-27).
+        LaunchedEffect(Unit) {
+            if (preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
+                // Un cuadro: el campo ya tiene que estar en pantalla para
+                // poder tomar el foco.
+                withFrameNanos { }
                 runCatching { focoGafete.requestFocus() }
             }
         }
@@ -352,13 +356,15 @@ internal fun PantallaBloqueoIngreso(titulo: String, subtitulo: String, mensaje: 
 
 /// Botón de dos estados "S/G" (sin gafete), del mismo alto que el campo del
 /// número: apagado, con borde y letras en el color de la sección; encendido,
-/// relleno. El cambio de un estado al otro se funde.
+/// relleno como los botones principales. El cambio de un estado al otro se funde.
 @Composable
 private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Modifier = Modifier) {
     val acento = MaterialTheme.colorScheme.primary
-    val fondo by animateColorAsState(if (activo) acento else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
+    val relleno = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas
+    val sobreRelleno = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas
+    val fondo by animateColorAsState(if (activo) relleno else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
     val texto by animateColorAsState(
-        if (activo) MaterialTheme.colorScheme.onPrimary else acento,
+        if (activo) sobreRelleno else acento,
         tween(MS_FUNDIDO_ENTRADA),
         label = "textoSinGafete",
     )
@@ -367,7 +373,7 @@ private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Mo
             .size(width = 64.dp, height = 56.dp)
             .clip(FormaCampoBrisas)
             .background(fondo)
-            .border(1.dp, acento, FormaCampoBrisas)
+            .border(1.dp, if (activo) relleno else acento, FormaCampoBrisas)
             .toggleable(value = activo, role = Role.Switch, onValueChange = { onAlternar() })
             .semantics { contentDescription = "Sin gafete" },
         contentAlignment = Alignment.Center,

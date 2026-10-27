@@ -130,6 +130,8 @@ class ActivosViewModelTest {
         val seleccion = viewModel.seleccionIngreso
         assertTrue(seleccion is SeleccionIngreso.Formulario)
         assertEquals("Contratista Escaneado", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
+        // Se abrió el formulario: lo leído no queda en el buscador.
+        assertEquals("", viewModel.texto)
     }
 
     @Test
@@ -176,6 +178,30 @@ class ActivosViewModelTest {
 
         assertTrue(trabajo.isCompleted)
         assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Ninguna)
+        // No se abrió nada: lo leído queda a la vista para corregirlo a mano.
+        assertEquals("999999999", viewModel.texto)
+    }
+
+    @Test
+    fun `escanear a alguien bloqueado no deja lo leido en el buscador`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('222222222', 'Sin Acceso', 1, 'SWAT', 0, 0);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "222222222"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Bloqueada)
+        assertEquals("", viewModel.texto)
     }
 
     @Test

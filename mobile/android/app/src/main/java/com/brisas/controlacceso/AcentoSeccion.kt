@@ -21,18 +21,21 @@ import androidx.compose.ui.graphics.lerp
 /// Tonos elegidos para no parecerse a los de estado: verde azulado (no el
 /// verde pasto de "confirmado"), rojo KOF franco (el de error es más apagado
 /// y sólo sale como mensaje) y mango tostado (más oscuro que el ámbar de
-/// "vencido"). Contraste medido contra Tokyo Day / Tokyo Night en
-/// `AcentoSeccionTest`: el acento contra el fondo llega a 3:1 y el texto sobre
-/// el acento a 4,5:1.
+/// "vencido"). Los tonos viven en `PaletaLattis.kt`; contraste medido en
+/// `AcentoSeccionTest`: el acento contra el fondo llega a 3:1 y el texto
+/// sobre el acento y sobre el relleno a 4,5:1.
 @Immutable
 class AcentoSeccion(
+    /// Texto, íconos y pestaña activa.
     val color: Color,
     /// Texto e íconos sobre un relleno de [color].
     val sobreColor: Color,
+    /// Relleno de los botones principales: en oscuro más profundo que
+    /// [color], para que no queden como bloques fluorescentes.
+    val relleno: Color,
+    /// Texto sobre [relleno].
+    val sobreRelleno: Color,
 )
-
-private val TextoSobreAcentoClaro = Color(0xFFFFFFFF)
-private val TextoSobreAcentoOscuro = Color(0xFF16161E)
 
 /// `null` = sin acento propio: la sección conserva el de la paleta base
 /// (Rutas, que está en desarrollo y no se ve en la fila de pestañas).
@@ -42,18 +45,14 @@ private val TextoSobreAcentoOscuro = Color(0xFF16161E)
 /// columna "Clase" del escritorio) y con él cambia también la pestaña de
 /// arriba. En cualquier otra sección no cuenta.
 fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean, externo: TipoExterno? = null): AcentoSeccion? {
-    val color = when (seccion) {
-        SeccionPrincipal.ACTIVOS -> if (oscuro) Color(0xFF00E0B0) else Color(0xFF00806A)
-        SeccionPrincipal.KOF -> if (oscuro) Color(0xFFFF4B3E) else Color(0xFFC4161C)
-        SeccionPrincipal.EXTERNOS ->
-            if (externo == TipoExterno.POR_CORREO) {
-                if (oscuro) Color(0xFFB794FF) else Color(0xFF6D32C9)
-            } else {
-                if (oscuro) Color(0xFFFFA000) else Color(0xFFB85C00)
-            }
+    val paleta = if (oscuro) PaletaNoche else PaletaDia
+    val tono = when (seccion) {
+        SeccionPrincipal.ACTIVOS -> paleta.contratistas
+        SeccionPrincipal.KOF -> paleta.kof
+        SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) paleta.porCorreo else paleta.proveedores
         SeccionPrincipal.RUTAS -> return null
     }
-    return AcentoSeccion(color, if (oscuro) TextoSobreAcentoOscuro else TextoSobreAcentoClaro)
+    return AcentoSeccion(tono.acento, paleta.sobreAcento, tono.relleno, paleta.sobreRelleno)
 }
 
 /// Ejecuta [contenido] con el acento de [seccion] en lugar del color

@@ -217,10 +217,15 @@ class ActivosViewModel(
     /// de escaneo se queda a la vista hasta entonces y pasa directo a la
     /// confirmación, sin que la lista aparezca un instante en medio (~110 ms en
     /// la telemetría de staging, 2026-10-19).
+    ///
+    /// Lo leído se busca directo en el núcleo, sin pasar por el buscador, y
+    /// sólo queda escrito ahí si no se abrió nada (nadie, varios o un error):
+    /// así quien opera ve qué leyó la cámara y corrige un dígito a mano. Antes
+    /// se escribía siempre y había que borrarlo en cada salida posible; una
+    /// cédula que quedó escrita dejaba la lista sin recargar (2026-10-27).
     fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado): Job {
         val valor = documento.textoBusqueda ?: documento.numeroDocumento
         modo = ModoBusqueda.ENTRADA
-        texto = valor
         mensaje = null
         trabajoBusqueda?.cancel()
         val inicioBusqueda = System.nanoTime()
@@ -228,18 +233,19 @@ class ActivosViewModel(
             try {
                 val resultados = withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(valor) } }
                 resultadosBusqueda = resultados
+                // Acá y no al final: si `elegir` falla, deja su propio error.
+                error = null
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
                     elegir(contratista.id, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
                 }
-                // Ya estaba adentro: se abrió su salida y lo leído no queda
-                // en el buscador.
-                if (seleccionSalida != null) texto = ""
+                val seAbrio = seleccionIngreso !is SeleccionIngreso.Ninguna || seleccionSalida != null
+                texto = if (seAbrio) "" else valor
                 alertaTrasEscaneo(seleccionIngreso)?.let { alerta ->
                     alertaEscaneo = AvisoEscaneo(alerta, ++siguienteAlerta)
                 }
-                error = null
             } catch (excepcion: NucleoException) {
+                texto = valor
                 error = excepcion.message
             }
         }

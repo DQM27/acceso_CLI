@@ -31,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,18 +57,6 @@ const val TAG_DEBUG_OCR_LECTURA = "OcrLectura"
 /// pantallas no tenían el efecto de "mal encuadrado" que sí tiene
 /// identidad/gafete) para que las 4 pantallas se sientan consistentes.
 const val LARGO_MINIMO_TEXTO_INVALIDO = 10
-
-/// Colores de estado del marco/mensaje en cualquiera de las 4 pantallas de
-/// escaneo (identidad/gafete, vehículo de ruta, comprobante de ruta, carnet
-/// KOF) -- antes cada una declaraba su propia copia de los mismos valores
-/// hexadecimales. Fijos, no dependientes del tema (Classic/Brisas/Negro):
-/// acá el color comunica significado (buscando/inválido/confirmado/vencido),
-/// y ese significado debe leerse igual sin importar qué tema tenga activo
-/// quien opera.
-val ColorEscaneoBuscando = Color(0xFF9E9E9E)
-val ColorEscaneoInvalido = Color(0xFFE53935)
-val ColorEscaneoConfirmado = Color(0xFF43A047)
-val ColorEscaneoVencido = Color(0xFFFF8F00)
 
 /// Debounce genérico por repetición de frames: exige que el mismo candidato
 /// (según `clave`) aparezca `framesRequeridos` veces dentro de la ventana de

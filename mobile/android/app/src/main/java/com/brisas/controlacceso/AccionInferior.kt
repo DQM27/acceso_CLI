@@ -160,7 +160,7 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
             .height(ALTO_PILDORA_BUSQUEDA)
             .clip(FormaBusquedaBrisas)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = ALFA_VELO))
-            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), FormaBusquedaBrisas)
+            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, FormaBusquedaBrisas)
             .clickable(onClick = busqueda::abrir)
             .semantics {
                 contentDescription = busqueda.ayuda
@@ -228,7 +228,7 @@ internal fun BotonRedondoVidrio(
             .size(tamano)
             .clip(CircleShape)
             .background(superficie.copy(alpha = ALFA_VELO))
-            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), CircleShape)
+            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, CircleShape)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = descripcion
