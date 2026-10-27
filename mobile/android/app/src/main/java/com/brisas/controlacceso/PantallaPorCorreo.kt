@@ -388,7 +388,7 @@ private fun FilaCorreoActiva.datos(): DatosFilaCorreo = when (this) {
 }
 
 /// La misma tarjeta que contratistas ([TarjetaActivo]), con el motivo en
-/// vez de la empresa y el ícono de la PC en las filas remotas.
+/// vez de la empresa y la nube en las filas remotas.
 @Composable
 private fun FilaCorreoActivo(fila: FilaCorreoActiva, onConfirmarSalida: () -> Unit) {
     val (nombre, cedula, motivo, placa, gafete, ingreso, usuario, remota) = fila.datos()
@@ -397,7 +397,6 @@ private fun FilaCorreoActivo(fila: FilaCorreoActiva, onConfirmarSalida: () -> Un
         detalle = "$cedula · $motivo" + (placa?.let { " · $it" } ?: ""),
         gafeteNumero = gafete,
         fechaHoraIngreso = ingreso,
-        dioIngreso = usuario,
         otroEquipo = remota,
         onClick = onConfirmarSalida,
     )

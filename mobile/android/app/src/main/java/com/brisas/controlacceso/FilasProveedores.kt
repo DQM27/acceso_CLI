@@ -22,9 +22,8 @@ internal fun FilaProveedorActivo(fila: FilaProveedorActiva, onConfirmarSalida: (
 /// explícito del usuario en pruebas reales, 2026-09-17: unificar el orden
 /// de importancia entre las dos pantallas.
 ///
-/// Mayúscula + negrita + gafete en azul, y "dio ingreso" en la última
-/// línea -- mismo tratamiento que `FilaActivoLocal` (contratista), pedido
-/// explícito del usuario 2026-09-20 para unificar las dos tarjetas.
+/// La misma tarjeta que `FilaActivoLocal` (contratista), pedido explícito del
+/// usuario 2026-09-20 para unificar las dos; la placa va junto a la empresa.
 @Composable
 private fun FilaProveedorActivoLocal(
     registro: RegistroIngresoProveedorActivoResumen,
@@ -35,7 +34,6 @@ private fun FilaProveedorActivoLocal(
         detalle = "${registro.cedula} · ${registro.empresaNombre}" + (registro.placa?.let { " · $it" } ?: ""),
         gafeteNumero = registro.gafeteNumero,
         fechaHoraIngreso = registro.fechaHoraIngreso,
-        dioIngreso = registro.usuarioIngresoNombre,
         otroEquipo = false,
         onClick = onConfirmarSalida,
     )
@@ -50,7 +48,6 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
         detalle = "${remoto.cedula} · ${remoto.empresaNombre}" + (remoto.placa?.let { " · $it" } ?: ""),
         gafeteNumero = remoto.gafeteNumero,
         fechaHoraIngreso = remoto.horaEntrada,
-        dioIngreso = remoto.usuarioEntradaNombre,
         otroEquipo = true,
         onClick = onConfirmarSalida,
     )
