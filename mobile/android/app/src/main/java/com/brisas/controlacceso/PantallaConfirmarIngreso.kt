@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.animation.animateColorAsState
@@ -47,7 +48,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.PreparacionIngreso
 
@@ -147,13 +147,17 @@ internal fun HojaIngreso(
         containerColor = MaterialTheme.colorScheme.background,
     ) {
         val focoGafete = remember { FocusRequester() }
-        // El teclado del gafete se abre solo, pero recién cuando la hoja
-        // terminó de subir y la flecha de entrar: las tres cosas a la vez
-        // (hoja, flecha y teclado acomodando la hoja cuadro a cuadro) se
-        // trababan y la flecha no se llegaba a ver.
-        LaunchedEffect(arriba) {
-            if (arriba && preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
-                delay(MS_FLECHA.toLong())
+        // El teclado del gafete se pide apenas la hoja empieza a subir: hoja
+        // y teclado suben en un solo movimiento, y la flecha entra cuando ya
+        // todo quedó quieto ([rememberHojaArriba] espera también al
+        // teclado). Antes se esperaba a la hoja y a la flecha para recién
+        // abrir el teclado, y se veían tres pasos con pausas: subía, se
+        // detenía, la flecha, y otra vez arriba con el teclado (2026-10-27).
+        LaunchedEffect(Unit) {
+            if (preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
+                // Un cuadro: el campo ya tiene que estar en pantalla para
+                // poder tomar el foco.
+                withFrameNanos { }
                 runCatching { focoGafete.requestFocus() }
             }
         }
