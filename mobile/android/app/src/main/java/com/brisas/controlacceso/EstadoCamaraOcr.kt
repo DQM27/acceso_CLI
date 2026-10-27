@@ -102,6 +102,21 @@ class EstadoCamaraOcr(contexto: Context) {
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
     var trabajoResultado: Job? by mutableStateOf(null)
+
+    /// `true` desde que la vista previa muestra imagen. Hasta ahí la pantalla
+    /// queda en negro, sin el recuadro: abrir la cámara física tarda unos
+    /// 0,75 s (telemetría de staging, `ms_hasta_imagen_camara`, igual desde
+    /// la 1.6.3) y el recuadro encima del negro hacía notar esa espera como
+    /// una pantalla de carga (2026-10-27).
+    var vistaPreviaLista by mutableStateOf(false)
+        private set
+
+    /// La llama [iniciarCamara] con la primera imagen de la vista previa.
+    fun marcarVistaPreviaLista() {
+        metricas.registrarVistaPrevia()
+        vistaPreviaLista = true
+    }
+
     init {
         ejecutor.execute(::precalentar)
     }

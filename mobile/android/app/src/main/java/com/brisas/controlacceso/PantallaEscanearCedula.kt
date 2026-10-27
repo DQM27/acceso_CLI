@@ -298,6 +298,7 @@ private fun VistaCamaraCedula(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onVistaPreviaLista = camara::marcarVistaPreviaLista,
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
@@ -311,7 +312,7 @@ private fun VistaCamaraCedula(
         )
         MarcoGuiaCedula(
             color = colorMarco,
-            estado = estado,
+            visible = camara.vistaPreviaLista,
             progreso = progreso,
             region = regionAnimada(encuadre.region(orientacionEncuadre)),
             modifier = Modifier.fillMaxSize(),

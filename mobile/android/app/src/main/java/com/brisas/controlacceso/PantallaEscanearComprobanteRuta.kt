@@ -148,6 +148,7 @@ private fun VistaCamaraComprobanteRuta(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onVistaPreviaLista = camara::marcarVistaPreviaLista,
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
@@ -156,7 +157,7 @@ private fun VistaCamaraComprobanteRuta(
         )
         MarcoGuiaCedula(
             color = colorMarco,
-            estado = estado,
+            visible = camara.vistaPreviaLista,
             modifier = Modifier.fillMaxSize(),
             region = RegionGuiaOcr.COMPROBANTE_RUTA,
         )

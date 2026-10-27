@@ -1,19 +1,16 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -37,8 +34,13 @@ import androidx.compose.ui.unit.dp
 /// verificación de identidad tipo Jumio/Onfido): rectángulo con proporción
 /// de cédula real, fondo oscurecido fuera del área de captura (para que el
 /// recuadro "salte" en vez de perderse contra el resto de la imagen de
-/// cámara), esquinas marcadas en vez de un borde completo, y un barrido
-/// vertical dentro del recuadro en vez de horizontal sobre una línea suelta.
+/// cámara) y esquinas marcadas en vez de un borde completo.
+///
+/// Sin animaciones mientras se busca (pedido del usuario 2026-10-27): el
+/// barrido vertical que recorría el recuadro no aportaba nada y, como el
+/// marco aparecía antes que la imagen, hacía notar la espera de abrir la
+/// cámara como una pantalla de carga. Ahora el marco aparece recién con la
+/// primera imagen ([visible], ver `EstadoCamaraOcr.vistaPreviaLista`).
 ///
 /// En su propio archivo (separado de `PantallaEscanearCedula.kt`) porque es
 /// puramente dibujo de UI -- no conoce cámara, ML Kit, ni el estado de
@@ -48,7 +50,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MarcoGuiaCedula(
     color: Color,
-    estado: EstadoEscaneo,
+    // La cámara ya muestra imagen: hasta ahí no se dibuja nada.
+    visible: Boolean,
     modifier: Modifier = Modifier,
     // Misma región que de verdad se recorta antes del OCR (ver
     // `RegionGuiaOcr`/`analizarFrameOcr`) -- por defecto la angosta de
@@ -70,29 +73,17 @@ fun MarcoGuiaCedula(
     val colorMarco by animateColorAsState(color, tween(DURACION_CAMBIO_COLOR_MS), label = "colorMarcoOcr")
     val progresoSuave by animateFloatAsState(progreso, tween(DURACION_AVANCE_PROGRESO_MS), label = "progresoMarcoOcr")
 
-    // Rendimiento (revisión 2026-10-21): antes había dos animaciones infinitas
-    // (un pulso de color en las esquinas y el barrido) que redibujaban el
-    // marco en cada cuadro siempre, también con el documento ya leído, en
-    // pantallas que van justas de tiempo por cuadro con la cámara y el OCR.
-    // El pulso se fue (las esquinas quedan fijas) y el barrido sólo corre
-    // mientras se busca: leído o con error, el marco queda quieto y no se
-    // vuelve a dibujar hasta que algo cambia.
-    //
-    // Revisión 2026-10-25: el barrido redibujaba igual todo el marco (fondo
-    // oscuro y esquinas) en cada cuadro mientras se buscaba, que es casi todo
-    // el tiempo. Ahora la línea va en su propia capa y la animación sólo la
-    // desplaza (`translationY`): ni se recompone ni se vuelve a dibujar nada.
-    val barrido = remember { Animatable(0f) }
-    val buscando = estado == EstadoEscaneo.BUSCANDO
-    LaunchedEffect(buscando) {
-        if (!buscando) return@LaunchedEffect
-        while (true) {
-            barrido.snapTo(0f)
-            barrido.animateTo(1f, tween(DURACION_BARRIDO_MS, easing = FastOutSlowInEasing))
-        }
-    }
-
-    Box(modifier = modifier) {
+    // Entra con un fundido corto junto con la imagen de la cámara. Quieto el
+    // resto del tiempo: sólo se vuelve a dibujar cuando cambia el color o el
+    // progreso (antes hubo un pulso y un barrido que redibujaban en cada
+    // cuadro, en pantallas que van justas de tiempo con la cámara y el OCR).
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)),
+        exit = ExitTransition.None,
+        label = "marcoOcr",
+    ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val guia = rectGuia(size, region)
         val radioEsquina = 14.dp.toPx()
@@ -169,27 +160,6 @@ fun MarcoGuiaCedula(
         }
 
     }
-
-    // Barrido vertical dentro del recuadro -- sólo mientras se busca (una vez
-    // confirmado/inválido, un barrido en movimiento contradice el mensaje de
-    // "ya terminé de leer"). Se dibuja una vez arriba del recuadro y la capa
-    // baja con la animación.
-    if (buscando) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { translationY = rectGuia(size, region).height * barrido.value },
-        ) {
-            val guia = rectGuia(size, region)
-            drawLine(
-                color = color.copy(alpha = 0.9f),
-                start = Offset(guia.left + 6.dp.toPx(), guia.top),
-                end = Offset(guia.right - 6.dp.toPx(), guia.top),
-                strokeWidth = 2.5.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-    }
     }
 }
 
@@ -206,4 +176,3 @@ private fun rectGuia(size: Size, region: RegionGuiaOcr?): Rect {
 
 private const val DURACION_CAMBIO_COLOR_MS = 250
 private const val DURACION_AVANCE_PROGRESO_MS = 150
-private const val DURACION_BARRIDO_MS = 1600
