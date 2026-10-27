@@ -1,11 +1,8 @@
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +32,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.EncargadoRuta
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.SpanStyle
@@ -369,53 +365,22 @@ private fun FilaPrestamoGafeteProvisional(
     }
 }
 
-/// Mismo orden e interacción que las tarjetas de Contratista/Proveedores:
-/// nombre primero, tarjeta completa tocable (sin botón "Devolver" aparte)
-/// -- pedido explícito del usuario en pruebas reales, 2026-09-17.
+/// La misma tarjeta que contratistas ([TarjetaActivo], rediseño 2026-10-27):
+/// el encargado, su código de empleado, el gafete en el cuadro (en el rojo de
+/// KOF) y la hora de entrega. Quién lo entregó quedó para el historial.
 @Composable
 private fun FilaPrestamoGafeteProvisionalLocal(
     prestamo: PrestamoGafeteProvisionalActivoResumen,
     onConfirmarDevolucion: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onConfirmarDevolucion)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(textoResaltado(prestamo.encargadoNombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        // Mismo criterio que la tarjeta de Contratista activo
-        // (`PantallaActivos.kt::FilaActivoLocal`) -- mayúscula + negrita en
-        // toda la línea, gafete resaltado. En rojo (pedido explícito del
-        // usuario 2026-09-21, para distinguir de un vistazo un gafete
-        // PROVISIONAL KOF de uno de contratista): desde que KOF tiene su color
-        // de sección (rojo), sale de `primary` y no de `colorScheme.error`,
-        // que queda para los errores. "Código de empleado:"
-        // explícito (no sólo el valor pelado) para consistencia con el resto
-        // de tarjetas del mismo módulo (ver ControlesBrisas.kt/el diálogo de
-        // asignación más arriba en este archivo, que ya usan esa etiqueta).
-        Text(
-            buildAnnotatedString {
-                append("Código de empleado: ${prestamo.encargadoCodigoEmpleado} · ".uppercase())
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                    append("Gafete ${prestamo.gafeteNumero}".uppercase())
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // "· entregó X" -- mismo criterio que "dio ingreso X" en la tarjeta
-        // de Contratista activo, pedido explícito del usuario 2026-09-21.
-        Text(
-            "Entregado ${textoFechaHora(prestamo.fechaHoraEntrega)} · entregó ${prestamo.usuarioEntregaNombre}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    TarjetaActivo(
+        nombre = prestamo.encargadoNombre,
+        detalle = "Código ${prestamo.encargadoCodigoEmpleado}",
+        gafeteNumero = prestamo.gafeteNumero,
+        fechaHoraIngreso = prestamo.fechaHoraEntrega,
+        otroEquipo = false,
+        onClick = onConfirmarDevolucion,
+    )
 }
 
 /// Ver el doc-comment de [FilaGafeteProvisionalActiva] -- un préstamo
@@ -426,39 +391,14 @@ private fun FilaPrestamoGafeteProvisionalRemota(
     remoto: PrestamoGafeteProvisionalRemoto,
     onConfirmarDevolucion: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onConfirmarDevolucion)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(textoResaltado(remoto.encargadoNombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            // Mismo criterio que FilaPrestamoGafeteProvisionalLocal -- ver ese
-            // comentario.
-            Text(
-                buildAnnotatedString {
-                    append("Código de empleado: ${remoto.encargadoCodigoEmpleado} · ".uppercase())
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                        append("Gafete ${remoto.gafeteNumero}".uppercase())
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "Entregado ${textoFechaHora(remoto.horaEntrega)} · entregó ${remoto.usuarioEntregaNombre}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // El mismo ícono que el resto de las listas, en vez de texto.
-        IconoOtroEquipo()
-    }
+    TarjetaActivo(
+        nombre = remoto.encargadoNombre,
+        detalle = "Código ${remoto.encargadoCodigoEmpleado}",
+        gafeteNumero = remoto.gafeteNumero,
+        fechaHoraIngreso = remoto.horaEntrega,
+        otroEquipo = true,
+        onClick = onConfirmarDevolucion,
+    )
 }
 
 /// La misma ficha que la salida de contratistas ([DialogoRegistrarSalida]),

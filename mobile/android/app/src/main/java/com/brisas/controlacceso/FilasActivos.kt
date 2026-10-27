@@ -20,10 +20,10 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -75,14 +75,15 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
 }
 
 /// Tarjeta de quien está adentro (tocar = salida). La comparten
-/// contratistas, proveedores, por correo y visitas para que se vean y se usen
-/// igual (pedido del usuario 2026-10-06).
+/// contratistas, proveedores, por correo, visitas y los gafetes de KOF para
+/// que se vean y se usen igual (pedido del usuario 2026-10-06).
 ///
-/// Sólo lo esencial (rediseño 2026-10-27, "menos es más"): el nombre; la
-/// cédula y la empresa en gris; la hora (con el día sólo si fue otro día); el
-/// gafete en una pastilla a la derecha, que es lo que se compara en la
-/// salida; y la nube si entró por otro equipo. Quién dio el ingreso quedó
-/// para el historial del escritorio y el panel.
+/// Sólo lo esencial (rediseño 2026-10-27, "menos es más"), en dos renglones:
+/// a la izquierda el nombre y, en gris, la cédula y la empresa; a la derecha
+/// el gafete en un cuadro redondeado (lo que se compara en la salida) y
+/// debajo la hora, todas alineadas en columna para leerlas de un vistazo (con
+/// el día sólo si fue otro día), con la nube si entró por otro equipo. Quién
+/// dio el ingreso quedó para el historial del escritorio y el panel.
 @Composable
 internal fun TarjetaActivo(
     nombre: String,
@@ -132,43 +133,53 @@ internal fun TarjetaActivo(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val hora = remember(fechaHoraIngreso) { horaIngreso(fechaHoraIngreso) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    hora.texto,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (hora.deOtroDia) ColorTextoAdvertenciaBrisas else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (hora.deOtroDia) FontWeight.SemiBold else FontWeight.Normal,
-                )
-                if (otroEquipo) {
-                    Spacer(Modifier.width(6.dp))
-                    IconoOtroEquipo(Modifier.size(14.dp))
-                }
-            }
         }
         Spacer(Modifier.width(12.dp))
-        PastillaGafete(gafeteNumero)
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            CuadroGafete(gafeteNumero)
+            val hora = remember(fechaHoraIngreso) { horaIngreso(fechaHoraIngreso) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (otroEquipo) {
+                    IconoOtroEquipo(Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    hora.texto,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (hora.deOtroDia) ColorTextoAdvertenciaBrisas else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (hora.deOtroDia) FontWeight.Bold else FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
-/// El número de gafete, en el color de la sección; "S/G" en gris si entró
-/// sin gafete.
+/// El número de gafete en un cuadro de esquinas redondeadas (pedido del
+/// usuario 2026-10-27: cuadrado, no píldora), en el color de la sección;
+/// "S/G" en gris si entró sin gafete.
 @Composable
-private fun PastillaGafete(gafeteNumero: Long?) {
+private fun CuadroGafete(gafeteNumero: Long?) {
     val conGafete = gafeteNumero != null
-    Text(
-        gafeteNumero?.toString() ?: "S/G",
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-        color = if (conGafete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
+    Box(
         modifier = Modifier
-            .widthIn(min = 44.dp)
-            .clip(RoundedCornerShape(percent = 50))
+            .defaultMinSize(minWidth = 44.dp, minHeight = 30.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(if (conGafete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-            .semantics { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },
-    )
+            .padding(horizontal = 8.dp)
+            .semantics(mergeDescendants = true) { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            gafeteNumero?.toString() ?: "S/G",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (conGafete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /// La marca de "entró por otro equipo de la unidad": una nube, la misma en
