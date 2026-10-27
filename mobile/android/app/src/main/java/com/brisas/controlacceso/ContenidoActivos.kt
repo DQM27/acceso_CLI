@@ -14,15 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -356,7 +353,8 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// segundo toque registre dos veces mientras baja.
 ///
 /// Con [aviso] (se escaneó a alguien que ya estaba adentro, pedido del
-/// usuario 2026-10-26): triángulo ámbar en vez del ícono de salida, el aviso
+/// usuario 2026-10-26): señal de tránsito ([SenalAdvertencia]) en vez del
+/// ícono de salida, el aviso
 /// en ámbar arriba del nombre y la pregunta antes del botón, para que no se
 /// confunda con un ingreso.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -372,6 +370,7 @@ internal fun DialogoRegistrarSalida(
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
+    val arriba = rememberHojaArriba(estado)
     fun cerrarY(accionAlCerrar: () -> Unit) {
         alcance.launch {
             if (confirmado) delay(MS_ANTES_DE_BAJAR)
@@ -390,17 +389,9 @@ internal fun DialogoRegistrarSalida(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (aviso != null) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(ColorAdvertenciaBrisas.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = ColorAdvertenciaBrisas)
-                }
+                SenalAdvertencia(arriba = arriba)
             } else {
-                IconoPaso(Paso.SALIDA, arriba = rememberHojaArriba(estado), siguiendo = confirmado)
+                IconoPaso(Paso.SALIDA, arriba = arriba, siguiendo = confirmado)
             }
             if (aviso != null) {
                 Text(
