@@ -400,7 +400,7 @@ internal fun DialogoRegistrarSalida(
                     Icon(Icons.Default.Warning, contentDescription = null, tint = ColorAdvertenciaBrisas)
                 }
             } else {
-                IconoPaso(Paso.SALIDA, siguiendo = confirmado)
+                IconoPaso(Paso.SALIDA, arriba = rememberHojaArriba(estado), siguiendo = confirmado)
             }
             if (aviso != null) {
                 Text(

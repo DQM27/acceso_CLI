@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.animation.animateColorAsState
@@ -45,7 +46,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import uniffi.control_acceso_mobile.MedioIngreso
@@ -150,41 +150,57 @@ internal fun HojaIngreso(
         }
     }
 
+    val arriba = rememberHojaArriba(estado)
     ModalBottomSheet(
         onDismissRequest = onCancelar,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
     ) {
         val focoGafete = remember { FocusRequester() }
-        // El teclado del gafete se abre solo, pero cuando la hoja ya terminó
-        // de subir: abrirlo a mitad de camino la hace saltar.
-        LaunchedEffect(Unit) {
-            if (preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
-                delay(MS_ENTRADA.toLong())
+        // El teclado del gafete se abre solo, pero recién cuando la hoja
+        // terminó de subir y la flecha de entrar: las tres cosas a la vez
+        // (hoja, flecha y teclado acomodando la hoja cuadro a cuadro) se
+        // trababan y la flecha no se llegaba a ver.
+        LaunchedEffect(arriba) {
+            if (arriba && preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty()) {
+                delay(MS_FLECHA.toLong())
                 runCatching { focoGafete.requestFocus() }
+            }
+        }
+        // Si lo de abajo no entra (nombre largo, vehículo con placa y el
+        // teclado abierto), la hoja se corre sola hasta el fondo: los botones
+        // nunca quedan tapados. Sólo se mueve cuando cambia lo que sobra.
+        val desplazamiento = rememberScrollState()
+        LaunchedEffect(desplazamiento) {
+            snapshotFlow { desplazamiento.maxValue }.collect { sobra ->
+                if (sobra > 0) desplazamiento.scrollTo(sobra)
             }
         }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(desplazamiento)
                 .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconoPaso(Paso.INGRESO, siguiendo = registrado && !abierta)
-            Text(
-                preparacion.nombre,
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            Text(
-                "${preparacion.cedula} · ${preparacion.empresaNombre}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
-            )
+            // En fila y no centrado uno debajo del otro como en la salida:
+            // con el teclado del gafete abierto no sobra alto, y un nombre de
+            // dos líneas dejaba "Cancelar" debajo del teclado (2026-10-27).
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconoPaso(Paso.INGRESO, arriba = arriba, siguiendo = registrado && !abierta, tamano = 48.dp)
+                Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
+                    Text(preparacion.nombre, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "${preparacion.cedula} · ${preparacion.empresaNombre}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
 
             // Texto y cuenta de días del núcleo (`aviso_praind`, con su reloj).
             preparacion.avisoPraind?.let { aviso ->
@@ -199,14 +215,10 @@ internal fun HojaIngreso(
                 )
             }
 
-            Text(
-                "Medio de ingreso",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 6.dp),
-            )
             // El mismo control segmentado que el resto de la app, en vez de dos
-            // botones de radio de Material.
+            // botones de radio de Material. Sin la etiqueta "Medio de
+            // ingreso" que llevaba encima: "Caminando | Vehículo" se explica
+            // solo y ese alto hacía falta con el teclado abierto.
             val medios = listOf(MedioIngreso.CAMINANDO, MedioIngreso.VEHICULO)
             FilaPildoras(
                 opciones = listOf("Caminando", "Vehículo"),
