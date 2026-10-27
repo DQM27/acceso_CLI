@@ -50,14 +50,9 @@ internal enum class Paso(val sentido: Float) {
     SALIDA(-1f),
 }
 
-/// Cuánto tarda la flecha en seguir de largo antes de que la hoja empiece a
-/// bajar (ver [IconoPaso]): lo justo para que se vea, sin demorar el cierre.
-internal const val MS_ANTES_DE_BAJAR = 90L
-
 /// Lo que dura la entrada de la flecha. La hoja de ingreso abre el teclado
 /// recién cuando termina: las dos cosas a la vez se trababan.
 internal const val MS_FLECHA = 320
-private const val MS_REMATE = 200
 
 /// `true` desde que la hoja terminó de subir (y ya no vuelve a `false`). La
 /// flecha arranca recién ahí: mientras la hoja sube, el ojo sigue a la hoja y
@@ -147,17 +142,17 @@ internal fun SenalAdvertencia(arriba: Boolean, modifier: Modifier = Modifier) {
 
 /// El ícono redondo de las hojas de ingreso y de salida. La flecha entra
 /// deslizándose en el sentido del [paso] una sola vez, cuando la hoja ya está
-/// [arriba] (nunca en bucle: el operador la ve cientos de veces por turno) y,
-/// con [siguiendo] (se confirmó), sigue de largo y se desvanece mientras la
-/// hoja baja. Quieta también se entiende: la de ingreso apunta a la puerta,
-/// la de salida se aleja de ella (el ícono de salida va en espejo para
-/// apuntar a la izquierda). Sólo se mueve en la fase de dibujo: no vuelve a
-/// medir ni a componer.
+/// [arriba] (nunca en bucle: el operador la ve cientos de veces por turno).
+/// Al confirmar no hace nada: la hoja se cierra en el acto y una animación de
+/// cierre no se llegaba a ver (se probó y se quitó, 2026-10-27). Quieta
+/// también se entiende: la de ingreso apunta a la puerta, la de salida se
+/// aleja de ella (el ícono de salida va en espejo para apuntar a la
+/// izquierda). Sólo se mueve en la fase de dibujo: no vuelve a medir ni a
+/// componer.
 @Composable
 internal fun IconoPaso(
     paso: Paso,
     arriba: Boolean,
-    siguiendo: Boolean,
     modifier: Modifier = Modifier,
     tamano: Dp = 56.dp,
 ) {
@@ -168,11 +163,6 @@ internal fun IconoPaso(
         if (!arriba) return@LaunchedEffect
         launch { opacidad.animateTo(1f, tween(MS_FUNDIDO_ENTRADA)) }
         desplazamiento.animateTo(0f, tween(MS_FLECHA, easing = CurvaEntrada))
-    }
-    LaunchedEffect(siguiendo) {
-        if (!siguiendo) return@LaunchedEffect
-        launch { opacidad.animateTo(0f, tween(MS_REMATE, easing = CurvaSalida)) }
-        desplazamiento.animateTo(paso.sentido * 2, tween(MS_REMATE, easing = CurvaSalida))
     }
     val recorrido = with(LocalDensity.current) { 14.dp.toPx() }
     Box(

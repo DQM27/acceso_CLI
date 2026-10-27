@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 
@@ -347,16 +346,15 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// demasiado para confirmar una salida). Lo comparten contratistas,
 /// proveedores, correo, visitas y KOF.
 ///
-/// Al confirmar, la flecha sigue de largo hacia la izquierda ([IconoPaso]),
-/// el panel baja y recién entonces avisa: si el que llama lo quitara de la
-/// composición en el acto, desaparecería de golpe. `confirmado` evita que un
-/// segundo toque registre dos veces mientras baja.
+/// Al abrir, la flecha entra hacia la izquierda ([IconoPaso]). Al confirmar,
+/// el panel baja primero y recién entonces avisa: si el que llama lo quitara
+/// de la composición en el acto, desaparecería de golpe. `confirmado` evita
+/// que un segundo toque registre dos veces mientras baja.
 ///
 /// Con [aviso] (se escaneó a alguien que ya estaba adentro, pedido del
 /// usuario 2026-10-26): señal de tránsito ([SenalAdvertencia]) en vez del
-/// ícono de salida, el aviso
-/// en ámbar arriba del nombre y la pregunta antes del botón, para que no se
-/// confunda con un ingreso.
+/// ícono de salida, el aviso en ámbar arriba del nombre y la pregunta antes
+/// del botón, para que no se confunda con un ingreso.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DialogoRegistrarSalida(
@@ -372,10 +370,7 @@ internal fun DialogoRegistrarSalida(
     var confirmado by remember { mutableStateOf(false) }
     val arriba = rememberHojaArriba(estado)
     fun cerrarY(accionAlCerrar: () -> Unit) {
-        alcance.launch {
-            if (confirmado) delay(MS_ANTES_DE_BAJAR)
-            estado.hide()
-        }.invokeOnCompletion { accionAlCerrar() }
+        alcance.launch { estado.hide() }.invokeOnCompletion { accionAlCerrar() }
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -391,7 +386,7 @@ internal fun DialogoRegistrarSalida(
             if (aviso != null) {
                 SenalAdvertencia(arriba = arriba)
             } else {
-                IconoPaso(Paso.SALIDA, arriba = arriba, siguiendo = confirmado)
+                IconoPaso(Paso.SALIDA, arriba = arriba)
             }
             if (aviso != null) {
                 Text(

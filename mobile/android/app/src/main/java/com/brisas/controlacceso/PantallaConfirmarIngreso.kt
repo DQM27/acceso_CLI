@@ -97,7 +97,7 @@ internal fun rememberCamposIngreso(clave: Any?): CamposIngreso =
 ///
 /// [abierta] la decide el ViewModel: cuando suelta la selección (se registró
 /// o se canceló) la hoja baja y recién entonces avisa con [onCerrada], así no
-/// desaparece de golpe. Si se registró, la flecha sigue de largo mientras baja.
+/// desaparece de golpe.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HojaIngreso(
@@ -116,16 +116,9 @@ internal fun HojaIngreso(
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val teclado = LocalSoftwareKeyboardController.current
     val hapticos = rememberHapticos()
-    // Se tocó "Registrar ingreso" y todavía no volvió un error: si la hoja se
-    // cierra así, fue porque entró.
-    var registrado by remember { mutableStateOf(false) }
-    LaunchedEffect(error) {
-        if (error != null) registrado = false
-    }
     LaunchedEffect(abierta) {
         if (abierta) return@LaunchedEffect
         teclado?.hide()
-        if (registrado) delay(MS_ANTES_DE_BAJAR)
         estado.hide()
         onCerrada()
     }
@@ -144,10 +137,7 @@ internal fun HojaIngreso(
     // La tecla ✓ del teclado registra (el gafete suele ser lo último que se
     // escribe): sin bajar la vista a buscar el botón.
     val registrarSiListo = {
-        if (puedeRegistrar) {
-            registrado = true
-            onRegistrar(campos.medio, campos.gafeteTexto, campos.placaTexto)
-        }
+        if (puedeRegistrar) onRegistrar(campos.medio, campos.gafeteTexto, campos.placaTexto)
     }
 
     val arriba = rememberHojaArriba(estado)
@@ -190,7 +180,7 @@ internal fun HojaIngreso(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconoPaso(Paso.INGRESO, arriba = arriba, siguiendo = registrado && !abierta, tamano = 48.dp)
+                IconoPaso(Paso.INGRESO, arriba = arriba, tamano = 48.dp)
                 Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                     Text(preparacion.nombre, style = MaterialTheme.typography.titleLarge)
                     Text(
