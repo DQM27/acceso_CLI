@@ -31,14 +31,34 @@ import kotlinx.coroutines.Job
 ///
 /// `mutableStateOf` (no propiedades simples) para lo que se asigna DESPUÉS
 /// de construir el estado, dentro del `factory` de `AndroidView`.
+/// El lector de texto de ML Kit, uno solo para todo el proceso (2026-10-27).
+/// Antes cada apertura de cámara creaba el suyo, cargaba el modelo (cientos
+/// de ms de CPU, justo mientras se abría la cámara) y lo cerraba al salir:
+/// cada escaneo pagaba esa carga de nuevo. Ahora se carga una vez y queda en
+/// memoria. Nunca se cierra: vive lo que vive el proceso.
+///
+/// El cliente lee del disco al crearse: StrictMode lo marcaba en el hilo
+/// principal (staging, 2026-10-19). Se crea en el primer hilo que lo pide,
+/// que nunca es el principal: [precalentar] corre en segundo plano y las
+/// cámaras lo usan desde el hilo del analizador.
+internal object LectorTextoOcr {
+    val cliente: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val precalentado = AtomicBoolean(false)
+
+    /// El primer `process` carga el modelo. Con una imagen mínima, una sola
+    /// vez por proceso; las llamadas siguientes no hacen nada.
+    fun precalentar() {
+        if (!precalentado.compareAndSet(false, true)) return
+        val vacia = InputImage.fromByteArray(ByteArray(32 * 32 * 3 / 2), 32, 32, 0, InputImage.IMAGE_FORMAT_NV21)
+        cliente.process(vacia)
+    }
+}
+
 class EstadoCamaraOcr(contexto: Context) {
     val ejecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
-    /// El cliente de ML Kit lee del disco al crearse: StrictMode lo marcaba
-    /// en el hilo principal al abrir la cámara (staging, 2026-10-19,
-    /// `EstadoCamaraOcr.<init>`). Se crea en el hilo del analizador -- el
-    /// único que lo usa -- al precalentar, y ahí mismo se cierra.
-    val recognizer: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    /// El de todo el proceso ([LectorTextoOcr]).
+    val recognizer: TextRecognizer get() = LectorTextoOcr.cliente
     val ejecutorPrincipal: Executor = ContextCompat.getMainExecutor(contexto)
 
     /// El hilo del analizador, para los listeners de ML Kit (ver
@@ -102,8 +122,25 @@ class EstadoCamaraOcr(contexto: Context) {
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
     var trabajoResultado: Job? by mutableStateOf(null)
+
+    /// `true` desde que la vista previa muestra imagen. Hasta ahí la pantalla
+    /// queda en negro, sin el recuadro: abrir la cámara física tarda unos
+    /// 0,75 s (telemetría de staging, `ms_hasta_imagen_camara`, igual desde
+    /// la 1.6.3) y el recuadro encima del negro hacía notar esa espera como
+    /// una pantalla de carga (2026-10-27).
+    var vistaPreviaLista by mutableStateOf(false)
+        private set
+
+    /// La llama [iniciarCamara] con la primera imagen de la vista previa.
+    fun marcarVistaPreviaLista() {
+        metricas.registrarVistaPrevia()
+        vistaPreviaLista = true
+    }
+
     init {
-        ejecutor.execute(::precalentar)
+        // Normalmente ya lo precalentó la Activity al arrancar; si no, se hace
+        // acá, en el hilo del analizador.
+        ejecutor.execute(LectorTextoOcr::precalentar)
     }
 
     /// Ejecuta `bloque` en el hilo principal si la sesión sigue viva. Los
@@ -113,18 +150,11 @@ class EstadoCamaraOcr(contexto: Context) {
         ejecutorPrincipal.execute { if (sesionActiva.get()) bloque() }
     }
 
-    /// El primer `process` carga el modelo (cientos de ms). Hacerlo con
-    /// una imagen mínima mientras la cámara arranca -- que igual tarda --
-    /// evita que ese costo caiga sobre el primer frame real.
-    private fun precalentar() {
-        val vacia = InputImage.fromByteArray(ByteArray(32 * 32 * 3 / 2), 32, 32, 0, InputImage.IMAGE_FORMAT_NV21)
-        recognizer.process(vacia)
-    }
-
     /// Mismo cierre que cada pantalla hacía a mano en su propio
     /// `onDispose` -- invalida callbacks de CameraX/ML Kit que terminen
     /// después de salir de la composición, desata la cámara del ciclo de
-    /// vida anterior, y libera hilo y modelos.
+    /// vida anterior, y libera el hilo. El modelo de ML Kit no se cierra: es
+    /// el de todo el proceso ([LectorTextoOcr]).
     fun liberar() {
         val inicioCierre = System.nanoTime()
         sesionActiva.set(false)
@@ -134,13 +164,9 @@ class EstadoCamaraOcr(contexto: Context) {
         val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
         val finUnbind = System.nanoTime()
-        // El modelo se cierra en el hilo del analizador, detrás de lo que
-        // quede en su cola: ningún frame usa un modelo ya cerrado, y si la
-        // pantalla se cerró antes de precalentar, igual se crea y se cierra.
-        if (!ejecutor.isShutdown) {
-            ejecutor.execute { recognizer.close() }
-            ejecutor.shutdown()
-        }
+        // El hilo termina lo que quede en su cola (los frames ya ven la sesión
+        // cerrada y no procesan nada) y se apaga.
+        if (!ejecutor.isShutdown) ejecutor.shutdown()
         val finCierre = System.nanoTime()
         if (Telemetria.activa) {
             Telemetria.evento(
@@ -149,9 +175,11 @@ class EstadoCamaraOcr(contexto: Context) {
                     "pantalla" to Telemetria.pantallaActual(),
                     "abierta_desde" to Telemetria.pantallaAnterior(),
                     // Cuánto tardó cerrar la cámara en el hilo que la cierra (el
-                    // principal): `unbind` y luego encargar el cierre del
-                    // modelo de ML Kit al hilo del analizador. Si esto es
-                    // grande, la pantalla se traba justo al salir del escaneo.
+                    // principal): `unbind` y luego apagar el hilo del analizador
+                    // (`ms_cierre_modelos` conserva el nombre de cuando ahí se
+                    // cerraba también el modelo de ML Kit, para poder comparar
+                    // con versiones anteriores). Si esto es grande, la pantalla
+                    // se traba justo al salir del escaneo.
                     "ms_cierre_unbind" to milisegundosDesde(inicioCierre, finUnbind),
                     "ms_cierre_modelos" to milisegundosDesde(finUnbind, finCierre),
                     "ms_cierre_total" to milisegundosDesde(inicioCierre, finCierre),

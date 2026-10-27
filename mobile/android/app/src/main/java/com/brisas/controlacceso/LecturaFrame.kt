@@ -125,6 +125,7 @@ class MetricasOcr(
 ) {
     private val inicio = reloj()
     private var msHastaImagenCamara: Long? = null
+    private var msHastaVistaPrevia: Long? = null
     private var primerFrame = 0L
     private var ultimoFrame = 0L
     private var frames = 0
@@ -174,6 +175,13 @@ class MetricasOcr(
     @Synchronized
     fun registrarImagenCamara() {
         if (habilitadas && msHastaImagenCamara == null) msHastaImagenCamara = (reloj() - inicio) / 1_000_000
+    }
+
+    /// La vista previa empezó a mostrar imagen: lo que de verdad ve quien
+    /// opera (puede llegar antes que la primera imagen del analizador).
+    @Synchronized
+    fun registrarVistaPrevia() {
+        if (habilitadas && msHastaVistaPrevia == null) msHastaVistaPrevia = (reloj() - inicio) / 1_000_000
     }
 
     /// Un frame que terminó de pasar por ML Kit.
@@ -292,6 +300,7 @@ class MetricasOcr(
     fun datos(): Map<String, Any?> = mapOf(
         "ms_sesion" to (reloj() - inicio) / 1_000_000,
         "ms_hasta_imagen_camara" to msHastaImagenCamara,
+        "ms_hasta_vista_previa" to msHastaVistaPrevia,
         "ms_hasta_confirmar" to msHastaConfirmar,
         "frames" to frames,
         "fps" to framesPorSegundo(),

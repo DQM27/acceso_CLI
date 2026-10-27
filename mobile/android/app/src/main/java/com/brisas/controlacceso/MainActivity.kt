@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.concurrent.thread
 
 /// Tope de ancho para todo el contenido de la app — sin esto, en horizontal
 /// (o en una tablet) cualquier pantalla se estira de punta a punta porque
@@ -80,6 +81,10 @@ class MainActivity : ComponentActivity() {
         // Después del primer dibujo, para no competir con el arranque; la
         // instancia queda cacheada en el proceso (`getInstance` no bloquea).
         window.decorView.post { ProcessCameraProvider.getInstance(applicationContext) }
+        // Lo mismo con el modelo de lectura de texto ([LectorTextoOcr]): se
+        // carga una vez por proceso, en segundo plano (lee del disco), y la
+        // primera cámara ya lo encuentra listo.
+        window.decorView.post { thread(name = "precalentar-ocr", isDaemon = true) { LectorTextoOcr.precalentar() } }
         if (Telemetria.activa) {
             // Duración de cada frame y fin del arranque (primer dibujo
             // completo). Sólo en el build de diagnóstico.

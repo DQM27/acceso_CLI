@@ -138,13 +138,14 @@ private fun VistaCamaraCarnetKof(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onVistaPreviaLista = camara::marcarVistaPreviaLista,
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, visible = camara.vistaPreviaLista, modifier = Modifier.fillMaxSize())
         MensajeEscaneo(
             ultimoMensaje,
             tono = tonoEscaneo(estado),

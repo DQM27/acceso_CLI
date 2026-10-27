@@ -70,8 +70,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 46
-        versionName = "1.8.1"
+        versionCode = 47
+        versionName = "1.8.2"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -212,9 +212,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.camera:camera-camera2:1.5.0")
-    implementation("androidx.camera:camera-lifecycle:1.5.0")
-    implementation("androidx.camera:camera-view:1.5.0")
+    // 1.6: CameraX corre sobre CameraPipe, el mismo motor de la cámara de los
+    // Pixel (2026-10-27, para bajar lo que tarda en abrir; se mide con
+    // `ocr_sesion.ms_hasta_vista_previa` en el build de diagnóstico).
+    implementation("androidx.camera:camera-camera2:1.6.2")
+    implementation("androidx.camera:camera-lifecycle:1.6.2")
+    implementation("androidx.camera:camera-view:1.6.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // PDF417 del reverso de la cédula anterior (sólo cédula y nombre, ver

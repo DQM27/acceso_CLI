@@ -12,6 +12,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import uniffi.control_acceso_mobile.LineaOcr
@@ -122,8 +123,11 @@ fun iniciarCamara(
     analisis: ImageAnalysis,
     sesionActiva: AtomicBoolean,
     onCameraProviderListo: (ProcessCameraProvider, Preview) -> Unit,
+    // La vista previa ya muestra imagen (ver `EstadoCamaraOcr.vistaPreviaLista`).
+    onVistaPreviaLista: () -> Unit,
     onFallo: (String) -> Unit,
 ) {
+    alMostrarPrimeraImagen(previewView, lifecycleOwner, onVistaPreviaLista)
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
         {
@@ -164,6 +168,25 @@ fun iniciarCamara(
         },
         ContextCompat.getMainExecutor(ctx),
     )
+}
+
+/// Una sola vez, cuando la vista previa pasa a `STREAMING` (ya hay imagen en
+/// pantalla, no sólo la cámara abierta). El observador se quita solo: la
+/// pantalla de escaneo se va mucho antes que el ciclo de vida de la Activity,
+/// que es el dueño, y si no quedaría sosteniendo la `PreviewView`.
+private fun alMostrarPrimeraImagen(
+    previewView: PreviewView,
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    alMostrar: () -> Unit,
+) {
+    val estado = previewView.previewStreamState
+    lateinit var observador: Observer<PreviewView.StreamState>
+    observador = Observer { cambio ->
+        if (cambio != PreviewView.StreamState.STREAMING) return@Observer
+        estado.removeObserver(observador)
+        alMostrar()
+    }
+    estado.observe(lifecycleOwner, observador)
 }
 
 // Hubo acá un empujón manual de autofocus al centro (`FocusMeteringAction`)
