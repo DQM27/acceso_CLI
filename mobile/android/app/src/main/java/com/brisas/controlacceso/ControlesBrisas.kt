@@ -483,16 +483,16 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val forma = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
-            .height(48.dp)
+            .height(40.dp)
             .clip(forma)
             .background(Color.Black.copy(alpha = 0.55f))
             .border(1.dp, Color.White.copy(alpha = 0.7f), forma)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
 }
