@@ -258,22 +258,32 @@ class ActivosViewModel(
 
     fun refrescar() {
         buscar()
-        if (modo != ModoBusqueda.ENTRADA || texto.isNotBlank()) actualizarTotalAdentro()
+        if (modo != ModoBusqueda.ENTRADA || texto.isNotBlank()) recargarActivos()
     }
 
-    /// Recuenta [totalAdentro] cuando la búsqueda en curso no trae la lista
-    /// completa (en modo Ingreso con el campo vacío ya lo cuenta [buscar]).
-    private fun actualizarTotalAdentro() {
+    /// Relee la lista de adentro y [totalAdentro] cuando la búsqueda en curso
+    /// no la trae (en modo Ingreso con el campo vacío ya la lee [buscar]). En
+    /// modo Ingreso la lista se ve también con algo escrito en el buscador:
+    /// antes acá sólo se recontaba el globito y, con una cédula escaneada
+    /// pero sin ingresar, quien salía seguía en la lista (pruebas reales,
+    /// 2026-10-27).
+    private fun recargarActivos() {
         viewModelScope.launch {
             try {
-                val locales = withContext(dispatcherIO) {
-                    medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA) }
-                }
-                totalAdentro = locales.size + remotosSeguro().size
+                activos = leerActivos()
+                totalAdentro = activos.size
             } catch (_: NucleoException) {
-                // El globito queda como estaba; la lista ya muestra el error.
+                // La lista queda como estaba; la búsqueda ya muestra el error.
             }
         }
+    }
+
+    /// Lo abierto en este teléfono y, después, lo del otro equipo de la unidad.
+    private suspend fun leerActivos(): List<FilaActiva> {
+        val locales = withContext(dispatcherIO) {
+            medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA) }
+        }
+        return locales.map { FilaActiva.Local(it) } + remotosSeguro().map { FilaActiva.Remota(it) }
     }
 
     /// `listarIngresosRemotos` no hace red -- lee la caché local que ya
@@ -301,11 +311,7 @@ class ActivosViewModel(
                 when (modo) {
                     ModoBusqueda.ENTRADA -> {
                         if (texto.isBlank()) {
-                            val locales = withContext(dispatcherIO) {
-                                medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA) }
-                            }
-                            val remotos = remotosSeguro()
-                            activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
+                            activos = leerActivos()
                             totalAdentro = activos.size
                         } else {
                             resultadosBusqueda =
@@ -456,9 +462,15 @@ class ActivosViewModel(
             }
         }
 
+    /// Cancelar el ingreso (o volver del bloqueo) también borra lo que quedó
+    /// en el buscador: la cédula escaneada o el nombre ya no buscan nada.
     fun cancelarSeleccionIngreso() {
         seleccionIngreso = SeleccionIngreso.Ninguna
         errorIngreso = null
+        if (texto.isNotEmpty()) {
+            texto = ""
+            buscar()
+        }
     }
 
     /// Error del formulario de ingreso abierto (validación o del núcleo).
@@ -609,7 +621,7 @@ class ActivosViewModel(
                         mensajeEsError = false
                         texto = ""
                         coincidenciasGafete = emptyList()
-                        actualizarTotalAdentro()
+                        recargarActivos()
                     }
                 } catch (excepcion: Exception) {
                     mensaje = "Gafete $numero: ${excepcion.mensajeDeErrorEsperado()}"

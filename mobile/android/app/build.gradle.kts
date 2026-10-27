@@ -70,8 +70,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 47
-        versionName = "1.8.2"
+        versionCode = 48
+        versionName = "1.8.3"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -229,7 +229,10 @@ dependencies {
     implementation("io.ktor:ktor-client-okhttp:3.2.2")
     implementation("io.ktor:ktor-client-websockets:3.2.2")
     // Requerido por el código Kotlin que genera uniffi para llamar al .so vía FFI.
-    implementation("net.java.dev.jna:jna:5.15.0@aar")
+    // 5.16/5.17 corrigen las llamadas en teléfonos con páginas de memoria de
+    // 16 KB (Android 15 en adelante); 5.19.1 repara el soporte de Android
+    // viejos que rompió 5.19.0. Mismas versiones en el JNA de los tests.
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
     // ViewModel + su integración con Compose (`viewModel()`, `viewModelScope`)
     // — ver mobile/android/ARQUITECTURA.md: el estado y las llamadas a Nucleo
     // viven acá, no en el @Composable.
@@ -266,7 +269,7 @@ dependencies {
     // JNA "de escritorio" (no el @aar de arriba, que es sólo para Android)
     // — necesario para que los bindings de uniffi puedan cargar el .so de
     // mobile/rust-core compilado para el host en un test JVM normal.
-    testImplementation("net.java.dev.jna:jna:5.15.0")
+    testImplementation("net.java.dev.jna:jna:5.19.1")
     // Sólo para sembrar fixtures con SQL crudo antes de abrir el Nucleo
     // real del test — Nucleo no expone ningún método para insertar datos
     // sin autenticarse primero, y el primer usuario Root todavía no existe
