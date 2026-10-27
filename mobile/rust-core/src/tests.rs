@@ -371,6 +371,59 @@ fn listar_activos_y_registrar_salida() {
     assert_eq!(activos_tras_salida, Vec::new());
 }
 
+/// Regresión: la lista se cortaba en 30 (el tope de `buscar_contratistas`),
+/// así que con 33 adentro el contador del teléfono decía 30 y los 3 ingresos
+/// más viejos no aparecían, mientras escritorio mostraba los 33.
+#[test]
+fn listar_activos_trae_a_todos_los_de_adentro() {
+    const ADENTRO: i64 = 33;
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+             INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                 '999999999', 'Actor Test',
+                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                 'ROOT', 1
+             );",
+        )
+        .unwrap();
+    for n in 1..=ADENTRO {
+        conexion
+            .execute(
+                "INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES (?1, ?2, 1, 'SWAT', 0, 1)",
+                (format!("1{n:08}"), format!("Contratista {n}")),
+            )
+            .unwrap();
+    }
+    drop(conexion);
+
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+    nucleo
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+        .unwrap();
+    let primero = nucleo
+        .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
+        .unwrap();
+    for contratista_id in 2..=ADENTRO {
+        nucleo
+            .registrar_ingreso(contratista_id, MedioIngreso::Caminando, None, None)
+            .unwrap();
+    }
+
+    let activos = nucleo
+        .listar_ingresos_activos(String::new(), ModoBusquedaActivos::NombreCedula)
+        .unwrap();
+    assert_eq!(activos.len(), usize::try_from(ADENTRO).unwrap());
+    // El más viejo es el que el tope dejaba afuera (orden: recientes primero).
+    assert!(activos.iter().any(|a| a.registro_id == primero.registro_id));
+}
+
 /// Regresión directa del motivo por el que `Gafete` es un modo aparte:
 /// una cédula que "contiene" el número de gafete no debe aparecer.
 #[test]

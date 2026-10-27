@@ -105,8 +105,12 @@ impl Nucleo {
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
 
-    /// Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
-    /// el listado completo que carga AG Grid en desktop.
+    /// Sin el `LIMITE_MOVIL` de `buscar_contratistas`: esta lista es "quién
+    /// está adentro", y además el contador de Activos sale de su largo. Con
+    /// el tope de 30 (más recientes primero) los ingresos más viejos no
+    /// aparecían en el teléfono ni para darles salida, y el contador se
+    /// quedaba en 30 mientras escritorio mostraba a todos. Usa el mismo tope
+    /// que escritorio (`FiltroIngresosActivos::default`).
     ///
     /// `modo` decide cómo se interpreta `texto` — separado a propósito de
     /// `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
@@ -119,13 +123,8 @@ impl Nucleo {
         texto: String,
         modo: ModoBusquedaActivos,
     ) -> Result<Vec<IngresoActivoResumen>, NucleoError> {
-        const LIMITE_MOVIL: usize = 30;
-
         let texto_normalizado = texto.trim();
-        let mut filtro = FiltroIngresosActivosNucleo {
-            limite: LIMITE_MOVIL,
-            ..Default::default()
-        };
+        let mut filtro = FiltroIngresosActivosNucleo::default();
         match modo {
             ModoBusquedaActivos::NombreCedula => {
                 filtro.texto =
