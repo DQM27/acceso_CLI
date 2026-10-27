@@ -439,6 +439,35 @@ class ActivosViewModelTest {
     }
 
     @Test
+    fun `dar salida con algo escrito en el buscador la saca de la lista`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+        val fila = viewModel.activos.single()
+        // Una cédula escaneada que no se llegó a ingresar queda en el buscador.
+        viewModel.cambiarTexto("111111111")
+        advanceUntilIdle()
+
+        viewModel.confirmarSalida(fila)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.activos.isEmpty())
+        assertEquals(0, viewModel.totalAdentro)
+    }
+
+    @Test
+    fun `cancelar el ingreso borra el buscador`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        assertEquals("Contratista", viewModel.texto)
+
+        viewModel.cancelarSeleccionIngreso()
+        advanceUntilIdle()
+
+        assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
+        assertEquals("", viewModel.texto)
+    }
+
+    @Test
     fun `escanear a quien ya esta adentro abre su salida sin alerta ni texto en el buscador`() = runTest(dispatcher) {
         val viewModel = formularioAbierto("SWAT")
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
