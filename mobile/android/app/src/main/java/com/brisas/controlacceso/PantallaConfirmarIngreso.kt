@@ -163,17 +163,6 @@ internal fun HojaIngreso(
     val abriraTeclado = remember { preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty() }
     val reservaTeclado = remember { if (abriraTeclado) AltoTeclado.leer(contexto) else 0 }
     var reservar by remember { mutableStateOf(reservaTeclado > 0) }
-    val ime = WindowInsets.ime
-    val imeFinal = WindowInsets.imeAnimationTarget
-    LaunchedEffect(ime, imeFinal) {
-        snapshotFlow { ime.getBottom(densidad) to imeFinal.getBottom(densidad) }.collect { (alto, altoFinal) ->
-            // Terminó de abrirse: de acá en más manda el teclado de verdad.
-            if (alto > 0 && alto == altoFinal) {
-                AltoTeclado.guardar(contexto, alto)
-                reservar = false
-            }
-        }
-    }
 
     val arriba = rememberHojaArriba(estado)
     ModalBottomSheet(
@@ -188,6 +177,20 @@ internal fun HojaIngreso(
             }
         },
     ) {
+        // Acá adentro y no afuera: la hoja es su propia ventana, y el teclado
+        // se abre para ella; la ventana de la app no lo ve y el alto no se
+        // guardaba nunca.
+        val ime = WindowInsets.ime
+        val imeFinal = WindowInsets.imeAnimationTarget
+        LaunchedEffect(ime, imeFinal) {
+            snapshotFlow { ime.getBottom(densidad) to imeFinal.getBottom(densidad) }.collect { (alto, altoFinal) ->
+                // Terminó de abrirse: de acá en más manda el teclado de verdad.
+                if (alto > 0 && alto == altoFinal) {
+                    AltoTeclado.guardar(contexto, alto)
+                    reservar = false
+                }
+            }
+        }
         val focoGafete = remember { FocusRequester() }
         LaunchedEffect(Unit) {
             if (!abriraTeclado) return@LaunchedEffect
