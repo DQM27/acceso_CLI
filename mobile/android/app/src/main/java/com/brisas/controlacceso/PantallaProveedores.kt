@@ -243,7 +243,6 @@ fun PantallaProveedores(
                         )
                     }
 
-                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
                     AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = {
@@ -270,7 +269,7 @@ fun PantallaProveedores(
                     ) {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             ListaProveedoresActivos(
-                                filas = viewModel.activos.filter { it.coincideCon(busqueda) },
+                                filas = remember(viewModel.activos, busqueda) { viewModel.activos.filter { it.coincideCon(busqueda) } },
                                 cargando = viewModel.cargando,
                                 busqueda = busqueda,
                                 sincronizando = sincronizando,

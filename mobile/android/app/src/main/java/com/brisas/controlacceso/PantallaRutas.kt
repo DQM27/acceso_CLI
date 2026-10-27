@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.Ruta
@@ -188,20 +187,8 @@ fun PantallaRutas(nucleo: Nucleo) {
                 // fondo -- ahí vive "Confirmar salida", último elemento de
                 // esta misma Column. El foco por sí solo sólo garantiza que
                 // el campo entre en pantalla, no el botón de abajo (pedido
-                // explícito del usuario 2026-09-20). Un solo
-                // `animateScrollTo` no alcanza: el teclado tarda ~250ms en
-                // animarse y el `imePadding()` va agrandando la Column
-                // cuadro a cuadro, así que `maxValue` todavía no refleja el
-                // alto final en el instante del foco -- se repite mientras
-                // dura esa animación para perseguir el nuevo fondo.
-                onEnfocado = {
-                    scopeFormulario.launch {
-                        repeat(15) {
-                            scrollStateFormulario.animateScrollTo(scrollStateFormulario.maxValue)
-                            delay(30)
-                        }
-                    }
-                },
+                // explícito del usuario 2026-09-20).
+                onEnfocado = { scopeFormulario.launch { scrollStateFormulario.seguirFondoMientrasAbreTeclado() } },
             )
         }
 

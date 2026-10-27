@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -280,11 +281,17 @@ internal fun BuscadorInferior(
             foco.requestFocus()
             tecladoSistema?.show()
         }
-        // Al arrastrar la lista (no al desplazarla sola), fuera el teclado.
+        // Al arrastrar la lista (no al desplazarla sola), fuera el teclado. Una
+        // sola vez, mientras el campo tiene el foco: antes se le pedía al
+        // sistema esconderlo en cada evento del arrastre (decenas por
+        // segundo), aunque ya estuviera cerrado. No es estado de Compose:
+        // sólo lo leen el arrastre y el foco, nunca el dibujo.
+        val campoEnfocado = remember { booleanArrayOf(false) }
         val esconderTeclado = remember(tecladoSistema, focos) {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    if (campoEnfocado[0] && source == NestedScrollSource.UserInput && available.y != 0f) {
+                        campoEnfocado[0] = false
                         tecladoSistema?.hide()
                         focos.clearFocus()
                     }
@@ -318,7 +325,10 @@ internal fun BuscadorInferior(
                     onCambiar = onCambiar,
                     ayuda = ayuda,
                     keyboardOptions = teclado,
-                    modifier = Modifier.weight(1f).focusRequester(foco),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(foco)
+                        .onFocusChanged { campoEnfocado[0] = it.hasFocus },
                 )
                 BotonRedondoVidrio(tamano = AlturaBusquedaBrisas, descripcion = "Cerrar búsqueda", onClick = onCerrar) {
                     Icon(Icons.Default.Close, contentDescription = null)

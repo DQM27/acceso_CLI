@@ -1564,7 +1564,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() and 0xFFFF) != 14429) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 64102) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 36813) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 48326) {
@@ -3764,8 +3764,12 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
-     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
-     * el listado completo que carga AG Grid en desktop.
+     * Sin el `LIMITE_MOVIL` de `buscar_contratistas`: esta lista es "quién
+     * está adentro", y además el contador de Activos sale de su largo. Con
+     * el tope de 30 (más recientes primero) los ingresos más viejos no
+     * aparecían en el teléfono ni para darles salida, y el contador se
+     * quedaba en 30 mientras escritorio mostraba a todos. Usa el mismo tope
+     * que escritorio (`FiltroIngresosActivos::default`).
      *
      * `modo` decide cómo se interpreta `texto` — separado a propósito de
      * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
@@ -4674,8 +4678,12 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
-     * el listado completo que carga AG Grid en desktop.
+     * Sin el `LIMITE_MOVIL` de `buscar_contratistas`: esta lista es "quién
+     * está adentro", y además el contador de Activos sale de su largo. Con
+     * el tope de 30 (más recientes primero) los ingresos más viejos no
+     * aparecían en el teléfono ni para darles salida, y el contador se
+     * quedaba en 30 mientras escritorio mostraba a todos. Usa el mismo tope
+     * que escritorio (`FiltroIngresosActivos::default`).
      *
      * `modo` decide cómo se interpreta `texto` — separado a propósito de
      * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
@@ -6650,155 +6658,6 @@ public object FfiConverterTypeConfiguracionEstabilizador: FfiConverterRustBuffer
             FfiConverterUInt.write(value.`framesEsperaReverso`, buf)
             FfiConverterUInt.write(value.`framesParaInvalido`, buf)
             FfiConverterUInt.write(value.`framesParaSugerirReflejo`, buf)
-    }
-}
-
-
-
-/**
- * Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
- */
-data class ConflictoGafeteActivo (
-    var `tipo`: TipoMovimientoGafete
-    , 
-    /**
-     * Contratista, proveedor o encargado de ruta (KOF).
-     */
-    var `nombre`: kotlin.String
-    , 
-    var `gafeteNumero`: kotlin.Long
-    , 
-    /**
-     * Hora de entrada, o de entrega en KOF.
-     */
-    var `fechaHora`: kotlin.String
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeConflictoGafeteActivo: FfiConverterRustBuffer<ConflictoGafeteActivo> {
-    override fun read(buf: ByteBuffer): ConflictoGafeteActivo {
-        return ConflictoGafeteActivo(
-            FfiConverterTypeTipoMovimientoGafete.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterLong.read(buf),
-            FfiConverterString.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: ConflictoGafeteActivo) = (
-            FfiConverterTypeTipoMovimientoGafete.allocationSize(value.`tipo`) +
-            FfiConverterString.allocationSize(value.`nombre`) +
-            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`fechaHora`)
-    )
-
-    override fun write(value: ConflictoGafeteActivo, buf: ByteBuffer) {
-            FfiConverterTypeTipoMovimientoGafete.write(value.`tipo`, buf)
-            FfiConverterString.write(value.`nombre`, buf)
-            FfiConverterLong.write(value.`gafeteNumero`, buf)
-            FfiConverterString.write(value.`fechaHora`, buf)
-    }
-}
-
-
-
-/**
- * Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
- */
-data class ConflictoIngresoActivo (
-    var `cedula`: kotlin.String
-    , 
-    var `contratistaNombre`: kotlin.String
-    , 
-    var `sitioConflicto`: kotlin.String
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeConflictoIngresoActivo: FfiConverterRustBuffer<ConflictoIngresoActivo> {
-    override fun read(buf: ByteBuffer): ConflictoIngresoActivo {
-        return ConflictoIngresoActivo(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: ConflictoIngresoActivo) = (
-            FfiConverterString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`contratistaNombre`) +
-            FfiConverterString.allocationSize(value.`sitioConflicto`)
-    )
-
-    override fun write(value: ConflictoIngresoActivo, buf: ByteBuffer) {
-            FfiConverterString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`contratistaNombre`, buf)
-            FfiConverterString.write(value.`sitioConflicto`, buf)
-    }
-}
-
-
-
-/**
- * Espejo de `control_acceso::nube::ConflictoIngresoProveedorActivo`.
- */
-data class ConflictoIngresoProveedorActivo (
-    var `cedula`: kotlin.String
-    , 
-    var `nombre`: kotlin.String
-    , 
-    var `sitioConflicto`: kotlin.String
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeConflictoIngresoProveedorActivo: FfiConverterRustBuffer<ConflictoIngresoProveedorActivo> {
-    override fun read(buf: ByteBuffer): ConflictoIngresoProveedorActivo {
-        return ConflictoIngresoProveedorActivo(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: ConflictoIngresoProveedorActivo) = (
-            FfiConverterString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`nombre`) +
-            FfiConverterString.allocationSize(value.`sitioConflicto`)
-    )
-
-    override fun write(value: ConflictoIngresoProveedorActivo, buf: ByteBuffer) {
-            FfiConverterString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`nombre`, buf)
-            FfiConverterString.write(value.`sitioConflicto`, buf)
     }
 }
 
@@ -9211,38 +9070,18 @@ data class ResumenSincronizacion (
     var `sesionTranscurridoMs`: kotlin.ULong?
     , 
     /**
-     * `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
-     * quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
-     * están activos en otro sitio (colados mientras este dispositivo
-     * estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
-     * vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
-     * base recién configurada, sin ingresos locales todavía) -- sólo
-     * `sincronizar` lo completa de verdad.
+     * `docs/pendientes.md`, "alertar luego al sincronizar": los conflictos
+     * de esta sincronización ya redactados por el núcleo
+     * (`control_acceso::nube::mensajes_conflictos`), para que Kotlin sólo
+     * los muestre. Son ingresos (de contratista, proveedor o por correo)
+     * activos en este teléfono que la nube dice que TAMBIÉN están activos en
+     * otro sitio, y movimientos con gafete que la nube rechazó porque otro
+     * equipo de la unidad ya tiene ese número. Mejor esfuerzo, vacío si el
+     * chequeo falla. Siempre vacío en la activación inicial
+     * (`From<ResumenSincronizacionNucleo>`, base recién configurada, sin
+     * ingresos locales todavía) -- sólo `sincronizar` lo completa de verdad.
      */
-    var `conflictosIngreso`: List<ConflictoIngresoActivo>
-    , 
-    /**
-     * Mismo criterio que `conflictos_ingreso`, pero para ingresos de
-     * proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
-     */
-    var `conflictosIngresoProveedor`: List<ConflictoIngresoProveedorActivo>
-    , 
-    /**
-     * Lo mismo para ingresos por correo (mismo tipo de aviso) -- ver
-     * `control_acceso::nube::correos_con_conflicto_activo`.
-     */
-    var `conflictosIngresoCorreo`: List<ConflictoIngresoProveedorActivo>
-    , 
-    /**
-     * Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
-     * la nube fue rechazado porque otro dispositivo del mismo sitio ya
-     * tiene ese número activo (índice único
-     * `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
-     * `conflictos_ingreso`, se calcula con datos locales dentro del mismo
-     * `drenar_cola`, sin una consulta remota aparte -- ver
-     * `control_acceso::nube::ConflictoGafeteActivo`.
-     */
-    var `conflictosGafete`: List<ConflictoGafeteActivo>
+    var `mensajesConflictos`: List<kotlin.String>
     
 ){
     
@@ -9276,10 +9115,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalULong.read(buf),
-            FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
-            FfiConverterSequenceTypeConflictoGafeteActivo.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
     }
 
@@ -9301,10 +9137,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.allocationSize(value.`sesionEnOtraUnidad`) +
             FfiConverterOptionalString.allocationSize(value.`sesionUnidad`) +
             FfiConverterOptionalULong.allocationSize(value.`sesionTranscurridoMs`) +
-            FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`) +
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`) +
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoCorreo`) +
-            FfiConverterSequenceTypeConflictoGafeteActivo.allocationSize(value.`conflictosGafete`)
+            FfiConverterSequenceString.allocationSize(value.`mensajesConflictos`)
     )
 
     override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
@@ -9325,10 +9158,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.write(value.`sesionEnOtraUnidad`, buf)
             FfiConverterOptionalString.write(value.`sesionUnidad`, buf)
             FfiConverterOptionalULong.write(value.`sesionTranscurridoMs`, buf)
-            FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoProveedor`, buf)
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoCorreo`, buf)
-            FfiConverterSequenceTypeConflictoGafeteActivo.write(value.`conflictosGafete`, buf)
+            FfiConverterSequenceString.write(value.`mensajesConflictos`, buf)
     }
 }
 
@@ -11630,50 +11460,6 @@ public object FfiConverterTypeTipoIngreso: FfiConverterRustBuffer<TipoIngreso> {
 
 
 
-/**
- * Espejo de `control_acceso::nube::TipoMovimientoGafete`.
- */
-
-enum class TipoMovimientoGafete {
-    
-    CONTRATISTA,
-    PROVEEDOR,
-    PROVISIONAL_KOF,
-    POR_CORREO,
-    /**
-     * Visita (gafete de visita): visitas agendadas, en escritorio o en el
-     * teléfono (`visitas.rs`).
-     */
-    VISITA;
-
-    
-
-
-    companion object
-}
-
-
-/**
- * @suppress
- */
-public object FfiConverterTypeTipoMovimientoGafete: FfiConverterRustBuffer<TipoMovimientoGafete> {
-    override fun read(buf: ByteBuffer) = try {
-        TipoMovimientoGafete.values()[buf.getInt() - 1]
-    } catch (e: IndexOutOfBoundsException) {
-        throw RuntimeException("invalid enum value, something is very wrong!!", e)
-    }
-
-    override fun allocationSize(value: TipoMovimientoGafete) = 4UL
-
-    override fun write(value: TipoMovimientoGafete, buf: ByteBuffer) {
-        buf.putInt(value.ordinal + 1)
-    }
-}
-
-
-
-
-
 
 enum class TipoVehiculoDetectado {
     
@@ -12670,90 +12456,6 @@ public object FfiConverterSequenceTypeCeldaManual: FfiConverterRustBuffer<List<C
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeCeldaManual.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeConflictoGafeteActivo: FfiConverterRustBuffer<List<ConflictoGafeteActivo>> {
-    override fun read(buf: ByteBuffer): List<ConflictoGafeteActivo> {
-        val len = buf.getInt()
-        return List<ConflictoGafeteActivo>(len) {
-            FfiConverterTypeConflictoGafeteActivo.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<ConflictoGafeteActivo>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeConflictoGafeteActivo.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<ConflictoGafeteActivo>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeConflictoGafeteActivo.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeConflictoIngresoActivo: FfiConverterRustBuffer<List<ConflictoIngresoActivo>> {
-    override fun read(buf: ByteBuffer): List<ConflictoIngresoActivo> {
-        val len = buf.getInt()
-        return List<ConflictoIngresoActivo>(len) {
-            FfiConverterTypeConflictoIngresoActivo.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<ConflictoIngresoActivo>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeConflictoIngresoActivo.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<ConflictoIngresoActivo>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeConflictoIngresoActivo.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeConflictoIngresoProveedorActivo: FfiConverterRustBuffer<List<ConflictoIngresoProveedorActivo>> {
-    override fun read(buf: ByteBuffer): List<ConflictoIngresoProveedorActivo> {
-        val len = buf.getInt()
-        return List<ConflictoIngresoProveedorActivo>(len) {
-            FfiConverterTypeConflictoIngresoProveedorActivo.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<ConflictoIngresoProveedorActivo>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeConflictoIngresoProveedorActivo.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<ConflictoIngresoProveedorActivo>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeConflictoIngresoProveedorActivo.write(it, buf)
         }
     }
 }

@@ -276,10 +276,7 @@ impl Nucleo {
             // locales todavía -- mismo criterio que
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
             // en desktop/src-tauri/src/comandos/nube.rs.
-            conflictos_ingreso: Vec::new(),
-            conflictos_ingreso_proveedor: Vec::new(),
-            conflictos_ingreso_correo: Vec::new(),
-            conflictos_gafete: Vec::new(),
+            mensajes_conflictos: Vec::new(),
         })
     }
 }
@@ -694,26 +691,12 @@ impl Nucleo {
             sesion_en_otra_unidad,
             sesion_unidad,
             sesion_transcurrido_ms,
-            conflictos_ingreso: resumen
-                .conflictos_ingreso
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            conflictos_ingreso_proveedor: resumen
-                .conflictos_ingreso_proveedor
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            conflictos_ingreso_correo: resumen
-                .conflictos_ingreso_correo
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            conflictos_gafete: resumen
-                .conflictos_gafete
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            mensajes_conflictos: control_acceso::nube::mensajes_conflictos(
+                &resumen.conflictos_ingreso,
+                &resumen.conflictos_ingreso_proveedor,
+                &resumen.conflictos_ingreso_correo,
+                &resumen.conflictos_gafete,
+            ),
         })
     }
 }

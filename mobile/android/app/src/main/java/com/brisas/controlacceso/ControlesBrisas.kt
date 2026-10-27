@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
@@ -47,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +73,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.control_acceso_mobile.EncargadoRuta
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
@@ -232,24 +236,26 @@ internal fun OcultarBarraSecciones() {
 }
 
 /** Espacio libre al final de las listas para que la última fila no quede
- * debajo de [FranjaConfirmacion] ni de la barra de secciones. */
+ * debajo de la barra de secciones ni de lo que flota con ella (el botón
+ * redondo y la píldora de búsqueda). */
 internal val EspacioPieLista: Dp
     @Composable get() = 72.dp + LocalMargenBarraInferior.current
 
-/** Lo que flota abajo de una pantalla con lista: la confirmación del último
- * registro ([FranjaConfirmacion]), justo encima de la barra de secciones. La
- * acción principal de la pantalla ya no flota acá: va en el botón redondo junto
- * a la barra (ver `AccionInferior.kt`). Va dentro de un `Box` a pantalla
- * completa, alineado abajo. */
-@Composable
-internal fun PieFlotante(confirmacion: ConfirmacionReciente, modifier: Modifier = Modifier) {
-    FranjaConfirmacion(
-        confirmacion,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMargenBarraInferior.current),
-    )
+/** Al enfocar el último campo de un formulario, lo lleva hasta el fondo (ahí
+ * está el botón, pedido del usuario 2026-09-20) y lo sigue mientras el
+ * teclado termina de abrirse: el `imePadding()` agranda el formulario cuadro
+ * a cuadro y `maxValue` recién tiene el alto final al terminar. Sólo se mueve
+ * cuando cambia lo que sobra, y cada cambio retoma la animación en curso.
+ * Antes eran 15 `animateScrollTo` en fila, cada uno esperando a que terminara
+ * el anterior: varios segundos de desplazamiento peleando con el teclado. */
+internal suspend fun ScrollState.seguirFondoMientrasAbreTeclado() {
+    withTimeoutOrNull(MS_APERTURA_TECLADO) {
+        snapshotFlow { maxValue }.collectLatest { animateScrollTo(it) }
+    }
 }
+
+/// Lo que tarda el teclado en abrirse, con margen.
+private const val MS_APERTURA_TECLADO = 600L
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas.
  * Dentro de una sección, en su color ([LocalRellenoBotones]). */

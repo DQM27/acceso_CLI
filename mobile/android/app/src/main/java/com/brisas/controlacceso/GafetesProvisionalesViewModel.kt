@@ -45,7 +45,7 @@ class GafetesProvisionalesViewModel(
         private set
 
     /// "Gafete N entregado · …" / "Gafete N devuelto · …" (ver
-    /// [FranjaConfirmacion]).
+    /// [ReenviarConfirmaciones]).
     val confirmacion = ConfirmacionReciente()
     var cargando by mutableStateOf(false)
         private set

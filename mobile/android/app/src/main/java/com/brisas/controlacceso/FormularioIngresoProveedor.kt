@@ -30,7 +30,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // Formulario de nuevo ingreso de proveedor (sacado de `PantallaProveedores.kt`,
@@ -121,16 +120,8 @@ internal fun FormularioNuevoIngresoProveedor(
             onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
             // Al enfocar el gafete, lleva el scroll hasta el fondo: ahí vive
             // "Registrar ingreso" (pedido del usuario 2026-09-20: ver campo y
-            // botón juntos). Se repite mientras dura la animación del teclado:
-            // `maxValue` todavía no refleja el alto final en el instante del foco.
-            onGafeteEnfocado = {
-                scope.launch {
-                    repeat(15) {
-                        scrollState.animateScrollTo(scrollState.maxValue)
-                        delay(30)
-                    }
-                }
-            },
+            // botón juntos).
+            onGafeteEnfocado = { scope.launch { scrollState.seguirFondoMientrasAbreTeclado() } },
             onListo = { if (puedeRegistrar) registrar() },
         )
 

@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -64,18 +65,26 @@ class NuevoContratistaViewModel(
     var enviando by mutableStateOf(false)
         private set
 
-    val requierePraind: Boolean
-        get() = medirNucleo("requierePraindParaFormulario") { nucleo.requierePraindParaFormulario(tipoIngreso, personalRuta) }
+    // Las tres le preguntan al núcleo, pero con `derivedStateOf`: la respuesta
+    // queda guardada y sólo se vuelve a preguntar cuando cambia lo que leen
+    // (tipo, personal de ruta, fecha). Antes eran getters: cada tecla en el
+    // nombre o la cédula recomponía la pantalla y eso eran 3 o 4 cruces al
+    // núcleo por JNA (`requierePraind` dos veces).
+    val requierePraind: Boolean by derivedStateOf {
+        medirNucleo("requierePraindParaFormulario") { nucleo.requierePraindParaFormulario(tipoIngreso, personalRuta) }
+    }
 
     /// Vencido en el instante en que se tipea, no recién al guardar. Una
     /// fecha a medio escribir ("10-09-202") el núcleo la toma como no
     /// vencida. Bloquea el botón Guardar (pedido del usuario 2026-09-20).
-    val praindVencido: Boolean
-        get() = requierePraind && fechaPraind.isNotBlank() &&
+    val praindVencido: Boolean by derivedStateOf {
+        requierePraind && fechaPraind.isNotBlank() &&
             medirNucleo("praindVencidoParaFormulario") { nucleo.praindVencidoParaFormulario(textoDDMMYYYYaIso(fechaPraind)) }
+    }
 
-    val muestraPersonalRuta: Boolean
-        get() = medirNucleo("admitePersonalRutaParaFormulario") { nucleo.admitePersonalRutaParaFormulario(tipoIngreso) }
+    val muestraPersonalRuta: Boolean by derivedStateOf {
+        medirNucleo("admitePersonalRutaParaFormulario") { nucleo.admitePersonalRutaParaFormulario(tipoIngreso) }
+    }
 
     init {
         viewModelScope.launch {

@@ -14,16 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -350,14 +346,15 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// demasiado para confirmar una salida). Lo comparten contratistas,
 /// proveedores, correo, visitas y KOF.
 ///
-/// Al confirmar, el panel baja primero y recién entonces avisa: si el que
-/// llama lo quitara de la composición en el acto, desaparecería de golpe.
-/// `confirmado` evita que un segundo toque registre dos veces mientras baja.
+/// Al abrir, la flecha entra hacia la izquierda ([IconoPaso]). Al confirmar,
+/// el panel baja primero y recién entonces avisa: si el que llama lo quitara
+/// de la composición en el acto, desaparecería de golpe. `confirmado` evita
+/// que un segundo toque registre dos veces mientras baja.
 ///
 /// Con [aviso] (se escaneó a alguien que ya estaba adentro, pedido del
-/// usuario 2026-10-26): triángulo ámbar en vez del ícono de salida, el aviso
-/// en ámbar arriba del nombre y la pregunta antes del botón, para que no se
-/// confunda con un ingreso.
+/// usuario 2026-10-26): señal de tránsito ([SenalAdvertencia]) en vez del
+/// ícono de salida, el aviso en ámbar arriba del nombre y la pregunta antes
+/// del botón, para que no se confunda con un ingreso.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DialogoRegistrarSalida(
@@ -371,6 +368,7 @@ internal fun DialogoRegistrarSalida(
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
+    val arriba = rememberHojaArriba(estado)
     fun cerrarY(accionAlCerrar: () -> Unit) {
         alcance.launch { estado.hide() }.invokeOnCompletion { accionAlCerrar() }
     }
@@ -385,20 +383,10 @@ internal fun DialogoRegistrarSalida(
                 .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (aviso != null) ColorAdvertenciaBrisas.copy(alpha = 0.16f) else MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (aviso != null) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = ColorAdvertenciaBrisas)
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                }
+            if (aviso != null) {
+                SenalAdvertencia(arriba = arriba)
+            } else {
+                IconoPaso(Paso.SALIDA, arriba = arriba)
             }
             if (aviso != null) {
                 Text(

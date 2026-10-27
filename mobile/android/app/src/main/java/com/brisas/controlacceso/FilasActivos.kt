@@ -14,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,21 +104,33 @@ internal fun TarjetaActivo(
             // que resaltar más que cédula/empresa. Dentro de una búsqueda, lo
             // buscado (una cédula, por ejemplo) se subraya en el color de la
             // sección.
+            //
+            // Los textos se recuerdan por valor: cada refresco de la lista
+            // trae objetos nuevos del núcleo (sus campos son `var`, así que
+            // Compose no los da por iguales) y sin esto cada fila visible
+            // volvía a armar la línea y a leer y formatear la fecha.
             val consulta = LocalConsultaResaltada.current
-            val estiloCoincidencia = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
-            Text(
+            val acento = MaterialTheme.colorScheme.primary
+            val lineaDetalle = remember(detalle, gafeteNumero, consulta, acento) {
+                val estiloCoincidencia = SpanStyle(color = acento, textDecoration = TextDecoration.Underline)
                 buildAnnotatedString {
                     agregarResaltado("$detalle · ".uppercase(), consulta, estiloCoincidencia)
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    withStyle(SpanStyle(color = acento)) {
                         append((if (gafeteNumero != null) "Gafete $gafeteNumero" else "Sin gafete").uppercase())
                     }
-                },
+                }
+            }
+            Text(
+                lineaDetalle,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            val lineaIngreso = remember(fechaHoraIngreso, dioIngreso) {
+                "Ingresó ${textoFechaHora(fechaHoraIngreso)} · dio ingreso $dioIngreso"
+            }
             Text(
-                "Ingresó ${textoFechaHora(fechaHoraIngreso)} · dio ingreso $dioIngreso",
+                lineaIngreso,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

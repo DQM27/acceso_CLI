@@ -457,113 +457,17 @@ pub struct ResumenSincronizacion {
     /// la activación inicial). Sólo para la telemetría de diagnóstico.
     pub sesion_unidad: Option<String>,
     pub sesion_transcurrido_ms: Option<u64>,
-    /// `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
-    /// quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
-    /// están activos en otro sitio (colados mientras este dispositivo
-    /// estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
-    /// vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
-    /// base recién configurada, sin ingresos locales todavía) -- sólo
-    /// `sincronizar` lo completa de verdad.
-    pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
-    /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
-    /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
-    pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
-    /// Lo mismo para ingresos por correo (mismo tipo de aviso) -- ver
-    /// `control_acceso::nube::correos_con_conflicto_activo`.
-    pub conflictos_ingreso_correo: Vec<ConflictoIngresoProveedorActivo>,
-    /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
-    /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
-    /// tiene ese número activo (índice único
-    /// `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
-    /// `conflictos_ingreso`, se calcula con datos locales dentro del mismo
-    /// `drenar_cola`, sin una consulta remota aparte -- ver
-    /// `control_acceso::nube::ConflictoGafeteActivo`.
-    pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
-}
-
-/// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct ConflictoGafeteActivo {
-    pub tipo: TipoMovimientoGafete,
-    /// Contratista, proveedor o encargado de ruta (KOF).
-    pub nombre: String,
-    pub gafete_numero: i64,
-    /// Hora de entrada, o de entrega en KOF.
-    pub fecha_hora: String,
-}
-
-/// Espejo de `control_acceso::nube::TipoMovimientoGafete`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum TipoMovimientoGafete {
-    Contratista,
-    Proveedor,
-    ProvisionalKof,
-    PorCorreo,
-    /// Visita (gafete de visita): visitas agendadas, en escritorio o en el
-    /// teléfono (`visitas.rs`).
-    Visita,
-}
-
-impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
-    fn from(tipo: control_acceso::nube::TipoMovimientoGafete) -> Self {
-        use control_acceso::nube::TipoMovimientoGafete as Nucleo;
-        match tipo {
-            Nucleo::Contratista => Self::Contratista,
-            Nucleo::Proveedor => Self::Proveedor,
-            Nucleo::ProvisionalKof => Self::ProvisionalKof,
-            Nucleo::PorCorreo => Self::PorCorreo,
-            Nucleo::Visita => Self::Visita,
-        }
-    }
-}
-
-impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
-    fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
-        Self {
-            tipo: conflicto.tipo.into(),
-            nombre: conflicto.nombre,
-            gafete_numero: conflicto.gafete_numero,
-            fecha_hora: conflicto.fecha_hora,
-        }
-    }
-}
-
-/// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct ConflictoIngresoActivo {
-    pub cedula: String,
-    pub contratista_nombre: String,
-    pub sitio_conflicto: String,
-}
-
-impl From<control_acceso::nube::ConflictoIngresoActivo> for ConflictoIngresoActivo {
-    fn from(conflicto: control_acceso::nube::ConflictoIngresoActivo) -> Self {
-        Self {
-            cedula: conflicto.cedula,
-            contratista_nombre: conflicto.contratista_nombre,
-            sitio_conflicto: conflicto.sitio_conflicto,
-        }
-    }
-}
-
-/// Espejo de `control_acceso::nube::ConflictoIngresoProveedorActivo`.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct ConflictoIngresoProveedorActivo {
-    pub cedula: String,
-    pub nombre: String,
-    pub sitio_conflicto: String,
-}
-
-impl From<control_acceso::nube::ConflictoIngresoProveedorActivo>
-    for ConflictoIngresoProveedorActivo
-{
-    fn from(conflicto: control_acceso::nube::ConflictoIngresoProveedorActivo) -> Self {
-        Self {
-            cedula: conflicto.cedula,
-            nombre: conflicto.nombre,
-            sitio_conflicto: conflicto.sitio_conflicto,
-        }
-    }
+    /// `docs/pendientes.md`, "alertar luego al sincronizar": los conflictos
+    /// de esta sincronización ya redactados por el núcleo
+    /// (`control_acceso::nube::mensajes_conflictos`), para que Kotlin sólo
+    /// los muestre. Son ingresos (de contratista, proveedor o por correo)
+    /// activos en este teléfono que la nube dice que TAMBIÉN están activos en
+    /// otro sitio, y movimientos con gafete que la nube rechazó porque otro
+    /// equipo de la unidad ya tiene ese número. Mejor esfuerzo, vacío si el
+    /// chequeo falla. Siempre vacío en la activación inicial
+    /// (`From<ResumenSincronizacionNucleo>`, base recién configurada, sin
+    /// ingresos locales todavía) -- sólo `sincronizar` lo completa de verdad.
+    pub mensajes_conflictos: Vec<String>,
 }
 
 impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
@@ -586,10 +490,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sesion_en_otra_unidad: false,
             sesion_unidad: None,
             sesion_transcurrido_ms: None,
-            conflictos_ingreso: Vec::new(),
-            conflictos_ingreso_proveedor: Vec::new(),
-            conflictos_ingreso_correo: Vec::new(),
-            conflictos_gafete: Vec::new(),
+            mensajes_conflictos: Vec::new(),
         }
     }
 }

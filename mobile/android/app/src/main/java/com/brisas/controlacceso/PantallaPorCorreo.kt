@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.Nucleo
 
@@ -222,7 +221,6 @@ fun PantallaPorCorreo(
                         )
                     }
 
-                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
                     AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = {
@@ -249,7 +247,7 @@ fun PantallaPorCorreo(
                     ) {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             ListaCorreoActivos(
-                                filas = viewModel.activos.filter { it.coincideCon(busqueda) },
+                                filas = remember(viewModel.activos, busqueda) { viewModel.activos.filter { it.coincideCon(busqueda) } },
                                 cargando = viewModel.cargando,
                                 busqueda = busqueda,
                                 sincronizando = sincronizando,
@@ -345,14 +343,7 @@ private fun FormularioNuevoIngresoCorreo(
                 onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
                 // Lleva el scroll al botón de abajo mientras se abre el
                 // teclado (mismo motivo que en proveedores).
-                onGafeteEnfocado = {
-                    scope.launch {
-                        repeat(15) {
-                            scrollState.animateScrollTo(scrollState.maxValue)
-                            delay(30)
-                        }
-                    }
-                },
+                onGafeteEnfocado = { scope.launch { scrollState.seguirFondoMientrasAbreTeclado() } },
                 ayudaGafete = "De visita",
                 onListo = { if (puedeRegistrar) registrar() },
             )

@@ -146,7 +146,7 @@ class ActivosViewModel(
         private set
 
     /// "Ingreso registrado · …" / "Salida registrada · …" (ver
-    /// [FranjaConfirmacion]).
+    /// [ReenviarConfirmaciones]).
     val confirmacion = ConfirmacionReciente()
 
     /// Lo que hay que hacer sonar tras escanear un documento para ingresar

@@ -251,7 +251,9 @@ fun PantallaNuevoContratista(
         onCerrar = { buscandoEmpresa = false },
     ) {
         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-            val coincidentes = vm.empresas.filter { textoEmpresa.isBlank() || rangosCoincidencia(it.nombre, textoEmpresa).isNotEmpty() }
+            val coincidentes = remember(vm.empresas, textoEmpresa) {
+                vm.empresas.filter { textoEmpresa.isBlank() || rangosCoincidencia(it.nombre, textoEmpresa).isNotEmpty() }
+            }
             if (coincidentes.isEmpty()) {
                 EstadoVacio("Sin resultados", "Pruebe con otro nombre. Las empresas nuevas se dan de alta en el panel.", Icons.Default.Business)
             } else {

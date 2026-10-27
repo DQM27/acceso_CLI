@@ -31,36 +31,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import uniffi.control_acceso_mobile.ConflictoGafeteActivo
-import uniffi.control_acceso_mobile.ConflictoIngresoActivo
-import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
-
-/// Los avisos de conflicto que trae cada sincronización (ingresos activos acá
-/// Y en otro sitio, y gafetes que la nube no aceptó), en el orden en que se
-/// muestran. Mismos textos que escritorio (`App.tsx`, `conflictoGafete.ts`)
-/// para no dar un aviso distinto según qué interfaz lo muestre.
-///
-/// Los de ingreso son simétricos (los dos lados "tienen razón" hasta que
-/// alguien cierra uno); en los de gafete Postgres ya decidió y el movimiento
-/// de ESTE teléfono es el que no quedó (ver [mensajeConflictoGafete]). Siguen
-/// saliendo en cada sincronización mientras no se resuelvan: no son errores
-/// pasajeros que convenga ocultar solos.
-internal fun mensajesConflictos(
-    ingreso: List<ConflictoIngresoActivo>,
-    proveedor: List<ConflictoIngresoProveedorActivo>,
-    correo: List<ConflictoIngresoProveedorActivo>,
-    gafete: List<ConflictoGafeteActivo>,
-    hora: (String) -> String = ::textoFechaHora,
-): List<String> =
-    ingreso.map { "${it.contratistaNombre} tiene un ingreso activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
-        proveedor.map { "${it.nombre} tiene un ingreso de proveedor activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
-        correo.map { "${it.nombre} tiene un ingreso por correo activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
-        gafete.map { mensajeConflictoGafete(it, hora(it.fechaHora)) }
 
 /// Título de la franja cuando hay más de un conflicto.
 internal fun tituloConflictos(cantidad: Int): String =
     if (cantidad == 1) "1 conflicto por resolver" else "$cantidad conflictos por resolver"
 
+/// Los avisos de conflicto de la última sincronización, tal como los redacta
+/// el núcleo (`nube::mensajes_conflictos`): ingresos activos acá Y en otro
+/// sitio, y gafetes que la nube no aceptó. Siguen saliendo en cada
+/// sincronización mientras no se resuelvan: no son errores pasajeros que
+/// convenga ocultar solos.
+///
 /// Una sola franja para todos los conflictos, en vez de un renglón rojo por
 /// cada uno (con tres o cuatro se comían media pantalla y no se leían como un
 /// aviso). Con uno solo muestra el mensaje directo; con varios, el total, y
