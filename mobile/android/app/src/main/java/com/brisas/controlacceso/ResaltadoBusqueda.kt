@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -29,9 +30,16 @@ internal fun rangosCoincidencia(texto: String, consulta: String): List<IntRange>
 }
 
 /// Minúsculas y sin tildes, letra por letra: el resultado mide lo mismo que
-/// [texto], así los índices sirven para el original.
+/// [texto], así los índices sirven para el original. Corre por cada campo de
+/// cada fila en cada tecla de una búsqueda: las letras ASCII (casi todas: las
+/// cédulas, y los nombres salvo las tildes y la ñ) no tienen tilde que
+/// quitar y no pasan por `Normalizer`, que arma un texto nuevo por letra.
 private fun plano(texto: String): String = buildString(texto.length) {
     for (letra in texto) {
+        if (letra.code < 128) {
+            append(letra.lowercaseChar())
+            continue
+        }
         val descompuesta = Normalizer.normalize(letra.toString(), Normalizer.Form.NFD)
         append(descompuesta.firstOrNull()?.lowercaseChar() ?: letra)
     }
@@ -55,13 +63,21 @@ private fun unirRangos(rangos: List<IntRange>): List<IntRange> {
 /// de una búsqueda.
 internal val LocalConsultaResaltada = compositionLocalOf { "" }
 
-/// [texto] con lo buscado en el color de la sección y en negrita.
+/// [texto] con lo buscado en el color de la sección y en negrita. Recordado
+/// por texto, consulta y color: una lista que se refresca con los mismos
+/// datos no vuelve a buscar ni a armar nada.
 @Composable
 internal fun textoResaltado(texto: String): AnnotatedString {
     val consulta = LocalConsultaResaltada.current
-    if (consulta.isBlank()) return AnnotatedString(texto)
-    val estilo = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-    return buildAnnotatedString { agregarResaltado(texto, consulta, estilo) }
+    val color = MaterialTheme.colorScheme.primary
+    return remember(texto, consulta, color) {
+        if (consulta.isBlank()) {
+            AnnotatedString(texto)
+        } else {
+            val estilo = SpanStyle(color = color, fontWeight = FontWeight.Bold)
+            buildAnnotatedString { agregarResaltado(texto, consulta, estilo) }
+        }
+    }
 }
 
 /// Agrega [texto] con lo que coincide con [consulta] en [estilo].

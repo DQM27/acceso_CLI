@@ -133,7 +133,7 @@ fun PantallaGafetesProvisionales(
         ) {
             Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                 ListaGafetesPrestados(
-                    filas = viewModel.activos.filter { it.coincideCon(textoPrestamo) },
+                    filas = remember(viewModel.activos, textoPrestamo) { viewModel.activos.filter { it.coincideCon(textoPrestamo) } },
                     cargando = viewModel.cargando,
                     tituloVacio = if (textoPrestamo.isBlank()) "Ningún gafete prestado" else "Sin resultados",
                     detalleVacio = if (textoPrestamo.isBlank()) "Para entregar uno, toque el + de abajo." else "Pruebe con otro nombre, código o gafete.",

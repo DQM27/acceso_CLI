@@ -356,11 +356,18 @@ fun PantallaPrincipal(
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
     val proveedoresViewModel: ProveedoresViewModel = viewModel(factory = ProveedoresViewModel.factory(nucleo))
     val correoViewModel: CorreoViewModel = viewModel(factory = CorreoViewModel.factory(nucleo))
-    val adentro = mapOf(
-        SeccionPrincipal.ACTIVOS to (activosViewModel.totalAdentro ?: 0),
-        SeccionPrincipal.KOF to gafetesViewModel.activos.size,
-        SeccionPrincipal.EXTERNOS to proveedoresViewModel.activos.size + correoViewModel.activos.size,
-    )
+    // Recordado por las cuentas: un mapa nuevo en cada recomposición de esta
+    // pantalla obligaba a la barra de secciones a recomponerse también.
+    val totalActivos = activosViewModel.totalAdentro ?: 0
+    val totalKof = gafetesViewModel.activos.size
+    val totalExternos = proveedoresViewModel.activos.size + correoViewModel.activos.size
+    val adentro = remember(totalActivos, totalKof, totalExternos) {
+        mapOf(
+            SeccionPrincipal.ACTIVOS to totalActivos,
+            SeccionPrincipal.KOF to totalKof,
+            SeccionPrincipal.EXTERNOS to totalExternos,
+        )
+    }
     // "Ingreso registrado · …" y compañía, de cualquier sección, arriba.
     ReenviarConfirmaciones(
         avisosBreves,
@@ -521,7 +528,9 @@ fun PantallaPrincipal(
         // conflictos en una sola franja (ver `FranjaConflictos.kt`). Sólo
         // informativa por ahora (fase 3, PR #62): sin botón de acción directa.
         FranjaConflictos(
-            mensajesConflictos(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete),
+            remember(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete) {
+                mensajesConflictos(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete)
+            },
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
 

@@ -14,8 +14,12 @@ import java.time.format.DateTimeFormatter
 fun textoFechaHora(iso: String): String {
     val instante = instanteFechaHora(iso) ?: return "Fecha no disponible"
     val local = ZonedDateTime.ofInstant(instante, ZoneId.systemDefault())
-    return local.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+    return local.format(FORMATO_FECHA_HORA)
 }
 
 fun instanteFechaHora(iso: String): Instant? =
     runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()
+
+/// Uno solo para toda la app: armarlo interpreta el patrón, y esto corre en
+/// cada fila de cada lista. Es inmutable y seguro entre hilos.
+private val FORMATO_FECHA_HORA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")

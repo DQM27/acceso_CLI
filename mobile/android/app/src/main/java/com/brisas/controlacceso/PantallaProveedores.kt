@@ -269,7 +269,7 @@ fun PantallaProveedores(
                     ) {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             ListaProveedoresActivos(
-                                filas = viewModel.activos.filter { it.coincideCon(busqueda) },
+                                filas = remember(viewModel.activos, busqueda) { viewModel.activos.filter { it.coincideCon(busqueda) } },
                                 cargando = viewModel.cargando,
                                 busqueda = busqueda,
                                 sincronizando = sincronizando,

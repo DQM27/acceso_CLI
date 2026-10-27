@@ -116,8 +116,7 @@ private fun VistaCamaraCedula(
     // Acota el recorte a la banda del MRZ cuando ya se sabe dónde está
     // (ver `LecturaFrame.kt`). Lo usa sólo el hilo del analizador.
     val seguidorMrz = remember { SeguidorBandaMrz() }
-    var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
-    var framesSinUltimoValor by remember { mutableStateOf(0) }
+    val repeticion = remember { RepeticionContinua() }
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
     // `EscaneoCompartido.kt`) -- fijos, no dependientes del tema
     // (Classic/Brisas/Negro): acá el color comunica significado
@@ -143,10 +142,10 @@ private fun VistaCamaraCedula(
                         // encima del resultado.
                         if (camara.detectada.get() && resultado.estado != EstadoEscaneo.CONFIRMADO) return@onResultado
                         if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
-                            framesSinUltimoValor++
-                            if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
-                                ultimoValorContinuo = null
-                                framesSinUltimoValor = 0
+                            repeticion.framesSinUltimoValor++
+                            if (repeticion.framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
+                                repeticion.ultimoValor = null
+                                repeticion.framesSinUltimoValor = 0
                             }
                         }
                         // Vibración de error al ENTRAR a inválido, no en
@@ -167,13 +166,13 @@ private fun VistaCamaraCedula(
                                 camara.metricas.registrarConfirmacion()
                                 val valor = documento.textoBusqueda ?: documento.numeroDocumento
                                 val repetidoContinuo = continuo &&
-                                    valor == ultimoValorContinuo
+                                    valor == repeticion.ultimoValor
                                 if (repetidoContinuo) {
                                     camara.detectada.set(false)
                                     estabilizador.reiniciar()
                                 } else {
-                                    ultimoValorContinuo = valor
-                                    framesSinUltimoValor = 0
+                                    repeticion.ultimoValor = valor
+                                    repeticion.framesSinUltimoValor = 0
                                     // En modo continuo el aviso espera al
                                     // resultado real de la mutación (ver más
                                     // abajo) -- pedido explícito del usuario
@@ -364,6 +363,15 @@ private fun VistaCamaraCedula(
 // bastante más rápido que tener que confirmar a mano.
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 1600L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
+
+/// Lo que recuerda el modo continuo entre cuadros para no procesar dos veces
+/// el mismo gafete mientras sigue frente a la cámara. Sólo lo leen los
+/// callbacks de la cámara, nunca el dibujo: no es estado de Compose, así
+/// escribirlo en cada cuadro no pasa por el sistema de snapshots.
+private class RepeticionContinua {
+    var ultimoValor: String? = null
+    var framesSinUltimoValor = 0
+}
 
 // El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
 // nombre Y cédula en un solo escaneo con checksum verificado; el frente

@@ -152,28 +152,6 @@ internal fun IconoPorteria(
     }
 }
 
-/// Cápsula con la unidad del teléfono y el punto de conexión: si lo
-/// registraron en la unidad equivocada se ve antes de escribir nada.
-@Composable
-internal fun ChipUnidad(texto: String, estado: EstadoConexion, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PuntoConexion(estado)
-        Text(
-            texto,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-    }
-}
-
 /// Aviso de error con ícono: errores que no son de un campo (sin red,
 /// cuenta inactiva). Aparece y se va con un despliegue suave.
 @Composable
