@@ -83,9 +83,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.control_acceso_mobile.ConflictoGafeteActivo
-import uniffi.control_acceso_mobile.ConflictoIngresoActivo
-import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
 import uniffi.control_acceso_mobile.EstadoBandeja
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
@@ -202,23 +199,13 @@ fun PantallaPrincipal(
             avisosViewModel.refrescar()
         }
     }
-    // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
-    // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
-    // Alimentado desde los dos caminos de sync (pulso periódico y botón
-    // manual), igual que `refrescarNube`.
-    var conflictosIngreso by remember { mutableStateOf<List<ConflictoIngresoActivo>>(emptyList()) }
-    // MV-04 (auditoría 2026-09-24): mismo criterio que `conflictosIngreso`,
-    // pero para proveedores (`ResumenSincronizacion.conflictosIngresoProveedor`,
-    // ver `nube::proveedores_con_conflicto_activo`) -- ya se calculaba en
-    // Rust y desktop ya lo mostraba (`App.tsx`), pero acá nadie lo leía
-    // todavía.
-    var conflictosIngresoProveedor by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
-    // Lo mismo para los ingresos por correo (mismo tipo de aviso).
-    var conflictosIngresoCorreo by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
-    // Mismo criterio que `conflictosIngreso`, pero calculado con datos
-    // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
-    // `ResumenSincronizacion.conflictosGafete`.
-    var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
+    // `docs/pendientes.md`, "alertar luego al sincronizar": los conflictos de
+    // la última sincronización (contratistas, proveedores y correo activos
+    // también en otro sitio, y gafetes que la nube rechazó), ya redactados
+    // por el núcleo (`ResumenSincronizacion.mensajesConflictos`). Alimentado
+    // desde los dos caminos de sync (pulso periódico y botón manual), igual
+    // que `refrescarNube`.
+    var mensajesConflictos by remember { mutableStateOf<List<String>>(emptyList()) }
     // La sesión se cerró desde la nube (usuario desactivado, o entró en otra
     // unidad): se avisa sólo en el segundo caso, que no es obvio para quien
     // tiene el teléfono en la mano.
@@ -269,10 +256,7 @@ fun PantallaPrincipal(
                     alCerrarseLaSesion(resumen.sesionEnOtraUnidad)
                 } else {
                     refrescarNube += 1
-                    conflictosIngreso = resumen.conflictosIngreso
-                    conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
-                    conflictosIngresoCorreo = resumen.conflictosIngresoCorreo
-                    conflictosGafete = resumen.conflictosGafete
+                    mensajesConflictos = resumen.mensajesConflictos
                 }
             },
         )
@@ -336,10 +320,7 @@ fun PantallaPrincipal(
         val resumen = nubeViewModel.ultimoResumen
         if (resumen != null) {
             refrescarNube += 1
-            conflictosIngreso = resumen.conflictosIngreso
-            conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
-            conflictosIngresoCorreo = resumen.conflictosIngresoCorreo
-            conflictosGafete = resumen.conflictosGafete
+            mensajesConflictos = resumen.mensajesConflictos
         }
     }
 
@@ -528,9 +509,7 @@ fun PantallaPrincipal(
         // conflictos en una sola franja (ver `FranjaConflictos.kt`). Sólo
         // informativa por ahora (fase 3, PR #62): sin botón de acción directa.
         FranjaConflictos(
-            remember(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete) {
-                mensajesConflictos(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete)
-            },
+            mensajesConflictos,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
 

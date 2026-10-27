@@ -62,7 +62,6 @@ pub use error::NucleoError;
 use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
-    ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
     IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
     IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
