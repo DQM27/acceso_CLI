@@ -2,6 +2,10 @@ package com.brisas.controlacceso
 
 import android.app.Application
 import android.system.Os
+import android.util.Log
+import androidx.camera.camera2.Camera2Config
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraXConfig
 
 /// Punto de entrada del proceso, antes que cualquier Activity/ViewModel --
 /// necesario para fijar `CONTROL_ACCESO_SUPABASE_URL`/`APIKEY` (leídas por
@@ -17,7 +21,19 @@ import android.system.Os
 /// debug y diagnóstico) -- release (firmado, distribuido vía GitHub
 /// Releases) sigue apuntando a producción sin tocar nada. La app ya está en producción real:
 /// un build de prueba NUNCA debe poder escribir en esa base por accidente.
-class AplicacionControlAcceso : Application() {
+class AplicacionControlAcceso : Application(), CameraXConfig.Provider {
+    /// CameraX sólo conoce la cámara trasera, la única que usa la app (todas
+    /// las pantallas de escaneo y la vinculación piden `DEFAULT_BACK_CAMERA`).
+    /// Al iniciarse, CameraX consulta cada cámara del teléfono (el A25 trae
+    /// cuatro), y eso tiene un costo por cámara: es lo que recomienda la
+    /// documentación de CameraX para bajar la latencia de arranque. Sólo
+    /// errores en el log de CameraX.
+    override fun getCameraXConfig(): CameraXConfig =
+        CameraXConfig.Builder.fromConfig(Camera2Config.defaultConfig())
+            .setAvailableCamerasLimiter(CameraSelector.DEFAULT_BACK_CAMERA)
+            .setMinimumLoggingLevel(Log.ERROR)
+            .build()
+
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.AMBIENTE_STAGING) {
