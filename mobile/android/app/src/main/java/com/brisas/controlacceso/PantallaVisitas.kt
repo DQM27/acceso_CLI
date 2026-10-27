@@ -187,7 +187,6 @@ private fun ListaAdentro(visitas: List<VisitaAdentro>, onElegir: (VisitaAdentro)
                     detalle = "${visita.cedula} · ${visita.empresa ?: "Visita a ${visita.anfitrion}"}",
                     gafeteNumero = visita.gafeteNumero,
                     fechaHoraIngreso = visita.fechaHoraEntrada,
-                    dioIngreso = visita.usuarioEntradaNombre,
                     otroEquipo = visita.origen is OrigenVisita.OtroEquipo,
                     onClick = { onElegir(visita) },
                 )

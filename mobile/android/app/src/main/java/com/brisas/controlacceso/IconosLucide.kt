@@ -88,6 +88,24 @@ internal object IconosLucide {
         )
     }
 
+    /// Registrado en otro equipo de la unidad, llegado por la nube (`Cloud`).
+    val Nube: ImageVector by lazy {
+        icono(
+            "Cloud",
+            "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z",
+        )
+    }
+
+    /// Tema automático, el del teléfono (`Smartphone`).
+    val Telefono: ImageVector by lazy {
+        icono(
+            "Smartphone",
+            // rect x=5 y=2 width=14 height=20 rx=2
+            "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z",
+            "M12 18h.01",
+        )
+    }
+
     private fun icono(nombre: String, vararg trazos: String): ImageVector =
         ImageVector.Builder(
             name = "Lucide.$nombre",

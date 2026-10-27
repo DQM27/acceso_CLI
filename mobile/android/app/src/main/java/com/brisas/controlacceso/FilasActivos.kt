@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,7 +20,15 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
@@ -47,7 +53,6 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
         detalle = "${activo.cedula} · ${activo.empresaNombre}",
         gafeteNumero = activo.gafeteNumero,
         fechaHoraIngreso = activo.fechaHoraIngreso,
-        dioIngreso = activo.usuarioIngresoNombre,
         otroEquipo = false,
         onClick = onClick,
     )
@@ -64,23 +69,27 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
         detalle = "${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"}",
         gafeteNumero = remoto.gafeteNumero,
         fechaHoraIngreso = remoto.horaEntrada,
-        dioIngreso = remoto.usuarioEntradaNombre ?: "—",
         otroEquipo = true,
         onClick = onClick,
     )
 }
 
 /// Tarjeta de quien está adentro (tocar = salida). La comparten
-/// contratistas y visitas para que se vean y se usen igual (pedido del
-/// usuario 2026-10-06). Lo que entró por el otro equipo de la unidad lleva
-/// el ícono de la PC a la derecha, en vez de texto, para ahorrar espacio.
+/// contratistas, proveedores, por correo, visitas y los gafetes de KOF para
+/// que se vean y se usen igual (pedido del usuario 2026-10-06).
+///
+/// Sólo lo esencial (rediseño 2026-10-27, "menos es más"), en dos renglones:
+/// a la izquierda el nombre y, en gris, la cédula y la empresa; a la derecha
+/// el gafete en un cuadro redondeado (lo que se compara en la salida) y
+/// debajo la hora, todas alineadas en columna para leerlas de un vistazo (con
+/// el día sólo si fue otro día), con la nube si entró por otro equipo. Quién
+/// dio el ingreso quedó para el historial del escritorio y el panel.
 @Composable
 internal fun TarjetaActivo(
     nombre: String,
     detalle: String,
     gafeteNumero: Long?,
     fechaHoraIngreso: String,
-    dioIngreso: String,
     otroEquipo: Boolean,
     onClick: () -> Unit,
 ) {
@@ -90,20 +99,22 @@ internal fun TarjetaActivo(
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(textoResaltado(nombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            // Mayúscula + negrita en toda la línea, gafete en azul -- pedido
-            // explícito del usuario 2026-09-20: es lo que el guardia de
-            // salida confirma contra lo que la persona trae puesto, tiene
-            // que resaltar más que cédula/empresa. Dentro de una búsqueda, lo
-            // buscado (una cédula, por ejemplo) se subraya en el color de la
-            // sección.
+            Text(
+                textoResaltado(nombre),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Dentro de una búsqueda, lo buscado (una cédula, por ejemplo) se
+            // subraya en el color de la sección.
             //
             // Los textos se recuerdan por valor: cada refresco de la lista
             // trae objetos nuevos del núcleo (sus campos son `var`, así que
@@ -111,44 +122,78 @@ internal fun TarjetaActivo(
             // volvía a armar la línea y a leer y formatear la fecha.
             val consulta = LocalConsultaResaltada.current
             val acento = MaterialTheme.colorScheme.primary
-            val lineaDetalle = remember(detalle, gafeteNumero, consulta, acento) {
+            val lineaDetalle = remember(detalle, consulta, acento) {
                 val estiloCoincidencia = SpanStyle(color = acento, textDecoration = TextDecoration.Underline)
-                buildAnnotatedString {
-                    agregarResaltado("$detalle · ".uppercase(), consulta, estiloCoincidencia)
-                    withStyle(SpanStyle(color = acento)) {
-                        append((if (gafeteNumero != null) "Gafete $gafeteNumero" else "Sin gafete").uppercase())
-                    }
-                }
+                buildAnnotatedString { agregarResaltado(detalle, consulta, estiloCoincidencia) }
             }
             Text(
                 lineaDetalle,
                 style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val lineaIngreso = remember(fechaHoraIngreso, dioIngreso) {
-                "Ingresó ${textoFechaHora(fechaHoraIngreso)} · dio ingreso $dioIngreso"
-            }
-            Text(
-                lineaIngreso,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (otroEquipo) IconoOtroEquipo()
+        Spacer(Modifier.width(12.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            CuadroGafete(gafeteNumero)
+            val hora = remember(fechaHoraIngreso) { horaIngreso(fechaHoraIngreso) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (otroEquipo) {
+                    IconoOtroEquipo(Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    hora.texto,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (hora.deOtroDia) ColorTextoAdvertenciaBrisas else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (hora.deOtroDia) FontWeight.Bold else FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
-/// La marca de "entró por el otro equipo de la unidad": el mismo ícono en
-/// todas las listas (contratistas, visitas, por correo, proveedores y
-/// gafetes provisionales), nunca texto.
+/// El número de gafete en un cuadro de esquinas redondeadas (pedido del
+/// usuario 2026-10-27: cuadrado, no píldora), en el color de la sección;
+/// "S/G" en gris si entró sin gafete.
 @Composable
-internal fun IconoOtroEquipo() {
+private fun CuadroGafete(gafeteNumero: Long?) {
+    val conGafete = gafeteNumero != null
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 30.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (conGafete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 8.dp)
+            .semantics(mergeDescendants = true) { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            gafeteNumero?.toString() ?: "S/G",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (conGafete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/// La marca de "entró por otro equipo de la unidad": una nube, la misma en
+/// todas las listas (contratistas, visitas, por correo, proveedores y
+/// gafetes provisionales), nunca texto. Antes era una computadora aunque el
+/// ingreso viniera de otro teléfono; lo que importa es que llegó de otro lado
+/// (y que cerrarlo pide conexión).
+@Composable
+internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
     Icon(
-        Icons.Default.Computer,
-        contentDescription = "Registrado en otro dispositivo",
-        tint = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.size(20.dp),
+        IconosLucide.Nube,
+        contentDescription = "Registrado en otro equipo",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
     )
 }
 
