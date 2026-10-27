@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.PreparacionIngreso
 /// Una sola vista para el ciclo completo — entrada, permanencia y salida —,
 /// igual que `Activos.tsx` en desktop (ahí "+Nuevo"/"Salida" abren modales
 /// sobre la misma grilla de activos; ver docs/plan-app-movil.md, addendum
@@ -87,12 +88,24 @@ fun PantallaActivos(
         viewModel.alertaSonada(aviso.id)
     }
 
+    // El ingreso es una hoja sobre la lista ([HojaIngreso]), no un panel: se
+    // sigue dibujando mientras baja, aunque el ViewModel ya haya soltado la
+    // selección. Lo escrito vive acá, no en la hoja: la cámara de placa la
+    // tapa (la saca de la composición) y al volver tiene que estar igual.
+    val formulario = viewModel.seleccionIngreso as? SeleccionIngreso.Formulario
+    var hojaIngreso by remember { mutableStateOf<PreparacionIngreso?>(null) }
+    LaunchedEffect(formulario) {
+        if (formulario != null) hojaIngreso = formulario.preparacion
+    }
+    val camposIngreso = rememberCamposIngreso(hojaIngreso?.contratistaId)
+    var escanerPlacaAbierto by remember { mutableStateOf(false) }
+
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
-    // ingreso en curso, luego los escáneres, y si no la lista).
+    // ingreso bloqueado, luego los escáneres, y si no la lista).
     val panel: PanelActivos = when (val actual = viewModel.seleccionIngreso) {
-        is SeleccionIngreso.Formulario -> PanelActivos.Confirmar(actual)
         is SeleccionIngreso.Bloqueada -> PanelActivos.Bloqueado(actual)
         else -> when {
+            escanerPlacaAbierto && formulario != null -> PanelActivos.EscanerPlaca
             escanerAbierto -> PanelActivos.EscanerCedula
             escanerGafeteSalidaAbierto -> PanelActivos.EscanerGafete
             else -> PanelActivos.Lista
@@ -117,20 +130,9 @@ fun PantallaActivos(
         label = "panelActivos",
     ) { mostrado ->
         when (mostrado) {
-            is PanelActivos.Confirmar -> {
-                // Los formularios ocupan toda la pantalla: sin barra de
-                // secciones encima (las cámaras la esconden solas).
-                OcultarBarraSecciones()
-                PantallaConfirmarIngreso(
-                    preparacion = mostrado.seleccion.preparacion,
-                    error = viewModel.errorIngreso,
-                    registrando = viewModel.registrandoIngreso,
-                    onRegistrar = viewModel::registrarIngreso,
-                    onLimpiarError = viewModel::limpiarErrorIngreso,
-                    onCambiar = { viewModel.cancelarSeleccionIngreso() },
-                )
-            }
             is PanelActivos.Bloqueado -> {
+                // Ocupa toda la pantalla: sin barra de secciones encima (las
+                // cámaras la esconden solas).
                 OcultarBarraSecciones()
                 PantallaIngresoBloqueado(
                     preparacion = mostrado.seleccion.preparacion,
@@ -166,6 +168,23 @@ fun PantallaActivos(
                         }
                     },
                     onCerrar = { escanerAbierto = false },
+                )
+            }
+            PanelActivos.EscanerPlaca -> {
+                // La misma cámara que lee placas en Proveedores y Rutas. Si
+                // lee un número de unidad (calcomanía de flota) en vez de una
+                // placa, igual se usa el texto leído, mismo criterio que
+                // Proveedores. Al cerrarla vuelve la hoja de ingreso.
+                PantallaEscanearVehiculoRuta(
+                    onVehiculoDetectado = { detectado ->
+                        // Como va impresa en la placa (`CL 371931`, `BPH-485`).
+                        camposIngreso.placaTexto = placaComoSeImprime(detectado.valor)
+                        viewModel.limpiarErrorIngreso()
+                        escanerPlacaAbierto = false
+                    },
+                    onCerrar = { escanerPlacaAbierto = false },
+                    mensajeInicial = "Apunte a la placa del vehículo",
+                    mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
                 )
             }
             PanelActivos.EscanerGafete -> {
@@ -293,6 +312,21 @@ fun PantallaActivos(
                 yaAdentro = viewModel.salidaYaAdentro,
             )
 
+            hojaIngreso?.let { preparacion ->
+                HojaIngreso(
+                    preparacion = preparacion,
+                    campos = camposIngreso,
+                    abierta = formulario?.preparacion == preparacion,
+                    error = viewModel.errorIngreso,
+                    registrando = viewModel.registrandoIngreso,
+                    onRegistrar = viewModel::registrarIngreso,
+                    onLimpiarError = viewModel::limpiarErrorIngreso,
+                    onCancelar = { viewModel.cancelarSeleccionIngreso() },
+                    onEscanearPlaca = { escanerPlacaAbierto = true },
+                    onCerrada = { hojaIngreso = null },
+                )
+            }
+
             }
         }
     }
@@ -304,8 +338,10 @@ private sealed interface PanelActivos {
     val conCamara: Boolean get() = false
 
     data object Lista : PanelActivos
-    data class Confirmar(val seleccion: SeleccionIngreso.Formulario) : PanelActivos
     data class Bloqueado(val seleccion: SeleccionIngreso.Bloqueada) : PanelActivos
+    data object EscanerPlaca : PanelActivos {
+        override val conCamara get() = true
+    }
     data object EscanerCedula : PanelActivos {
         override val conCamara get() = true
     }

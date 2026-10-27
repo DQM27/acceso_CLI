@@ -28,10 +28,10 @@ internal const val MS_SALIDA = 120
 internal const val MS_FUNDIDO_ENTRADA = 180
 
 /// Curva "emphasized decelerate" de Material 3: arranca rápido y frena suave.
-private val CurvaEntrada = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+internal val CurvaEntrada = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
 
 /// Curva "emphasized accelerate": la pantalla que se va sale rápido.
-private val CurvaSalida = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+internal val CurvaSalida = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
 /// Sin animación: el cambio es inmediato.
 internal val SinTransicion = ContentTransform(

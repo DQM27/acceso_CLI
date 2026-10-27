@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Warning
@@ -41,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 
@@ -350,9 +350,10 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// demasiado para confirmar una salida). Lo comparten contratistas,
 /// proveedores, correo, visitas y KOF.
 ///
-/// Al confirmar, el panel baja primero y recién entonces avisa: si el que
-/// llama lo quitara de la composición en el acto, desaparecería de golpe.
-/// `confirmado` evita que un segundo toque registre dos veces mientras baja.
+/// Al confirmar, la flecha sigue de largo hacia la izquierda ([IconoPaso]),
+/// el panel baja y recién entonces avisa: si el que llama lo quitara de la
+/// composición en el acto, desaparecería de golpe. `confirmado` evita que un
+/// segundo toque registre dos veces mientras baja.
 ///
 /// Con [aviso] (se escaneó a alguien que ya estaba adentro, pedido del
 /// usuario 2026-10-26): triángulo ámbar en vez del ícono de salida, el aviso
@@ -372,7 +373,10 @@ internal fun DialogoRegistrarSalida(
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
     fun cerrarY(accionAlCerrar: () -> Unit) {
-        alcance.launch { estado.hide() }.invokeOnCompletion { accionAlCerrar() }
+        alcance.launch {
+            if (confirmado) delay(MS_ANTES_DE_BAJAR)
+            estado.hide()
+        }.invokeOnCompletion { accionAlCerrar() }
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -385,20 +389,18 @@ internal fun DialogoRegistrarSalida(
                 .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (aviso != null) ColorAdvertenciaBrisas.copy(alpha = 0.16f) else MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (aviso != null) {
+            if (aviso != null) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(ColorAdvertenciaBrisas.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(Icons.Default.Warning, contentDescription = null, tint = ColorAdvertenciaBrisas)
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
+            } else {
+                IconoPaso(Paso.SALIDA, siguiendo = confirmado)
             }
             if (aviso != null) {
                 Text(
