@@ -69,9 +69,18 @@ object GestorTema {
     }
 
     fun alternar(actual: TemaApp) {
-        val siguiente = actual.siguiente()
-        temaForzado = siguiente
-        prefs.edit().putString(CLAVE_TEMA, siguiente.name).apply()
+        elegir(actual.siguiente())
+    }
+
+    /// `null` = automático, según el sistema (pedido del usuario 2026-10-27:
+    /// una vez elegido claro u oscuro no había cómo volver). Se borra también
+    /// la clave vieja: si quedara, [temaGuardado] la volvería a aplicar.
+    fun elegir(tema: TemaApp?) {
+        temaForzado = tema
+        prefs.edit().apply {
+            if (tema == null) remove(CLAVE_TEMA) else putString(CLAVE_TEMA, tema.name)
+            remove(CLAVE_OSCURO_VIEJA)
+        }.apply()
     }
 }
 

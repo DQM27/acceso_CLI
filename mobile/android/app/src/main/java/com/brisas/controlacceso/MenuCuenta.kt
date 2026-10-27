@@ -7,6 +7,10 @@ import androidx.compose.animation.core.tween
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -91,8 +95,8 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 @Composable
 fun MenuCuenta(
     sesion: UsuarioSesion,
-    tema: TemaApp,
-    onAlternarTema: () -> Unit,
+    temaElegido: TemaApp?,
+    onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
     onCerrarSesion: () -> Unit,
     actualizador: ActualizacionViewModel,
@@ -175,8 +179,8 @@ fun MenuCuenta(
                 ) {
                     PanelCuenta(
                         sesion = sesion,
-                        tema = tema,
-                        onAlternarTema = onAlternarTema,
+                        temaElegido = temaElegido,
+                        onElegirTema = onElegirTema,
                         onAyuda = {
                             cerrar()
                             onAyuda()
@@ -214,8 +218,8 @@ fun MenuCuenta(
 @Composable
 private fun PanelCuenta(
     sesion: UsuarioSesion,
-    tema: TemaApp,
-    onAlternarTema: () -> Unit,
+    temaElegido: TemaApp?,
+    onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
     actualizacion: OpcionActualizacion?,
     onActualizacion: (AccionActualizacion) -> Unit,
@@ -247,15 +251,8 @@ private fun PanelCuenta(
             }
             SeparadorFino()
             FilaEscalonada(indice = 1) {
-                // El ícono dice cuál está puesto (como en el escritorio);
-                // tocar la fila cambia al otro. El menú queda abierto: se ve el
-                // cambio de tema en el acto.
-                OpcionMenu(
-                    texto = if (tema == TemaApp.TOKYO_NIGHT) "Tema oscuro" else "Tema claro",
-                    onClick = onAlternarTema,
-                ) {
-                    IconoTema(tema)
-                }
+                // El menú queda abierto: se ve el cambio de tema en el acto.
+                SelectorTema(elegido = temaElegido, onElegir = onElegirTema)
             }
             SeparadorFino()
             FilaEscalonada(indice = 2) {
@@ -345,6 +342,49 @@ private fun OpcionMenu(
         icono()
     }
 }
+
+/// Las tres opciones de tema a la vista, como en los ajustes de iOS:
+/// automático (el del teléfono), claro y oscuro. `null` = automático.
+@Composable
+private fun SelectorTema(elegido: TemaApp?, onElegir: (TemaApp?) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(3.dp),
+    ) {
+        OPCIONES_TEMA.forEach { (tema, texto, icono) ->
+            val activa = tema == elegido
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (activa) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .selectable(selected = activa, role = Role.RadioButton, onClick = { onElegir(tema) })
+                    .padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val color = if (activa) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+                Text(
+                    texto,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color,
+                    fontWeight = if (activa) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+private val OPCIONES_TEMA: List<Triple<TemaApp?, String, ImageVector>>
+    get() = listOf(
+        Triple(null, "Auto", IconosLucide.Telefono),
+        Triple(TemaApp.TOKYO_DAY, "Claro", IconosLucide.Sol),
+        Triple(TemaApp.TOKYO_NIGHT, "Oscuro", IconosLucide.Luna),
+    )
 
 @Composable
 private fun SeparadorFino() {

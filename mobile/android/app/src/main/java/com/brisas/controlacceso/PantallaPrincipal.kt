@@ -446,15 +446,14 @@ fun PantallaPrincipal(
                 // Sin botón "Sincronizar": cada lista sincroniza tirando hacia
                 // abajo (ver `ListaConEstados`), y además está el pulso
                 // periódico y Realtime.
-                val tema = temaActual()
                 // La misma instancia que ya creó `MainActivity` para la franja
                 // (mismo dueño: la Activity).
                 val actualizador: ActualizacionViewModel =
                     viewModel(factory = ActualizacionViewModel.factory(LocalContext.current))
                 MenuCuenta(
                     sesion = sesion,
-                    tema = tema,
-                    onAlternarTema = { GestorTema.alternar(tema) },
+                    temaElegido = GestorTema.temaForzado,
+                    onElegirTema = GestorTema::elegir,
                     onAyuda = {
                         mostrarAvisos = false
                         mostrarNuevoContratista = false
