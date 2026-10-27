@@ -352,13 +352,15 @@ internal fun PantallaBloqueoIngreso(titulo: String, subtitulo: String, mensaje: 
 
 /// Botón de dos estados "S/G" (sin gafete), del mismo alto que el campo del
 /// número: apagado, con borde y letras en el color de la sección; encendido,
-/// relleno. El cambio de un estado al otro se funde.
+/// relleno como los botones principales. El cambio de un estado al otro se funde.
 @Composable
 private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Modifier = Modifier) {
     val acento = MaterialTheme.colorScheme.primary
-    val fondo by animateColorAsState(if (activo) acento else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
+    val relleno = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas
+    val sobreRelleno = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas
+    val fondo by animateColorAsState(if (activo) relleno else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
     val texto by animateColorAsState(
-        if (activo) MaterialTheme.colorScheme.onPrimary else acento,
+        if (activo) sobreRelleno else acento,
         tween(MS_FUNDIDO_ENTRADA),
         label = "textoSinGafete",
     )
@@ -367,7 +369,7 @@ private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Mo
             .size(width = 64.dp, height = 56.dp)
             .clip(FormaCampoBrisas)
             .background(fondo)
-            .border(1.dp, acento, FormaCampoBrisas)
+            .border(1.dp, if (activo) relleno else acento, FormaCampoBrisas)
             .toggleable(value = activo, role = Role.Switch, onValueChange = { onAlternar() })
             .semantics { contentDescription = "Sin gafete" },
         contentAlignment = Alignment.Center,

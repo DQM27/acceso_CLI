@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -151,26 +150,21 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
         label = "avisoBreve",
     ) {
         val aviso = mostrado ?: return@AnimatedVisibility
-        val (fondo, contenido) = coloresEstado(aviso.tipo)
-        val exito = aviso.tipo == TipoEstado.EXITO
+        val paleta = paletaActual
         Surface(
             shape = RoundedCornerShape(percent = 50),
-            // Sobre cualquier fondo: la superficie de la app con un borde fino,
-            // sin sombra (ver la nota de 1.6.3 sobre sombras y desenfoque). Un
-            // éxito (sobre todo las confirmaciones de registro, ver
-            // [ReenviarConfirmaciones]) va en verde lleno: se lee de un vistazo.
-            color = when {
-                exito -> ColorExitoBrisas
-                aviso.tipo == TipoEstado.INFO -> MaterialTheme.colorScheme.surface
-                else -> fondo
+            // Lleno y con texto blanco, en el color de su tipo: verde éxito,
+            // azul información, rojo error (pedido del usuario 2026-10-27:
+            // antes sólo el éxito tenía color y los demás se confundían con
+            // la superficie). Sin sombra (ver la nota de 1.6.3 sobre sombras y
+            // desenfoque). Los tonos profundos, no los de texto: en oscuro los
+            // claros quedaban fluorescentes (ver `PaletaLattis.kt`).
+            color = when (aviso.tipo) {
+                TipoEstado.EXITO -> paleta.rellenoExito
+                TipoEstado.ERROR, TipoEstado.AVISO -> paleta.rellenoError
+                TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.rellenoInfo
             },
-            // El verde de Tokyo Night es claro: ahí el texto va oscuro.
-            contentColor = if (exito) {
-                if (temaActual().oscuro) Color(0xFF16161E) else Color.White
-            } else {
-                contenido
-            },
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+            contentColor = paleta.sobreRelleno,
             modifier = Modifier.clickable { avisos.ocultar(aviso.id) },
         ) {
             Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -266,8 +266,8 @@ fun BotonBrisas(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(
-        containerColor = LocalRellenoBotones.current?.color ?: ColorRellenoBrisas,
-        contentColor = LocalRellenoBotones.current?.sobreColor ?: ColorSobreRellenoBrisas,
+        containerColor = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas,
+        contentColor = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas,
     ),
     content: @Composable RowScope.() -> Unit,
 ) {

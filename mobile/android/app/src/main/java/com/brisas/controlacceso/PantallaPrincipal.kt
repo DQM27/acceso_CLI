@@ -798,7 +798,7 @@ private fun BarraSecciones(
             .height(ALTO_BARRA_SECCIONES)
             .clip(forma)
             .background(superficie.copy(alpha = ALFA_VELO))
-            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), forma)
+            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
             .padding(5.dp)
             .drawBehind {
                 val cantidad = SECCIONES_VISIBLES.size

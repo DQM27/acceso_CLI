@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -81,11 +80,6 @@ internal fun rememberHojaArriba(estado: SheetState): Boolean {
     }
     return arriba
 }
-
-/// Amarillo y negro de señal de tránsito: iguales en tema claro y oscuro,
-/// como una señal de verdad.
-private val AmarilloSenal = Color(0xFFFFC20E)
-private val NegroSenal = Color(0xFF1F1F1F)
 
 /// "Persona con ingreso activo" (se escaneó a alguien que ya estaba adentro):
 /// una señal de advertencia de tránsito, triángulo amarillo con borde y "!"

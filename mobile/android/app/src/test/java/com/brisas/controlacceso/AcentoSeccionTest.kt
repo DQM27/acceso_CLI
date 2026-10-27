@@ -25,7 +25,7 @@ class AcentoSeccionTest {
     }
 
     private fun fondos(oscuro: Boolean): List<Color> =
-        if (oscuro) listOf(TokyoNight.background, TokyoNight.surface) else listOf(TokyoDay.background, TokyoDay.surface)
+        if (oscuro) listOf(EsquemaNoche.background, EsquemaNoche.surface) else listOf(EsquemaDia.background, EsquemaDia.surface)
 
     @Test
     fun elTextoSobreElAcentoSeLeeEnAmbosTemas() {
@@ -33,6 +33,16 @@ class AcentoSeccionTest {
             for ((nombre, acento) in acentos(oscuro)) {
                 val razon = contraste(acento.color, acento.sobreColor)
                 assertTrue("$nombre oscuro=$oscuro: texto sobre acento $razon", razon >= 4.5)
+            }
+        }
+    }
+
+    @Test
+    fun elTextoSobreElRellenoDeLosBotonesSeLeeEnAmbosTemas() {
+        for (oscuro in listOf(false, true)) {
+            for ((nombre, acento) in acentos(oscuro)) {
+                val razon = contraste(acento.relleno, acento.sobreRelleno)
+                assertTrue("$nombre oscuro=$oscuro: texto sobre relleno $razon", razon >= 4.5)
             }
         }
     }
