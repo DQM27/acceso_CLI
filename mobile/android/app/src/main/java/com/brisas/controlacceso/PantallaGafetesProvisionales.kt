@@ -120,7 +120,6 @@ fun PantallaGafetesProvisionales(
                 onElegir = { filaParaDevolver = it },
             )
         }
-        PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
 
         BuscadorInferior(
             visible = buscandoPrestamo,

@@ -232,24 +232,10 @@ internal fun OcultarBarraSecciones() {
 }
 
 /** Espacio libre al final de las listas para que la última fila no quede
- * debajo de [FranjaConfirmacion] ni de la barra de secciones. */
+ * debajo de la barra de secciones ni de lo que flota con ella (el botón
+ * redondo y la píldora de búsqueda). */
 internal val EspacioPieLista: Dp
     @Composable get() = 72.dp + LocalMargenBarraInferior.current
-
-/** Lo que flota abajo de una pantalla con lista: la confirmación del último
- * registro ([FranjaConfirmacion]), justo encima de la barra de secciones. La
- * acción principal de la pantalla ya no flota acá: va en el botón redondo junto
- * a la barra (ver `AccionInferior.kt`). Va dentro de un `Box` a pantalla
- * completa, alineado abajo. */
-@Composable
-internal fun PieFlotante(confirmacion: ConfirmacionReciente, modifier: Modifier = Modifier) {
-    FranjaConfirmacion(
-        confirmacion,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMargenBarraInferior.current),
-    )
-}
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas.
  * Dentro de una sección, en su color ([LocalRellenoBotones]). */

@@ -68,7 +68,7 @@ internal fun <T> ListaConEstados(
     detalleVacio: String,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
-    // Abajo, lugar para el botón flotante y la confirmación (ver [PieFlotante]).
+    // Abajo, lugar para lo que flota sobre la barra (ver [EspacioPieLista]).
     contentPadding: PaddingValues = PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     // El del mensaje sin filas: el de la sección (cajas en Proveedores, sobre
     // en Correo, insignia en KOF), como el ícono de su pestaña.

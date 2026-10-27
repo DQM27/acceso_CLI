@@ -53,7 +53,7 @@ class ProveedoresViewModel(
         private set
 
     /// "Ingreso registrado · …" / "Salida registrada · …" (ver
-    /// [FranjaConfirmacion]).
+    /// [ReenviarConfirmaciones]).
     val confirmacion = ConfirmacionReciente()
     var cargando by mutableStateOf(false)
         private set

@@ -37,7 +37,7 @@ class CorreoViewModel(
         private set
 
     /// "Ingreso registrado · …" / "Salida registrada · …" (ver
-    /// [FranjaConfirmacion]).
+    /// [ReenviarConfirmaciones]).
     val confirmacion = ConfirmacionReciente()
     var error by mutableStateOf<String?>(null)
         private set

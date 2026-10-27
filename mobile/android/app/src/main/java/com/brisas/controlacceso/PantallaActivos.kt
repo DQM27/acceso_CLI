@@ -250,7 +250,6 @@ fun PantallaActivos(
                 }
             }
 
-            PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
             AccionActivos(
                 modo = viewModel.modo,
                 onEscanearCedula = { escanerAbierto = true },

@@ -152,12 +152,24 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
     ) {
         val aviso = mostrado ?: return@AnimatedVisibility
         val (fondo, contenido) = coloresEstado(aviso.tipo)
+        val exito = aviso.tipo == TipoEstado.EXITO
         Surface(
             shape = RoundedCornerShape(percent = 50),
             // Sobre cualquier fondo: la superficie de la app con un borde fino,
-            // sin sombra (ver la nota de 1.6.3 sobre sombras y desenfoque).
-            color = if (aviso.tipo == TipoEstado.INFO) MaterialTheme.colorScheme.surface else fondo,
-            contentColor = contenido,
+            // sin sombra (ver la nota de 1.6.3 sobre sombras y desenfoque). Un
+            // éxito (sobre todo las confirmaciones de registro, ver
+            // [ReenviarConfirmaciones]) va en verde lleno: se lee de un vistazo.
+            color = when {
+                exito -> ColorExitoBrisas
+                aviso.tipo == TipoEstado.INFO -> MaterialTheme.colorScheme.surface
+                else -> fondo
+            },
+            // El verde de Tokyo Night es claro: ahí el texto va oscuro.
+            contentColor = if (exito) {
+                if (temaActual().oscuro) Color(0xFF16161E) else Color.White
+            } else {
+                contenido
+            },
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
             modifier = Modifier.clickable { avisos.ocultar(aviso.id) },
         ) {

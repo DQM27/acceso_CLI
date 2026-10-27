@@ -361,6 +361,14 @@ fun PantallaPrincipal(
         SeccionPrincipal.KOF to gafetesViewModel.activos.size,
         SeccionPrincipal.EXTERNOS to proveedoresViewModel.activos.size + correoViewModel.activos.size,
     )
+    // "Ingreso registrado · …" y compañía, de cualquier sección, arriba.
+    ReenviarConfirmaciones(
+        avisosBreves,
+        activosViewModel.confirmacion,
+        gafetesViewModel.confirmacion,
+        proveedoresViewModel.confirmacion,
+        correoViewModel.confirmacion,
+    )
     // Cada pantalla se refresca sola tras una sincronización mientras está a la
     // vista; las que no se ven se refrescan acá para que su globito no quede
     // atrasado.
