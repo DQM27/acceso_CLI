@@ -20,12 +20,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Route
@@ -378,12 +376,6 @@ fun PantallaPrincipal(
         if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
     }
 
-    // El puntito de conexión junto al nombre de la app.
-    val conexion = estadoConexion(
-        hayRed = rememberHayRed(),
-        falloSincronizacion = nubeViewModel.error != null,
-    )
-
     // Qué ocupa la pantalla debajo de la barra superior.
     val panel = when {
         mostrarAvisos -> PanelPrincipal.AVISOS
@@ -414,33 +406,32 @@ fun PantallaPrincipal(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // El título grande es la sección a la vista (como el de cada
-            // pestaña de iOS) y, debajo, la unidad y cuántos hay adentro. El
+            // pestaña de iOS) y, debajo, la unidad. Cuántos hay adentro lo
+            // dice el globito de la barra de abajo; repetirlo acá sobraba. El
             // nombre de la app ya se ve en el login. Quién tiene la sesión
             // vive en el menú de la cuenta.
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedContent(
-                        targetState = seccion,
-                        transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
-                        label = "tituloSeccion",
-                    ) { seccionTitulo ->
-                        Text(
-                            seccionTitulo.etiqueta,
-                            style = MaterialTheme.typography.headlineMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    PuntoConexion(conexion)
+                AnimatedContent(
+                    targetState = seccion,
+                    transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
+                    label = "tituloSeccion",
+                ) { seccionTitulo ->
+                    Text(
+                        seccionTitulo.etiqueta,
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                Text(
-                    subtituloSeccion(textoUnidad, seccion, adentro[seccion] ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (textoUnidad != null) {
+                    Text(
+                        textoUnidad,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = {
@@ -458,8 +449,7 @@ fun PantallaPrincipal(
                 })
                 // Sin botón "Sincronizar": cada lista sincroniza tirando hacia
                 // abajo (ver `ListaConEstados`), y además está el pulso
-                // periódico y Realtime. El punto de conexión junto al nombre
-                // sigue diciendo si la nube responde.
+                // periódico y Realtime.
                 val tema = temaActual()
                 // La misma instancia que ya creó `MainActivity` para la franja
                 // (mismo dueño: la Activity).
@@ -745,17 +735,6 @@ fun PantallaPrincipal(
     )
     }
     }
-}
-
-/// Lo que dice debajo del título de la sección: la unidad operativa y
-/// cuántos hay adentro (en KOF, cuántos gafetes hay prestados). La cuenta va
-/// acá y no sólo en el globito de la barra: es lo primero que se lee.
-internal fun subtituloSeccion(unidad: String?, seccion: SeccionPrincipal, cantidad: Int): String {
-    val cuenta = when (seccion) {
-        SeccionPrincipal.KOF -> if (cantidad == 1) "1 gafete prestado" else "$cantidad gafetes prestados"
-        else -> "$cantidad adentro"
-    }
-    return listOfNotNull(unidad, cuenta).joinToString(" · ")
 }
 
 /// Cuánto hay que desplazar de una vez para replegar o mostrar la píldora:
