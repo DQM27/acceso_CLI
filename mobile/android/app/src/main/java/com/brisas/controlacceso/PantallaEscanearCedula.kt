@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,7 +15,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -342,13 +338,7 @@ private fun VistaCamaraCedula(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (onLlenarAMano != null) {
-                TextButton(
-                    onClick = onLlenarAMano,
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {
-                    Text("Llenar a mano")
-                }
+                BotonLlenarAManoCamara(onClick = onLlenarAMano, modifier = Modifier.padding(bottom = 16.dp))
             }
             BotonCerrarCamara(onClick = onCerrar)
         }

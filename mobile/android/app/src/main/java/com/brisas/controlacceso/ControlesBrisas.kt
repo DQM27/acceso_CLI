@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -468,6 +469,31 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+    }
+}
+
+/** "Llenar a mano" en la cámara de documentos, como píldora con un lápiz
+ * (pedido del usuario 2026-10-27: era un texto blanco suelto encima de la X y
+ * pasaba desapercibido; con una cédula que no se dejaba leer no encontró cómo
+ * escribirla). Mismo fondo que [BotonCerrarCamara] y un borde blanco fino: el
+ * fondo de abajo de la cámara ya está oscurecido y sin borde la forma no se
+ * distinguía. */
+@Composable
+fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val forma = RoundedCornerShape(percent = 50)
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(forma)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, Color.White.copy(alpha = 0.7f), forma)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
 }
 
