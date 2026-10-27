@@ -136,7 +136,7 @@ internal fun TarjetaActivo(
         }
         Spacer(Modifier.width(12.dp))
         Column(
-            horizontalAlignment = Alignment.End,
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             CuadroGafete(gafeteNumero)
