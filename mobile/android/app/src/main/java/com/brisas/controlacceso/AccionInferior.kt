@@ -195,13 +195,14 @@ internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 /// rebote.
 @Composable
 internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
-    // La mitad derecha de la pieza que forma con la barra de secciones.
+    // Redondo, no la mitad de una pieza (pedido del usuario 2026-10-29): la
+    // barra sí queda cortada de su lado, y esa asimetría se ve mejor.
     BotonRedondoVidrio(
         tamano = tamano,
         descripcion = accion.descripcion,
         onClick = accion::tocar,
         modifier = modifier,
-        forma = FormaPiezaFin,
+        forma = CircleShape,
     ) {
         AnimatedContent(
             targetState = accion.icono,
