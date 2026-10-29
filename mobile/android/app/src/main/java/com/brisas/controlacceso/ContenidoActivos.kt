@@ -149,7 +149,7 @@ internal fun ResultadosIngreso(
 /// Resultados del buscador cuando se escribieron gafetes ("25" o "2, 25,
 /// 85"): la misma tarjeta de la lista de adentro, con el gafete en su cuadro,
 /// pintada de azul de salida; tocarla abre la salida, igual que en la lista
-/// (2026-10-28: antes tenía un diseño propio). Con dos o más encontrados,
+/// (2026-10-28: antes tenía un diseño propio). Con uno o más encontrados,
 /// además, un botón saca a todos de una vez (la vista previa con nombres hace
 /// de confirmación, como en escritorio). Un gafete que nadie tiene queda en
 /// una fila chica en rojo, para que no desaparezca en silencio.
@@ -183,13 +183,21 @@ internal fun ResultadosGafete(
                 }
             }
         }
-        if (encontrados.size >= 2) {
+        // Desde uno solo (pedido del usuario 2026-10-29): con un gafete
+        // escrito, el botón saca de una vez sin pasar por la hoja.
+        if (encontrados.isNotEmpty()) {
             BotonBrisas(
                 onClick = onRegistrarSalidaGafetes,
                 enabled = !enviando,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
-                Text(if (enviando) "Registrando…" else "Registrar salida (${encontrados.size})")
+                Text(
+                    when {
+                        enviando -> "Registrando…"
+                        encontrados.size == 1 -> "Registrar salida"
+                        else -> "Registrar salida (${encontrados.size})"
+                    },
+                )
             }
         }
     }

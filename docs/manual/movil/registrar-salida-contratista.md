@@ -52,8 +52,8 @@ la persona ya está adentro.
 2. Cada gafete aparece en una tarjeta **azul** con la persona que lo tiene,
    su gafete, la hora en que entró y **"Toque para registrar su salida"**.
    Tóquela y luego **Registrar salida**.
-3. Con dos o más encontrados, abajo aparece **Registrar salida (N)**: salen
-   todos de una vez.
+3. Abajo aparece **Registrar salida** (con varios, **Registrar salida
+   (N)**): salen todos de una vez, sin abrir el panel de cada uno.
 4. Si nadie lo tiene, se ve por qué: **"libre, nadie lo tiene"** (en gris),
    **"no existe"**, **"reportado perdido"** o **"dado de baja"** (en rojo).
 
