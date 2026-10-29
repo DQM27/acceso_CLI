@@ -44,7 +44,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -116,7 +116,10 @@ internal class AccionesInferiores {
     }
 }
 
-internal val LocalAccionesInferiores = staticCompositionLocalOf<AccionesInferiores?> { null }
+/// Dinámico y no `static`: a mitad de un deslizamiento pasa de una página a
+/// la otra, y con `static` cambiarlo recomponía las dos páginas enteras; así
+/// sólo se enteran quienes lo leen ([AccionPrincipal], [BusquedaPrincipal]).
+internal val LocalAccionesInferiores = compositionLocalOf<AccionesInferiores?> { null }
 
 /// La pantalla que la llama pone su acción en el botón redondo mientras esté a
 /// la vista (y [visible]). Fuera de las pestañas no hace nada.

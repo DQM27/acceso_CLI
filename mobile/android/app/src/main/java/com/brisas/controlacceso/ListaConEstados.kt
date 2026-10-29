@@ -33,7 +33,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,8 +55,8 @@ private enum class EstadoLista { MARCADORES, VACIA, LISTA }
 /// Si la lista de la sección a la vista está desplazada hacia abajo: la barra
 /// de arriba muestra entonces una línea fina en su borde, para que las
 /// tarjetas no se corten en seco. Sólo la página a la vista la recibe (como
-/// `LocalAccionesInferiores`).
-internal val LocalListaDesplazada = staticCompositionLocalOf<MutableState<Boolean>?> { null }
+/// `LocalAccionesInferiores`, y dinámico por el mismo motivo).
+internal val LocalListaDesplazada = compositionLocalOf<MutableState<Boolean>?> { null }
 
 /// Lista de gente adentro (contratistas, proveedores, visitas por correo,
 /// gafetes provisionales KOF): mismo comportamiento en todas.
