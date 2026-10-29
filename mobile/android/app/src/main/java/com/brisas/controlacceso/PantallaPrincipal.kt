@@ -28,6 +28,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -134,13 +135,10 @@ fun PantallaPrincipal(
     // expulsión en vivo.
     var mostrarReconexion by remember { mutableStateOf(false) }
     var equipoRetirado by remember { mutableStateOf(false) }
-    // La pestaña elegida y, dentro de Externos, el tipo (Proveedor o Correo,
-    // que cambia el color de la sección y de la pestaña de arriba: ver
-    // `AcentoSeccion.kt`). Viven acá y no junto a las pestañas: al abrir la
+    // La pestaña elegida. Vive acá y no junto a las pestañas: al abrir la
     // bandeja o "Nuevo contratista" las pestañas salen de la composición, y
     // al volver se caía siempre en Activos.
     var pestana by rememberSaveable { mutableIntStateOf(0) }
-    var indiceExterno by rememberSaveable { mutableIntStateOf(0) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
@@ -345,12 +343,14 @@ fun PantallaPrincipal(
     // pantalla obligaba a la barra de secciones a recomponerse también.
     val totalActivos = activosViewModel.totalAdentro ?: 0
     val totalKof = gafetesViewModel.activos.size
-    val totalExternos = proveedoresViewModel.activos.size + correoViewModel.activos.size
-    val adentro = remember(totalActivos, totalKof, totalExternos) {
+    val totalProveedores = proveedoresViewModel.activos.size
+    val totalCorreo = correoViewModel.activos.size
+    val adentro = remember(totalActivos, totalKof, totalProveedores, totalCorreo) {
         mapOf(
             SeccionPrincipal.ACTIVOS to totalActivos,
             SeccionPrincipal.KOF to totalKof,
-            SeccionPrincipal.EXTERNOS to totalExternos,
+            SeccionPrincipal.PROVEEDORES to totalProveedores,
+            SeccionPrincipal.CORREO to totalCorreo,
         )
     }
     // "Ingreso registrado · …" y compañía, de cualquier sección, arriba.
@@ -367,13 +367,11 @@ fun PantallaPrincipal(
     LaunchedEffect(refrescarNube) {
         if (refrescarNube == 0) return@LaunchedEffect
         val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-        val externo = tipoExternoVisible(indiceExterno)
         val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda || mostrarReconexion
-        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !fueraDePestanas
         if (seccion != SeccionPrincipal.ACTIVOS || fueraDePestanas) activosViewModel.refrescar()
         if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
-        if (!(enExternos && externo == TipoExterno.PROVEEDOR)) proveedoresViewModel.refrescarActivos()
-        if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
+        if (seccion != SeccionPrincipal.PROVEEDORES || fueraDePestanas) proveedoresViewModel.refrescarActivos()
+        if (seccion != SeccionPrincipal.CORREO || fueraDePestanas) correoViewModel.refrescarActivos()
     }
 
     // Qué ocupa la pantalla debajo de la barra superior.
@@ -397,7 +395,6 @@ fun PantallaPrincipal(
     // La que está a la vista: cambia a mitad del deslizamiento, así el título,
     // el color y la barra acompañan al dedo.
     val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
-    val externo = tipoExternoVisible(indiceExterno)
 
     CompositionLocalProvider(LocalAvisosBreves provides avisosBreves) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -602,7 +599,7 @@ fun PantallaPrincipal(
                 // al desplazar); al volver hacia arriba, o al cambiar de
                 // sección, reaparece.
                 var barraCompacta by remember { mutableStateOf(false) }
-                LaunchedEffect(seccion, externo) { barraCompacta = false }
+                LaunchedEffect(seccion) { barraCompacta = false }
                 val replegarAlDesplazar = remember {
                     object : NestedScrollConnection {
                         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
@@ -653,7 +650,7 @@ fun PantallaPrincipal(
                             // su pantalla no compila (antes eran textos y un `else`
                             // que caía en Activos en silencio ante un error de tipeo).
                             // Cada página con su propio acento.
-                            TemaSeccion(seccionMostrada, externo) {
+                            TemaSeccion(seccionMostrada) {
                                 when (seccionMostrada) {
                                     SeccionPrincipal.ACTIVOS -> PantallaActivos(
                                         nucleo,
@@ -674,14 +671,19 @@ fun PantallaPrincipal(
                                         sincronizando = nubeViewModel.sincronizando,
                                         onSincronizar = nubeViewModel::sincronizar,
                                     )
-                                    SeccionPrincipal.EXTERNOS -> PantallaExternos(
+                                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(
                                         nucleo,
                                         refrescarNube,
-                                        tipo = indiceExterno,
-                                        onCambiarTipo = { indiceExterno = it },
-                                        sincronizando = nubeViewModel.sincronizando,
-                                        onSincronizar = nubeViewModel::sincronizar,
+                                        nubeViewModel.sincronizando,
+                                        nubeViewModel::sincronizar,
                                     )
+                                    SeccionPrincipal.CORREO -> PantallaPorCorreo(
+                                        nucleo,
+                                        refrescarNube,
+                                        nubeViewModel.sincronizando,
+                                        nubeViewModel::sincronizar,
+                                    )
+                                    SeccionPrincipal.VISITAS -> PantallaVisitas(nucleo, refrescarNube)
                                 }
                             }
                             }
@@ -733,7 +735,6 @@ fun PantallaPrincipal(
                                 BarraSecciones(
                                     seleccionada = seccion,
                                     posicion = { paginas.currentPage + paginas.currentPageOffsetFraction },
-                                    externo = externo,
                                     adentro = adentro,
                                     onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
                                     modifier = Modifier.weight(1f),
@@ -806,7 +807,6 @@ private fun BarraSecciones(
     seleccionada: SeccionPrincipal,
     // Se lee al dibujar: seguir al dedo no recompone la barra en cada frame.
     posicion: () -> Float,
-    externo: TipoExterno,
     adentro: Map<SeccionPrincipal, Int>,
     onSeleccionar: (SeccionPrincipal) -> Unit,
     modifier: Modifier = Modifier,
@@ -837,7 +837,7 @@ private fun BarraSecciones(
     ) {
         SECCIONES_VISIBLES.forEach { seccion ->
             val elegida = seccion == seleccionada
-            val acento = acentoDeSeccion(seccion, oscuro, externo)?.color ?: MaterialTheme.colorScheme.primary
+            val acento = acentoDeSeccion(seccion, oscuro)?.color ?: MaterialTheme.colorScheme.primary
             val color by animateColorAsState(
                 targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(MS_FUNDIDO_ENTRADA),
@@ -874,7 +874,7 @@ private fun BarraSecciones(
                         }
                     },
                 ) {
-                    Icon(iconoSeccion(seccion, externo), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                    Icon(iconoSeccion(seccion), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
                 Text(
                     seccion.etiqueta,
@@ -905,14 +905,15 @@ private val ESPACIO_PILDORA_BARRA = 8.dp
 private val MARGEN_BARRA_SECCIONES =
     ALTO_BARRA_SECCIONES + ALTO_PILDORA_BUSQUEDA + ESPACIO_PILDORA_BARRA + MARGEN_INFERIOR_BARRA + 6.dp
 
-/// Los mismos íconos que el escritorio (ver [IconosLucide]). Externos cambia
-/// con el tipo elegido, igual que su color: Proveedor o Correo.
-private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): ImageVector = when (seccion) {
+/// Los mismos íconos que el escritorio (ver [IconosLucide]).
+private fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccion) {
     SeccionPrincipal.ACTIVOS -> IconosLucide.UsuarioConCheck
-    // Oculta de la barra (en desarrollo).
-    SeccionPrincipal.RUTAS -> Icons.Default.Route
     SeccionPrincipal.KOF -> IconosLucide.InsigniaConCheck
-    SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) IconosLucide.Sobre else IconosLucide.Cajas
+    SeccionPrincipal.PROVEEDORES -> IconosLucide.Cajas
+    SeccionPrincipal.CORREO -> IconosLucide.Sobre
+    // Ocultas de la barra (en desarrollo).
+    SeccionPrincipal.RUTAS -> Icons.Default.Route
+    SeccionPrincipal.VISITAS -> Icons.Default.Event
 }
 
 /// Qué ocupa la pantalla principal debajo de la barra superior.
@@ -931,14 +932,20 @@ private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 /// [BarraSecciones]).
 enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
     // "Contratistas" y no "Activos" (pedido del usuario 2026-10-26): la
-    // pestaña es sólo de contratistas; KOF y Externos también tienen gente
-    // adentro.
+    // pestaña es sólo de contratistas; KOF, Proveedores y Correo también
+    // tienen gente adentro.
     ACTIVOS("Contratistas"),
     RUTAS("Rutas", enDesarrollo = true),
     KOF("KOF"),
-    // Antes "Proveedores": ahora agrupa a quien entra sin catálogo
-    // (proveedores e ingresos por correo, ver [PantallaExternos]).
-    EXTERNOS("Externos"),
+    // Proveedores y Correo eran una sola sección, "Externos", con un
+    // selector adentro; se separaron (pedido del usuario 2026-10-29): con el
+    // deslizamiento entre secciones, cada una queda a un gesto y con su
+    // propio globito. Correo va al final: se usa muy rara vez.
+    PROVEEDORES("Proveedores"),
+    CORREO("Correo"),
+    // Visitas agendadas en la web (`PantallaVisitas`): oculta desde
+    // 2026-10-17; para volver a mostrarla basta con sacarla de `enDesarrollo`.
+    VISITAS("Visitas", enDesarrollo = true),
 }
 
 private val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }

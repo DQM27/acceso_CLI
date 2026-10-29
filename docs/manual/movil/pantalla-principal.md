@@ -11,8 +11,8 @@ Cualquier usuario con sesión abierta.
 
 ## Arriba
 
-- El **nombre de la sección** en grande (**Contratistas**, **KOF** o
-  **Externos**) y, debajo, la **unidad** (el sitio) y **cuántos hay
+- El **nombre de la sección** en grande (**Contratistas**, **KOF**,
+  **Proveedores** o **Correo**) y, debajo, la **unidad** (el sitio) y **cuántos hay
   adentro** (en KOF, cuántos gafetes hay prestados).
 - Un **puntito de color** junto al nombre de la sección: el estado de la
   conexión (ver [Trabajar sin internet](sin-internet-y-sincronizar.md)).
@@ -26,14 +26,19 @@ Cualquier usuario con sesión abierta.
 - **Barra de secciones**:
   - **Contratistas**: ingreso y salida de contratistas.
   - **KOF**: gafetes provisionales KOF.
-  - **Externos**: proveedores y visitas por correo.
+  - **Proveedores**: personas de empresas proveedoras.
+  - **Correo**: visitas autorizadas por correo.
 
   Cada sección tiene un globito gris con **cuántas personas hay adentro**.
+  Para cambiar de sección, toque su ícono o **deslice el dedo de lado**
+  sobre la pantalla (desde el centro, no desde el borde). Con una cámara,
+  un formulario o la búsqueda abiertos no se cambia de sección al deslizar.
 - **Botón redondo**, a la derecha de la barra: la acción principal de la
   sección (escanear un documento, entregar un gafete o un nuevo ingreso).
 - **Búsqueda**, encima de la barra: tóquela para buscar en la sección. El
   campo sube con el teclado y lo que coincide se marca en la lista. En
-  **KOF** y **Externos** sólo aparece cuando hay alguien en la lista. Al
+  **KOF**, **Proveedores** y **Correo** sólo aparece cuando hay alguien en
+  la lista. Al
   deslizar la lista hacia abajo se esconde para dejar más lugar; vuelve al
   subir.
 
@@ -63,7 +68,7 @@ Los formularios, los avisos y la ayuda se abren encima de la pantalla
 principal, con **‹ Volver** arriba a la izquierda. También se vuelve con el
 gesto o el botón **atrás** del teléfono.
 
-Las secciones **Rutas** y **Visita** (visitas agendadas en la web) no se
+Las secciones **Rutas** y **Visitas** (visitas agendadas en la web) no se
 muestran todavía.
 
 ## Relacionado

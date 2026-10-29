@@ -11,8 +11,9 @@ entró por la PC del puesto (los que tienen el ícono de la PC).
 
 ## Dónde
 
-Sección **Contratistas**. Arriba hay dos opciones: **Persona** (por nombre,
-cédula o escaneando la cédula) y **Gafete** (por número de gafete).
+Sección **Contratistas**. Se puede sacar a alguien tocándolo en la lista,
+escaneando su cédula o con la búsqueda de abajo (**"Nombre, cédula o
+gafete"**), que sirve para nombres, cédulas y números de gafete.
 
 ## Pasos — tocando a la persona en la lista
 
@@ -24,8 +25,8 @@ cédula o escaneando la cédula) y **Gafete** (por número de gafete).
 
 ## Pasos — escaneando la cédula de quien sale
 
-Con **Persona** elegido, el mismo botón de la cámara sirve para entrar y
-para salir: la app sabe si la persona ya está adentro.
+El mismo botón de la cámara sirve para entrar y para salir: la app sabe si
+la persona ya está adentro.
 
 1. Toque el botón redondo de la cámara (**Escanear documento**) y escanee
    la cédula.
@@ -37,38 +38,30 @@ para salir: la app sabe si la persona ya está adentro.
 
 ## Pasos — buscando por nombre o cédula
 
-1. Con **Persona** elegido, toque la búsqueda de abajo y escriba el nombre
-   o la cédula.
-2. Quien está adentro aparece con **"Adentro · toque para registrar su
-   salida"**. Tóquelo.
+1. Toque la búsqueda de abajo y escriba el nombre o la cédula (al menos 4
+   dígitos: con menos, se buscan gafetes).
+2. Quien está adentro aparece en una tarjeta **ámbar** con la señal
+   amarilla y **ADENTRO**. Tóquelo.
 3. Toque **Registrar salida**.
 
-## Pasos — escaneando gafetes (varios seguidos)
+## Pasos — por número de gafete
 
-1. Elija **Gafete** arriba.
-2. Toque el botón redondo de la cámara (**Escanear gafete**).
-3. Coloque el gafete **dentro del recuadro**. **La salida se registra al
-   instante**, sin confirmar: verá en verde **"Salida registrada:
-   (nombre)"** o en rojo **"Gafete N: sin ingreso activo"**.
-4. La cámara queda lista para el siguiente gafete. Ciérrela con la **X** de
-   abajo cuando termine.
-
-## Pasos — escribiendo números de gafete
-
-1. Elija **Gafete** arriba y toque la búsqueda de abajo (**"Gafetes: 2,
-   25, 85"**).
-2. Escriba uno o varios números separados por coma, por ejemplo **2, 25,
-   85**.
-3. Debajo se ve a quién corresponde cada uno (nombre y empresa) o **"Sin
-   ingreso activo"**.
-4. Toque **Registrar salida (N)**: salen todos los encontrados de una vez.
+1. Toque la búsqueda de abajo y escriba el número del gafete (de 1 a 3
+   dígitos), o varios separados por coma, por ejemplo **2, 25, 85**.
+2. Cada gafete aparece en una tarjeta **azul** con la persona que lo tiene,
+   su gafete y la hora en que entró. Tóquela y luego **Registrar salida**.
+3. Con dos o más encontrados, abajo aparece **Registrar salida (N)**: salen
+   todos de una vez.
+4. Si nadie lo tiene, se ve por qué: **"libre, nadie lo tiene"** (en gris),
+   **"no existe"**, **"reportado perdido"** o **"dado de baja"** (en rojo).
 
 ## Mensajes que pueden aparecer
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "Gafete N: sin ingreso activo" / "Sin ingreso activo" | Nadie adentro tiene ese gafete. | Revise el número. Si la persona salió sin gafete, búsquela por nombre con **Persona**. |
-| "Gafete no válido" | El número no se entiende. | Vuelva a escanear o escriba el número. |
+| "Gafete N · libre, nadie lo tiene" | El gafete existe pero nadie adentro lo tiene puesto. | Revise el número. Si la persona salió sin gafete, búsquela por nombre. |
+| "Gafete N · no existe" | No hay un gafete de contratista con ese número. | Revise el número. |
+| "Gafete N · reportado perdido" / "dado de baja" | Ese gafete no está en uso. | Revise el número o busque a la persona por nombre. |
 | "Revise la fecha y hora del equipo antes de continuar" | La hora del teléfono quedó antes del último registro. | Ver [Problemas frecuentes](problemas-frecuentes.md#revise-la-fecha-y-hora-del-equipo). |
 
 ## Relacionado

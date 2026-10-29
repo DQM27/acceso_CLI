@@ -55,8 +55,8 @@ import uniffi.control_acceso_mobile.VisitaParaEntrar
 /// ([TarjetaActivo], [DialogoRegistrarSalida]); lo que entró por la PC lleva
 /// su ícono y se refresca en vivo (`refrescarNube`). Sin historial: eso se
 /// consulta en escritorio y en el panel web. Sin lógica propia: cada texto
-/// y cada decisión vienen del núcleo. Vive bajo la pestaña "Externos"
-/// ([PantallaExternos]).
+/// y cada decisión vienen del núcleo. Es la sección "Visitas", oculta de la
+/// barra por ahora (ver `SeccionPrincipal.VISITAS`).
 @Composable
 fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
     RegistrarPantalla("visitas")

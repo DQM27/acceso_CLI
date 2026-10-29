@@ -80,7 +80,7 @@ private fun ListaCorreoActivos(
 /// 2026-10-03): buscador + lista de activos (locales y del otro dispositivo
 /// del sitio) y un formulario aparte con las mismas tarjetas numeradas --
 /// datos de la persona (con escáner de cédula), motivo de la visita, y placa
-/// y gafete de visita. Vive bajo la pestaña "Externos" ([PantallaExternos]).
+/// y gafete de visita. Es la sección "Correo" de la barra de abajo.
 @Composable
 fun PantallaPorCorreo(
     nucleo: Nucleo,

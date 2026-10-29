@@ -12,11 +12,11 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Sección **Externos**, con **Correo** elegido arriba.
+Sección **Correo** (ícono de sobre, en violeta), la última de la barra.
 
 ## Pasos — registrar el ingreso
 
-1. En **Externos → Correo**, toque el botón redondo (**Nuevo ingreso por
+1. En **Correo**, toque el botón redondo (**Nuevo ingreso por
    correo**). Se abre directo la cámara: escanee la cédula.
 2. Se abre **Ingreso por correo** con la cédula y el nombre ya puestos
    (grupo **Visita**).
@@ -43,7 +43,7 @@ Si escribe la cédula a mano, el aviso aparece debajo de la cédula y
 
 ## Pasos — registrar la salida
 
-1. En **Externos → Correo**, toque a la persona en la lista (puede
+1. En **Correo**, toque a la persona en la lista (puede
    buscarla con la búsqueda de abajo: **"Cédula, nombre o motivo"**).
 2. Toque **Registrar salida**.
 

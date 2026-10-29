@@ -34,7 +34,7 @@ internal object IconosLucide {
         )
     }
 
-    /// Externos con Proveedor elegido (`Boxes`, "Proveedor" en el escritorio).
+    /// Proveedores (`Boxes`, "Proveedor" en el escritorio).
     val Cajas: ImageVector by lazy {
         icono(
             "Boxes",
@@ -53,7 +53,7 @@ internal object IconosLucide {
         )
     }
 
-    /// Externos con Correo elegido (`Mail`, "Visita por correo" en el escritorio).
+    /// Correo (`Mail`, "Visita por correo" en el escritorio).
     val Sobre: ImageVector by lazy {
         icono(
             "Mail",

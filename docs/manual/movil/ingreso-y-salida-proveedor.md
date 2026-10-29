@@ -12,12 +12,12 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Sección **Externos**, con **Proveedor** elegido arriba. Se ve la lista de
+Sección **Proveedores** (ícono de cajas, en naranja). Se ve la lista de
 proveedores que están adentro.
 
 ## Pasos — registrar el ingreso
 
-1. En **Externos → Proveedor**, toque el botón redondo (**Nuevo ingreso de
+1. En **Proveedores**, toque el botón redondo (**Nuevo ingreso de
    proveedor**). Se abre directo la cámara: escanee la cédula.
 2. Se abre **Ingreso de proveedor** con la cédula y el nombre ya puestos.
    Si la persona ya entró antes como proveedor desde este teléfono, también
@@ -46,7 +46,7 @@ Si escribe la cédula a mano, el aviso aparece debajo de la cédula y
 
 ## Pasos — registrar la salida
 
-1. En **Externos → Proveedor**, toque a la persona en la lista (puede
+1. En **Proveedores**, toque a la persona en la lista (puede
    buscarla con la búsqueda de abajo: **"Cédula, nombre, empresa o
    placa"**).
 2. Toque **Registrar salida**.

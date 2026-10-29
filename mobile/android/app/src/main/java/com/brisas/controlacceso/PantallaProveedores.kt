@@ -225,7 +225,7 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
-                    // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
+                    // Sin título propio: el de la barra de arriba ya dice dónde se
                     // está. Se busca con la píldora de abajo, como en todas las pestañas.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
                         viewModel.error?.let { mensaje ->
