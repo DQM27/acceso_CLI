@@ -264,7 +264,9 @@ mod tests {
             )
             .unwrap();
         let id: i64 = connection
-            .query_row("SELECT id FROM registro_ingresos_correo", [], |fila| fila.get(0))
+            .query_row("SELECT id FROM registro_ingresos_correo", [], |fila| {
+                fila.get(0)
+            })
             .unwrap();
 
         assert_eq!(

@@ -110,12 +110,12 @@ impl Nucleo {
             tipo: Some(Igualdad::Incluye(TipoGafete::Contratista)),
             estado: None,
         };
-        let encontrados = self
-            .core_lock()
-            .buscar_gafetes(&filtro)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
+        let encontrados =
+            self.core_lock()
+                .buscar_gafetes(&filtro)
+                .map_err(|error| NucleoError::Interno {
+                    mensaje: interno(error),
+                })?;
         let situacion = situacion_segun_catalogo(encontrados.first().map(|gafete| gafete.estado));
         Ok(GafeteSinPortador {
             situacion,

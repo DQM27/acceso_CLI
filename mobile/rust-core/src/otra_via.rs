@@ -75,7 +75,9 @@ impl From<IngresoPorOtraViaNucleo> for SalidaPorOtraVia {
             gafete_numero: ingreso.gafete_numero,
             fecha_hora_ingreso: ingreso.fecha_hora_ingreso,
             ubicacion: match ingreso.ubicacion {
-                UbicacionIngresoNucleo::Local(registro_id) => UbicacionSalida::Local { registro_id },
+                UbicacionIngresoNucleo::Local(registro_id) => {
+                    UbicacionSalida::Local { registro_id }
+                }
                 UbicacionIngresoNucleo::Remoto(uuid) => UbicacionSalida::Remota { uuid },
             },
         }
