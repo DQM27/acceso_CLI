@@ -106,6 +106,30 @@ internal object IconosLucide {
         )
     }
 
+    /// Contratista sin acceso, en la búsqueda (`Ban`, el "prohibido").
+    val Prohibido: ImageVector by lazy {
+        icono(
+            "Ban",
+            // circle cx=12 cy=12 r=10
+            "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0",
+            "M4.929 4.929 19.07 19.071",
+        )
+    }
+
+    /// PRAIND vencido, en la búsqueda (`CalendarX`, `lucide-react` 1.62.0).
+    val CalendarioConX: ImageVector by lazy {
+        icono(
+            "CalendarX",
+            "M8 2v3",
+            "M16 2v3",
+            // rect x=3 y=3 width=18 height=18 rx=2
+            "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
+            "M3 9h18",
+            "m14 13-4 4",
+            "m10 13 4 4",
+        )
+    }
+
     private fun icono(nombre: String, vararg trazos: String): ImageVector =
         ImageVector.Builder(
             name = "Lucide.$nombre",

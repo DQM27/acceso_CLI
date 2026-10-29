@@ -82,6 +82,12 @@ internal class Paleta(
     /// salida: azul, el acento general, distinto del ámbar de "adentro".
     val salidaSuave: Color,
     val franjaSalida: Color,
+    /// La tarjeta de quien no puede entrar (acceso denegado o PRAIND
+    /// vencido) en la búsqueda: el mismo rojo para los dos, el ícono y la
+    /// palabra dicen el motivo.
+    val bloqueadoSuave: Color,
+    val franjaBloqueado: Color,
+    val textoBloqueado: Color,
     val contratistas: TonoSeccion,
     val kof: TonoSeccion,
     val proveedores: TonoSeccion,
@@ -89,6 +95,7 @@ internal class Paleta(
 ) {
     val tinteAdentro = TinteTarjeta(adentroSuave, franjaAdentro)
     val tinteSalida = TinteTarjeta(salidaSuave, franjaSalida)
+    val tinteBloqueado = TinteTarjeta(bloqueadoSuave, franjaBloqueado)
 }
 
 /// Fondo y franja izquierda de una tarjeta que se distingue de las demás.
@@ -131,6 +138,9 @@ internal val PaletaDia = Paleta(
     textoAdentro = Color(0xFF7F5600),
     salidaSuave = Color(0xFFDCE6FA),
     franjaSalida = Color(0xFF2959AA),
+    bloqueadoSuave = Color(0xFFFBE3E3),
+    franjaBloqueado = Color(0xFFA93737),
+    textoBloqueado = Color(0xFFA93737),
     contratistas = TonoSeccion(acento = Color(0xFF00806A), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFC4161C), relleno = Color(0xFFC4161C)),
     proveedores = TonoSeccion(acento = Color(0xFFB85C00), relleno = Color(0xFFB85C00)),
@@ -171,6 +181,9 @@ internal val PaletaNoche = Paleta(
     textoAdentro = Color(0xFFFBBF24),
     salidaSuave = Color(0xFF16233A),
     franjaSalida = Color(0xFF6EA8FF),
+    bloqueadoSuave = Color(0xFF331A1D),
+    franjaBloqueado = Color(0xFFFF6B6B),
+    textoBloqueado = Color(0xFFFF6B6B),
     contratistas = TonoSeccion(acento = Color(0xFF5CC8B2), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFFF6B5E), relleno = Color(0xFFD0312D)),
     proveedores = TonoSeccion(acento = Color(0xFFFFB547), relleno = Color(0xFFB85C00)),

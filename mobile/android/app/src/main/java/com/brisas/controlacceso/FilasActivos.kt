@@ -32,6 +32,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import uniffi.control_acceso_mobile.AvisoAcceso
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
@@ -205,18 +208,44 @@ internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
     )
 }
 
-/// En la búsqueda salen juntos quienes pueden entrar y quienes ya están
-/// adentro: éstos van en ámbar, con franja y la señal de "ADENTRO", para
-/// distinguirlos sin leer (antes era sólo una línea de texto al final).
+/// Cómo se marca una tarjeta de la búsqueda de contratistas, si hace falta
+/// (ver [marcaContratista]).
+internal enum class MarcaContratista(val palabra: String) {
+    ADENTRO("ADENTRO"),
+    DENEGADO("DENEGADO"),
+    VENCIDO("VENCIDO"),
+}
+
+/// Adentro gana: con esa persona lo que se hace es la salida, que siempre se
+/// permite. Entre denegado y vencido ya decidió el núcleo (un solo aviso).
+internal fun marcaContratista(contratista: ContratistaResumen): MarcaContratista? = when {
+    contratista.tieneIngresoActivo -> MarcaContratista.ADENTRO
+    contratista.tipoAvisoAcceso == AvisoAcceso.ACCESO_DENEGADO -> MarcaContratista.DENEGADO
+    contratista.tipoAvisoAcceso == AvisoAcceso.PRAIND_VENCIDO -> MarcaContratista.VENCIDO
+    else -> null
+}
+
+/// En la búsqueda salen juntos quienes pueden entrar, quienes ya están
+/// adentro y quienes no pueden entrar. Se distinguen sin leer (antes era una
+/// línea de texto al final), con fondo, franja, ícono y una palabra:
+/// adentro en ámbar con la señal de "ya está adentro"; acceso denegado y
+/// PRAIND vencido en rojo, con el "prohibido" o el calendario con una X.
 @Composable
 internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
-    val adentro = contratista.tieneIngresoActivo
+    val marca = marcaContratista(contratista)
+    val adentro = marca == MarcaContratista.ADENTRO
     val paleta = paletaActual
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .fondoTarjeta(if (adentro) paleta.tinteAdentro else null)
+            .fondoTarjeta(
+                when (marca) {
+                    MarcaContratista.ADENTRO -> paleta.tinteAdentro
+                    MarcaContratista.DENEGADO, MarcaContratista.VENCIDO -> paleta.tinteBloqueado
+                    null -> null
+                },
+            )
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -237,8 +266,11 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
-            // su reloj: sólo se muestra, en negrita para que se lea con fuerza.
-            contratista.avisoAcceso?.let { aviso ->
+            // su reloj. Sin estar adentro, lo dicen el ícono y la palabra de
+            // la derecha; adentro queda como línea chica, para que se sepa que
+            // no podrá volver a entrar.
+            val aviso = contratista.avisoAcceso
+            if (aviso != null && (adentro || marca == null)) {
                 Text(
                     aviso,
                     style = MaterialTheme.typography.bodySmall,
@@ -254,18 +286,28 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                 )
             }
         }
-        if (adentro) {
+        if (marca != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                SenalAdentro()
+                when (marca) {
+                    MarcaContratista.ADENTRO -> SenalAdentro()
+                    MarcaContratista.DENEGADO -> IconoMarca(IconosLucide.Prohibido, paleta.textoBloqueado)
+                    MarcaContratista.VENCIDO -> IconoMarca(IconosLucide.CalendarioConX, paleta.textoBloqueado)
+                }
                 Text(
-                    "ADENTRO",
+                    marca.palabra,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = paleta.textoAdentro,
+                    color = if (adentro) paleta.textoAdentro else paleta.textoBloqueado,
                 )
             }
         }
     }
+}
+
+/// Ícono de la marca de una tarjeta, del alto de la señal de "adentro".
+@Composable
+private fun IconoMarca(icono: ImageVector, color: Color) {
+    Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
 }
 
 /// El fondo de siempre (`surface`) o, con [tinte], el suyo con la franja a

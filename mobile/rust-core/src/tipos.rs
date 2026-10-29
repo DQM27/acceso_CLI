@@ -2,6 +2,7 @@
 
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
 use control_acceso::database::queries::contratistas::ContratistaResumen as ContratistaResumenNucleo;
+use control_acceso::domain::acceso::AvisoAccesoLista as AvisoAccesoListaNucleo;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
@@ -135,6 +136,25 @@ pub struct ContratistaResumen {
     /// "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo con su
     /// reloj; Kotlin sólo lo muestra.
     pub aviso_acceso: Option<String>,
+    /// El mismo aviso como tipo: la tarjeta elige ícono, palabra y color con
+    /// esto, sin comparar textos. Cuál gana si hay dos lo decide el núcleo.
+    pub tipo_aviso_acceso: Option<AvisoAcceso>,
+}
+
+/// Espejo de `AvisoAccesoLista` del núcleo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum AvisoAcceso {
+    AccesoDenegado,
+    PraindVencido,
+}
+
+impl From<AvisoAccesoListaNucleo> for AvisoAcceso {
+    fn from(aviso: AvisoAccesoListaNucleo) -> Self {
+        match aviso {
+            AvisoAccesoListaNucleo::AccesoDenegado => Self::AccesoDenegado,
+            AvisoAccesoListaNucleo::PraindVencido => Self::PraindVencido,
+        }
+    }
 }
 
 impl From<ContratistaResumenNucleo> for ContratistaResumen {
@@ -149,6 +169,7 @@ impl From<ContratistaResumenNucleo> for ContratistaResumen {
             tiene_acceso: resumen.tiene_acceso,
             tiene_ingreso_activo: resumen.tiene_ingreso_activo,
             aviso_acceso: resumen.aviso_acceso,
+            tipo_aviso_acceso: resumen.tipo_aviso_acceso.map(Into::into),
         }
     }
 }

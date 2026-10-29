@@ -87,12 +87,13 @@ impl AppCore {
         let mut pagina = ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)?;
         let hoy = fecha_costa_rica(self.reloj.ahora_utc());
         for contratista in &mut pagina.items {
-            contratista.aviso_acceso = aviso_acceso_en_lista(
+            let aviso = aviso_acceso_en_lista(
                 contratista.tiene_acceso,
                 contratista.fecha_vencimiento_praind,
                 hoy,
-            )
-            .map(mensaje_aviso_acceso_lista);
+            );
+            contratista.tipo_aviso_acceso = aviso;
+            contratista.aviso_acceso = aviso.map(mensaje_aviso_acceso_lista);
             // Las mismas reglas que al dar ingreso, para mostrar el estado
             // completo en la lista (igual que el panel web).
             let modelo = Contratista::reconstruir(

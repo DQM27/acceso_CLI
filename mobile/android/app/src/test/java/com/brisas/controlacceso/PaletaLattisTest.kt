@@ -64,6 +64,21 @@ class PaletaLattisTest {
     }
 
     @Test
+    fun laTarjetaDeQuienNoPuedeEntrarSeLeeYSeDistingue() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto bloqueado", p.texto, p.bloqueadoSuave, 4.5)
+            exigir("$tema secundario bloqueado", p.textoSecundario, p.bloqueadoSuave, 4.5)
+            exigir("$tema palabra DENEGADO/VENCIDO", p.textoBloqueado, p.bloqueadoSuave, 4.5)
+            exigir("$tema franja bloqueado", p.franjaBloqueado, p.bloqueadoSuave, 3.0)
+        }
+        for (p in listOf(PaletaDia, PaletaNoche)) {
+            assertTrue(p.bloqueadoSuave != p.adentroSuave)
+            assertTrue(p.bloqueadoSuave != p.salidaSuave)
+            assertTrue(p.bloqueadoSuave != p.tarjeta)
+        }
+    }
+
+    @Test
     fun laTarjetaDeSalidaPorGafeteSeLee() {
         for ((tema, p) in paletas) {
             exigir("$tema texto salida", p.texto, p.salidaSuave, 4.5)

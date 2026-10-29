@@ -67,7 +67,7 @@ pub use error::NucleoError;
 use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
-    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
+    AvisoAcceso, ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
     IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
     IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
     PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,

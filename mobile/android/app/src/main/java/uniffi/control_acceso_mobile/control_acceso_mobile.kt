@@ -6841,6 +6841,12 @@ data class ContratistaResumen (
      * reloj; Kotlin sólo lo muestra.
      */
     var `avisoAcceso`: kotlin.String?
+    , 
+    /**
+     * El mismo aviso como tipo: la tarjeta elige ícono, palabra y color con
+     * esto, sin comparar textos. Cuál gana si hay dos lo decide el núcleo.
+     */
+    var `tipoAvisoAcceso`: AvisoAcceso?
     
 ){
     
@@ -6866,6 +6872,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalTypeAvisoAcceso.read(buf),
         )
     }
 
@@ -6878,7 +6885,8 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.allocationSize(value.`fechaVencimientoPraind`) +
             FfiConverterBoolean.allocationSize(value.`tieneAcceso`) +
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
-            FfiConverterOptionalString.allocationSize(value.`avisoAcceso`)
+            FfiConverterOptionalString.allocationSize(value.`avisoAcceso`) +
+            FfiConverterOptionalTypeAvisoAcceso.allocationSize(value.`tipoAvisoAcceso`)
     )
 
     override fun write(value: ContratistaResumen, buf: ByteBuffer) {
@@ -6891,6 +6899,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
             FfiConverterOptionalString.write(value.`avisoAcceso`, buf)
+            FfiConverterOptionalTypeAvisoAcceso.write(value.`tipoAvisoAcceso`, buf)
     }
 }
 
@@ -10029,6 +10038,43 @@ public object FfiConverterTypeAlmacenClaveError : FfiConverterRustBuffer<Almacen
 
 
 /**
+ * Espejo de `AvisoAccesoLista` del núcleo.
+ */
+
+enum class AvisoAcceso {
+    
+    ACCESO_DENEGADO,
+    PRAIND_VENCIDO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAvisoAcceso: FfiConverterRustBuffer<AvisoAcceso> {
+    override fun read(buf: ByteBuffer) = try {
+        AvisoAcceso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: AvisoAcceso) = 4UL
+
+    override fun write(value: AvisoAcceso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Un bloque para dibujar. Las listas llegan aplanadas: cada elemento con su
  * marca ("1.", "•") y su sangría (0 arriba, 1 en una sublista…).
  */
@@ -12443,6 +12489,38 @@ public object FfiConverterOptionalTypeVehiculoRutaDetectado: FfiConverterRustBuf
         } else {
             buf.put(1)
             FfiConverterTypeVehiculoRutaDetectado.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeAvisoAcceso: FfiConverterRustBuffer<AvisoAcceso?> {
+    override fun read(buf: ByteBuffer): AvisoAcceso? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAvisoAcceso.read(buf)
+    }
+
+    override fun allocationSize(value: AvisoAcceso?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAvisoAcceso.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AvisoAcceso?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAvisoAcceso.write(value, buf)
         }
     }
 }

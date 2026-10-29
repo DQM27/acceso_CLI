@@ -4,7 +4,7 @@ use rusqlite::{Connection, Row};
 use crate::database::error::DatabaseError;
 use crate::database::queries::{Igualdad, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 use crate::database::search::BusquedaTexto;
-use crate::domain::acceso::{DIAS_ADVERTENCIA_PRAIND, EstadoAccesoLista};
+use crate::domain::acceso::{AvisoAccesoLista, DIAS_ADVERTENCIA_PRAIND, EstadoAccesoLista};
 use crate::models::tipo_ingreso::TipoIngreso;
 
 /// ¿Hay un contratista con esta cédula y el acceso negado (`tiene_acceso`
@@ -68,6 +68,10 @@ pub struct ContratistaResumen {
     /// Lo llena `AppCore::buscar_contratistas` con el reloj del núcleo; la
     /// consulta lo deja en `None`.
     pub aviso_acceso: Option<String>,
+    /// El mismo aviso como tipo, para que una interfaz elija ícono y color
+    /// sin comparar textos (la tarjeta del móvil). Lo llena
+    /// `AppCore::buscar_contratistas` junto con `aviso_acceso`.
+    pub tipo_aviso_acceso: Option<AvisoAccesoLista>,
     /// `empresas.activo`: hace falta para evaluar `verificar_acceso`.
     pub empresa_activa: bool,
     /// Resultado completo de `verificar_acceso` para hoy (las mismas reglas
@@ -353,6 +357,7 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
         empresa_activa: row.get::<_, i64>(9)? != 0,
         tiene_ingreso_activo: row.get::<_, i64>(10)? != 0,
         aviso_acceso: None,
+        tipo_aviso_acceso: None,
         estado_acceso: None,
         dias_para_vencer_praind: None,
     })
