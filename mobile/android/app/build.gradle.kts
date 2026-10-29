@@ -203,6 +203,21 @@ android {
     }
 }
 
+// Los datos que llegan del núcleo (los `data class` de UniFFI, con campos
+// `var`) son estables para Compose: nadie los modifica después de recibirlos.
+// Sin esto Compose los compara por instancia, y como cada refresco de una
+// lista (sincronización, Realtime) trae objetos nuevos, redibujaba todas las
+// tarjetas visibles aunque no hubiera cambiado nada.
+composeCompiler {
+    stabilityConfigurationFiles.add(project.layout.projectDirectory.file("estabilidad_compose.conf"))
+    // `-PinformesCompose=true`: qué clases ve estables y qué funciones puede
+    // saltar, en build/informes_compose (para revisar, no se publica).
+    if (providers.gradleProperty("informesCompose").orNull == "true") {
+        reportsDestination.set(layout.buildDirectory.dir("informes_compose"))
+        metricsDestination.set(layout.buildDirectory.dir("informes_compose"))
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
