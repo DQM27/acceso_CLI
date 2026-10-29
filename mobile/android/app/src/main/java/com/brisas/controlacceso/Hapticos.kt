@@ -17,7 +17,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 internal enum class Haptico { SELECCION, CONFIRMAR, RECHAZAR, ACTIVAR, DESACTIVAR }
 
 internal fun tipoHaptico(haptico: Haptico): HapticFeedbackType = when (haptico) {
-    Haptico.SELECCION -> HapticFeedbackType.SegmentTick
+    // El "clic" de las teclas del sistema. Era `SegmentTick`, el más tenue de
+    // Android: en el Samsung A25 casi no se sentía al cambiar de sección
+    // (pruebas del usuario 2026-10-29).
+    Haptico.SELECCION -> HapticFeedbackType.VirtualKey
     Haptico.CONFIRMAR -> HapticFeedbackType.Confirm
     Haptico.RECHAZAR -> HapticFeedbackType.Reject
     Haptico.ACTIVAR -> HapticFeedbackType.ToggleOn

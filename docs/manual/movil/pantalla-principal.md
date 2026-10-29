@@ -11,8 +11,8 @@ Cualquier usuario con sesión abierta.
 
 ## Arriba
 
-- El **nombre de la sección** en grande (**Contratistas**, **KOF**,
-  **Proveedores** o **Correo**) y, debajo, la **unidad** (el sitio) y **cuántos hay
+- El **nombre de la sección** en grande (**Contratistas**,
+  **Proveedores**, **Correo** o **KOF**) y, debajo, la **unidad** (el sitio) y **cuántos hay
   adentro** (en KOF, cuántos gafetes hay prestados).
 - Un **puntito de color** junto al nombre de la sección: el estado de la
   conexión (ver [Trabajar sin internet](sin-internet-y-sincronizar.md)).
@@ -25,9 +25,9 @@ Cualquier usuario con sesión abierta.
 
 - **Barra de secciones**:
   - **Contratistas**: ingreso y salida de contratistas.
-  - **KOF**: gafetes provisionales KOF.
   - **Proveedores**: personas de empresas proveedoras.
   - **Correo**: visitas autorizadas por correo.
+  - **KOF**: gafetes provisionales KOF.
 
   Cada sección tiene un globito gris con **cuántas personas hay adentro**.
   Para cambiar de sección, toque su ícono o **deslice el dedo de lado**

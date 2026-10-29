@@ -392,6 +392,7 @@ fun PantallaPrincipal(
     // usuario 2026-10-28), además de tocando la barra. `pestana` sigue siendo
     // la sección elegida; las dos se sincronizan dentro de las pestañas.
     val paginas = rememberPagerState(initialPage = pestana) { SECCIONES_VISIBLES.size }
+    val hapticosSecciones = rememberHapticos()
     // La que está a la vista: cambia a mitad del deslizamiento, así el título,
     // el color y la barra acompañan al dedo.
     val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
@@ -622,8 +623,15 @@ fun PantallaPrincipal(
                     // Sin el primer valor: al volver de otra pantalla que eligió
                     // la sección (p. ej. "Nuevo contratista" deja Contratistas),
                     // la página vieja la pisaría antes de que el carrusel llegue.
+                    //
+                    // Si la página nueva no es la que ya estaba elegida, el cambio
+                    // vino de deslizar: vibra como al tocar la barra (al tocarla,
+                    // `pestana` ya cambió y vibró el toque).
                     LaunchedEffect(paginas) {
-                        snapshotFlow { paginas.settledPage }.drop(1).collect { pestana = it }
+                        snapshotFlow { paginas.settledPage }.drop(1).collect { pagina ->
+                            if (pagina != pestana) hapticosSecciones(Haptico.SELECCION)
+                            pestana = pagina
+                        }
                     }
                     CompositionLocalProvider(
                         LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
@@ -814,7 +822,11 @@ private fun BarraSecciones(
     val oscuro = temaActual().oscuro
     val superficie = MaterialTheme.colorScheme.surface
     val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
-    val forma = RoundedCornerShape(percent = 50)
+    // Menos redonda que una cápsula (pedido del usuario 2026-10-29). La
+    // píldora de la sección elegida, concéntrica: su radio es el de afuera
+    // menos el margen interior, así las dos curvas quedan paralelas.
+    val forma = RoundedCornerShape(RADIO_BARRA_SECCIONES)
+    val formaPildora = RoundedCornerShape(RADIO_BARRA_SECCIONES - MARGEN_INTERIOR_BARRA)
     val hapticos = rememberHapticos()
     Row(
         modifier = modifier
@@ -822,15 +834,16 @@ private fun BarraSecciones(
             .clip(forma)
             .background(superficie.copy(alpha = ALFA_VELO))
             .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
-            .padding(5.dp)
+            .padding(MARGEN_INTERIOR_BARRA)
             .drawBehind {
                 val cantidad = SECCIONES_VISIBLES.size
                 val ancho = size.width / cantidad
+                val radio = (RADIO_BARRA_SECCIONES - MARGEN_INTERIOR_BARRA).toPx()
                 drawRoundRect(
                     color = colorPildora,
                     topLeft = Offset(posicion() * ancho, 0f),
                     size = Size(ancho, size.height),
-                    cornerRadius = CornerRadius(size.height / 2),
+                    cornerRadius = CornerRadius(radio),
                 )
             },
         verticalAlignment = Alignment.CenterVertically,
@@ -848,7 +861,7 @@ private fun BarraSecciones(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(forma)
+                    .clip(formaPildora)
                     .selectable(
                         selected = elegida,
                         role = Role.Tab,
@@ -889,6 +902,9 @@ private fun BarraSecciones(
 }
 
 private val ALTO_BARRA_SECCIONES = 58.dp
+/// Antes era una cápsula (radio de la mitad del alto, 29dp).
+private val RADIO_BARRA_SECCIONES = 18.dp
+private val MARGEN_INTERIOR_BARRA = 5.dp
 private val MARGEN_LATERAL_BARRA = 12.dp
 /// Despegada del borde (pedido del usuario 2026-10-21): pegada abajo quedaba
 /// incómoda para el pulgar. 18dp se sentía bajo y 28dp alto; 24dp.
@@ -934,15 +950,16 @@ enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = fa
     // "Contratistas" y no "Activos" (pedido del usuario 2026-10-26): la
     // pestaña es sólo de contratistas; KOF, Proveedores y Correo también
     // tienen gente adentro.
+    // En el orden de lo que más se usa (pedido del usuario 2026-10-29).
     ACTIVOS("Contratistas"),
     RUTAS("Rutas", enDesarrollo = true),
-    KOF("KOF"),
     // Proveedores y Correo eran una sola sección, "Externos", con un
     // selector adentro; se separaron (pedido del usuario 2026-10-29): con el
     // deslizamiento entre secciones, cada una queda a un gesto y con su
-    // propio globito. Correo va al final: se usa muy rara vez.
+    // propio globito.
     PROVEEDORES("Proveedores"),
     CORREO("Correo"),
+    KOF("KOF"),
     // Visitas agendadas en la web (`PantallaVisitas`): oculta desde
     // 2026-10-17; para volver a mostrarla basta con sacarla de `enDesarrollo`.
     VISITAS("Visitas", enDesarrollo = true),

@@ -12,7 +12,7 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Sección **Correo** (ícono de sobre, en violeta), la última de la barra.
+Sección **Correo** (ícono de sobre, en violeta).
 
 ## Pasos — registrar el ingreso
 

@@ -89,10 +89,10 @@ class AcentoSeccionTest {
     }
 
     @Test
-    fun laBarraMuestraCuatroSeccionesYCorreoAlFinal() {
+    fun laBarraMuestraCuatroSeccionesPorUso() {
         val visibles = SeccionPrincipal.entries.filterNot { it.enDesarrollo }
         assertEquals(
-            listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.KOF, SeccionPrincipal.PROVEEDORES, SeccionPrincipal.CORREO),
+            listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.PROVEEDORES, SeccionPrincipal.CORREO, SeccionPrincipal.KOF),
             visibles,
         )
     }
