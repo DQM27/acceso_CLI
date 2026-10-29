@@ -95,7 +95,7 @@ fun PantallaGafetesProvisionales(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             // Fallas de la lista (la entrega muestra las suyas en su panel).
             if (viewModel.encargadoSeleccionado == null) {
                 viewModel.error?.let { mensaje ->

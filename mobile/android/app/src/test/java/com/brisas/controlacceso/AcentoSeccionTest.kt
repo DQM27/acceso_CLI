@@ -10,13 +10,16 @@ import org.junit.Test
 
 class AcentoSeccionTest {
 
-    private val seccionesConAcento = listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.KOF, SeccionPrincipal.EXTERNOS)
+    private val seccionesConAcento = listOf(
+        SeccionPrincipal.ACTIVOS,
+        SeccionPrincipal.KOF,
+        SeccionPrincipal.PROVEEDORES,
+        SeccionPrincipal.CORREO,
+    )
 
-    /// Todos los acentos que puede haber en pantalla: los de cada sección y el
-    /// de "Por correo" dentro de Externos.
+    /// Todos los acentos que puede haber en pantalla: uno por sección.
     private fun acentos(oscuro: Boolean): List<Pair<String, AcentoSeccion>> =
-        seccionesConAcento.map { it.name to acentoDeSeccion(it, oscuro)!! } +
-            ("POR_CORREO" to acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.POR_CORREO)!!)
+        seccionesConAcento.map { it.name to acentoDeSeccion(it, oscuro)!! }
 
     /// Razón de contraste WCAG entre dos colores opacos.
     private fun contraste(a: Color, b: Color): Double {
@@ -78,24 +81,19 @@ class AcentoSeccionTest {
     }
 
     @Test
-    fun porCorreoTieneSuPropioColorSoloDentroDeExternos() {
-        for (oscuro in listOf(false, true)) {
-            val proveedor = acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.PROVEEDOR)!!.color
-            val correo = acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.POR_CORREO)!!.color
-            assertNotEquals(proveedor, correo)
-            // Sin tipo, o con Proveedor, Externos sigue en mango.
-            assertEquals(proveedor, acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro)!!.color)
-            // En otra sección, el tipo de Externos no cuenta.
-            assertEquals(
-                acentoDeSeccion(SeccionPrincipal.ACTIVOS, oscuro)!!.color,
-                acentoDeSeccion(SeccionPrincipal.ACTIVOS, oscuro, TipoExterno.POR_CORREO)!!.color,
-            )
+    fun lasSeccionesEnDesarrolloConservanElAcentoDeLaPaleta() {
+        for (seccion in listOf(SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS)) {
+            assertNull(acentoDeSeccion(seccion, oscuro = false))
+            assertNull(acentoDeSeccion(seccion, oscuro = true))
         }
     }
 
     @Test
-    fun rutasConservaElAcentoDeLaPaleta() {
-        assertNull(acentoDeSeccion(SeccionPrincipal.RUTAS, oscuro = false))
-        assertNull(acentoDeSeccion(SeccionPrincipal.RUTAS, oscuro = true))
+    fun laBarraMuestraCuatroSeccionesPorUso() {
+        val visibles = SeccionPrincipal.entries.filterNot { it.enDesarrollo }
+        assertEquals(
+            listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.PROVEEDORES, SeccionPrincipal.CORREO, SeccionPrincipal.KOF),
+            visibles,
+        )
     }
 }

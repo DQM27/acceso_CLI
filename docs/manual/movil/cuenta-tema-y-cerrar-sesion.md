@@ -11,19 +11,20 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Arriba a la derecha de la pantalla principal: el engranaje con su inicial
-dentro de un engranaje. Al tocarlo se abre un panel con su nombre y su rol.
+Arriba a la derecha de la pantalla principal: el cuadrito con la inicial de
+su nombre. Al tocarlo se abre un panel con su nombre y, debajo, la unidad
+(el sitio) del teléfono.
 
 ## Pasos — cambiar el tema
 
-1. Toque el engranaje con su inicial.
+1. Toque el cuadrito con su inicial.
 2. Toque **Tema claro** o **Tema oscuro**: cada toque cambia al otro.
 
 Si nunca eligió uno, la app sigue el tema del teléfono.
 
 ## Pasos — cerrar sesión
 
-1. Toque el engranaje con su inicial.
+1. Toque el cuadrito con su inicial.
 2. Toque **Cerrar sesión** (en rojo, al final).
 3. Vuelve el inicio de sesión.
 

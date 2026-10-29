@@ -38,6 +38,8 @@ class MenuCuentaTest {
         val opcion = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.BUSCANDO)
         assertEquals("Buscando…", opcion.texto)
         assertEquals(AccionActualizacion.NINGUNA, opcion.accion)
+        assertEquals(true, opcion.trabajando)
+        assertEquals(null, opcion.progreso)
     }
 
     @Test

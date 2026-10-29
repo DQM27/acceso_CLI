@@ -26,7 +26,9 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,8 +39,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,12 +74,13 @@ import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// Menú de la cuenta de quien tiene la sesión, mismo lugar y misma marca que el
-/// menú de usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`):
-/// la inicial dentro de un engranaje ([EngranajeConInicial]) arriba a la
-/// derecha. Queda arriba y no en la barra de secciones a propósito: abajo es lo
-/// operativo y rápido, y ahí se tocaría por error (decisión del usuario
-/// 2026-10-21).
+/// Menú de la cuenta de quien tiene la sesión, mismo lugar que el menú de
+/// usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`): la
+/// inicial arriba a la derecha, en el mismo cuadradito que la campanita (el
+/// engranaje del escritorio desentonaba con los otros íconos, pedido del
+/// usuario 2026-10-29). Queda arriba y no en la barra de secciones a
+/// propósito: abajo es lo operativo y rápido, y ahí se tocaría por error
+/// (decisión del usuario 2026-10-21).
 ///
 /// Al tocarlo brota un panel chico, a la manera de los menús de iOS 26
 /// (rediseño 2026-10-21): el nombre, el tema (sol/luna), la Ayuda, la
@@ -87,7 +88,7 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// grueso para no tocarlo por error. Es un panel propio y no un
 /// `DropdownMenu`: el de Material no deja cambiar cómo aparece.
 ///
-/// Si hay una versión nueva, un puntito late unos segundos sobre el engranaje y
+/// Si hay una versión nueva, un puntito late unos segundos sobre la inicial y
 /// luego queda fijo; el ítem de actualización cambia de "Buscar" a "Actualizar".
 ///
 /// Sólo UI: el tema lo guarda [GestorTema], el estado de la actualización es de
@@ -95,6 +96,8 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 @Composable
 fun MenuCuenta(
     sesion: UsuarioSesion,
+    // La unidad operativa del teléfono, bajo el nombre.
+    unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
@@ -105,8 +108,6 @@ fun MenuCuenta(
     // Mantiene el panel en pantalla mientras se encoge al cerrarse.
     val visible = remember { MutableTransitionState(false) }
     visible.targetState = abierto
-    val giro = remember { Animatable(0f) }
-    val alcance = rememberCoroutineScope()
     val estadoActualizacion by actualizador.estado.collectAsState()
     val busqueda by actualizador.busqueda.collectAsState()
     val hayPendiente = estadoActualizacion is EstadoActualizacion.ConNovedad
@@ -119,9 +120,10 @@ fun MenuCuenta(
         actualizador.olvidarBusqueda()
     }
 
-    // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
-    // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
-    // tarjeta flotante y el puntito en el engranaje.
+    // La respuesta de "Buscar actualizaciones" sale como un aviso corto (el
+    // menú sigue abierto, con el ítem de nuevo en "Buscar"); si hay versión
+    // nueva no hay aviso: el ítem pasa a "Actualizar a…", y aparecen la
+    // tarjeta flotante y el puntito en la inicial.
     val avisosBreves = LocalAvisosBreves.current
     LaunchedEffect(busqueda) {
         val aviso = avisoDeBusqueda(busqueda) ?: return@LaunchedEffect
@@ -136,22 +138,16 @@ fun MenuCuenta(
     }
 
     Box {
-        BotonIconoCuadradoBrisas(onClick = {
-            abierto = !abierto
-            // La rueda da media vuelta con rebote al tocarla (pedido del
-            // usuario 2026-10-21); cada toque suma otra media vuelta.
-            alcance.launch { giro.animateTo(giro.targetValue + 180f, ResorteRebote) }
-        }) {
+        BotonIconoCuadradoBrisas(onClick = { abierto = !abierto }) {
             // Mientras busca, el círculo girando dice que algo está pasando.
             if (busqueda == EstadoBusqueda.BUSCANDO) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                EngranajeConInicial(
+                Text(
                     inicialDe(sesion.nombre),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    tamano = 28.dp,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics { contentDescription = "Cuenta de ${sesion.nombre}" },
-                    giro = { giro.value },
                 )
             }
         }
@@ -179,6 +175,7 @@ fun MenuCuenta(
                 ) {
                     PanelCuenta(
                         sesion = sesion,
+                        unidad = unidad,
                         temaElegido = temaElegido,
                         onElegirTema = onElegirTema,
                         onAyuda = {
@@ -186,17 +183,13 @@ fun MenuCuenta(
                             onAyuda()
                         },
                         actualizacion =if (actualizador.activo) opcionActualizacion(estadoActualizacion, busqueda) else null,
+                        // El menú queda abierto: se ve la ruedita mientras busca
+                        // y la barra mientras descarga (pedido del usuario
+                        // 2026-10-29; antes se cerraba y no se veía nada).
                         onActualizacion = { accion ->
                             when (accion) {
-                                // Cierra el menú: la respuesta llega como aviso corto.
-                                AccionActualizacion.BUSCAR -> {
-                                    cerrar()
-                                    actualizador.buscarAhora()
-                                }
-                                AccionActualizacion.ACTUALIZAR -> {
-                                    cerrar()
-                                    actualizador.actualizar()
-                                }
+                                AccionActualizacion.BUSCAR -> actualizador.buscarAhora()
+                                AccionActualizacion.ACTUALIZAR -> actualizador.actualizar()
                                 AccionActualizacion.NINGUNA -> Unit
                             }
                         },
@@ -218,6 +211,7 @@ fun MenuCuenta(
 @Composable
 private fun PanelCuenta(
     sesion: UsuarioSesion,
+    unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
@@ -238,15 +232,41 @@ private fun PanelCuenta(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    EngranajeConInicial(inicialDe(sesion.nombre), color = MaterialTheme.colorScheme.primary, tamano = 34.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            inicialDe(sesion.nombre),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        sesion.nombre,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column {
+                        Text(
+                            sesion.nombre,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        // La unidad vivía bajo el título de la sección; acá
+                        // libera alto arriba (pedido del usuario 2026-10-29).
+                        if (unidad != null) {
+                            Text(
+                                unidad,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
             SeparadorFino()
@@ -274,12 +294,18 @@ private fun PanelCuenta(
                         resaltada = actualizacion.resaltada,
                         enabled = actualizacion.accion != AccionActualizacion.NINGUNA,
                         onClick = { onActualizacion(actualizacion.accion) },
+                        progreso = actualizacion.progreso,
                     ) {
-                        Icon(
-                            if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = if (actualizacion.resaltada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        val tinte = if (actualizacion.resaltada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        if (actualizacion.trabajando) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tinte)
+                        } else {
+                            Icon(
+                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = tinte,
+                            )
+                        }
                     }
                 } else {
                     // Builds de prueba: sin actualizador, sólo la versión.
@@ -314,6 +340,8 @@ private fun OpcionMenu(
     color: Color = MaterialTheme.colorScheme.onSurface,
     resaltada: Boolean = false,
     enabled: Boolean = true,
+    // De 0 a 1: una barra bajo el texto (la descarga de una actualización).
+    progreso: Float? = null,
     icono: @Composable () -> Unit,
 ) {
     Row(
@@ -336,6 +364,14 @@ private fun OpcionMenu(
             )
             if (detalle != null) {
                 Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (progreso != null) {
+                // Avanza suave entre un porcentaje y el siguiente.
+                val avance by animateFloatAsState(progreso, label = "progresoActualizacion")
+                LinearProgressIndicator(
+                    progress = { avance },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(2.dp)),
+                )
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -441,7 +477,7 @@ internal fun IconoTema(tema: TemaApp) {
 }
 
 /// Alto de [BotonIconoCuadradoBrisas]: el panel se abre justo debajo.
-private val ALTO_BOTON_CUENTA = 40.dp
+private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO
 
 /// El panel crece desde la esquina superior derecha, donde está el botón.
 private val OrigenEsquina = TransformOrigin(1f, 0f)
@@ -454,7 +490,7 @@ private val ResorteMenu = spring<Float>(
     stiffness = Spring.StiffnessMedium,
 )
 
-/// Puntito sobre el engranaje: late unas veces al aparecer (llama la atención
+/// Puntito sobre la inicial: late unas veces al aparecer (llama la atención
 /// una vez) y queda fijo. Si el sistema tiene las animaciones apagadas, las
 /// animaciones de Compose terminan al instante y sólo queda el punto.
 @Composable
@@ -494,14 +530,24 @@ internal data class OpcionActualizacion(
     val texto: String,
     val accion: AccionActualizacion,
     val resaltada: Boolean,
+    // Trabajando (buscando, descargando, instalando): la ruedita en vez del
+    // ícono. Con [progreso] (0 a 1, al descargar), además, la barra.
+    val trabajando: Boolean = false,
+    val progreso: Float? = null,
 )
 
 internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBusqueda): OpcionActualizacion =
     when (estado) {
         is EstadoActualizacion.Descargando ->
-            OpcionActualizacion("Descargando ${estado.porcentaje} %", AccionActualizacion.NINGUNA, resaltada = true)
+            OpcionActualizacion(
+                "Descargando ${estado.porcentaje} %",
+                AccionActualizacion.NINGUNA,
+                resaltada = true,
+                trabajando = true,
+                progreso = estado.porcentaje / 100f,
+            )
         is EstadoActualizacion.Instalando ->
-            OpcionActualizacion("Instalando…", AccionActualizacion.NINGUNA, resaltada = true)
+            OpcionActualizacion("Instalando…", AccionActualizacion.NINGUNA, resaltada = true, trabajando = true)
         is EstadoActualizacion.Fallo ->
             OpcionActualizacion(
                 "Reintentar ${estado.novedad.manifiesto.versionName}",
@@ -520,7 +566,7 @@ internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBu
         // (ver [avisoDeBusqueda]); el ítem sólo vuelve a ofrecer buscar.
         EstadoActualizacion.SinAviso ->
             if (busqueda == EstadoBusqueda.BUSCANDO) {
-                OpcionActualizacion("Buscando…", AccionActualizacion.NINGUNA, resaltada = false)
+                OpcionActualizacion("Buscando…", AccionActualizacion.NINGUNA, resaltada = false, trabajando = true)
             } else {
                 OpcionActualizacion("Buscar actualizaciones", AccionActualizacion.BUSCAR, resaltada = false)
             }

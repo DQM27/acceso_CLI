@@ -15,6 +15,7 @@ use control_acceso::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
 use control_acceso::database::schema::{SCHEMA_VERSION, initialize_database};
+use control_acceso::domain::acceso::AvisoAccesoLista;
 use control_acceso::models::contratista::Contratista;
 use control_acceso::models::empresa::Empresa;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
@@ -306,16 +307,25 @@ fn buscar_contratistas_trae_el_aviso_de_acceso_con_el_reloj_del_nucleo() {
         .unwrap()
         .items
         .into_iter()
-        .map(|fila| (fila.cedula, fila.aviso_acceso))
+        .map(|fila| (fila.cedula, fila.aviso_acceso, fila.tipo_aviso_acceso))
         .collect();
-    avisos.sort();
+    avisos.sort_by(|a, b| a.0.cmp(&b.0));
 
+    // El texto y el tipo van juntos; con los dos, gana "sin acceso" (1003).
     assert_eq!(
         avisos,
         vec![
-            ("1001".to_owned(), None),
-            ("1002".to_owned(), Some("PRAIND VENCIDO".to_owned())),
-            ("1003".to_owned(), Some("ACCESO DENEGADO".to_owned())),
+            ("1001".to_owned(), None, None),
+            (
+                "1002".to_owned(),
+                Some("PRAIND VENCIDO".to_owned()),
+                Some(AvisoAccesoLista::PraindVencido)
+            ),
+            (
+                "1003".to_owned(),
+                Some("ACCESO DENEGADO".to_owned()),
+                Some(AvisoAccesoLista::AccesoDenegado)
+            ),
         ]
     );
 }

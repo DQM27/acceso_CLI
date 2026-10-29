@@ -7,15 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -25,6 +24,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,56 +34,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
+import uniffi.control_acceso_mobile.GafeteSinPortador
+import uniffi.control_acceso_mobile.SituacionGafete
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
 // contenido por modo y la ficha de salida (sacado de `PantallaActivos.kt`,
 // punto M6 de la auditoría móvil).
 
-/// Píldoras "Persona"/"Gafete" (`FilaPildoras`, ver ControlesBrisas.kt): los
-/// dos modos de [PantallaActivos]. Dentro del buscador de abajo hacen de
-/// barra de alcances como en iOS: se puede cambiar de modo sin cerrar la
-/// búsqueda. Antes eran tres (Ingreso, Salida y Gafete); "Salida" se fue
-/// porque elegir a alguien que ya está adentro abre su salida.
+/// Lo que dice la píldora y el campo de búsqueda de abajo. Un solo buscador
+/// para personas y gafetes (2026-10-28: antes eran dos pestañas, "Persona" y
+/// "Gafete"); qué se busca lo decide el núcleo
+/// (`interpretarBusquedaActivos`) según lo escrito.
+internal const val AYUDA_BUSQUEDA_ACTIVOS = "Nombre, cédula o gafete"
+
+/// El botón redondo de abajo en Activos (ver `AccionInferior.kt`): escanea el
+/// documento, para entrar o, si ya está adentro, para salir (lo decide
+/// [ActivosViewModel.elegir]). El escáner de gafetes se desconectó con las
+/// pestañas: en la práctica los gafetes se escriben.
 @Composable
-internal fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -> Unit) {
-    val opciones = listOf(ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_GAFETE)
-    FilaPildoras(
-        opciones = listOf("Persona", "Gafete"),
-        seleccionado = opciones.indexOf(modo),
-        onSeleccionar = { onCambiar(opciones[it]) },
-    )
-}
-
-/// Lo que dice la píldora y el campo de búsqueda de abajo en cada modo: el
-/// mismo buscador cambia de sentido.
-internal fun ayudaBusquedaActivos(modo: ModoBusqueda): String = when (modo) {
-    ModoBusqueda.ENTRADA -> "Nombre o cédula"
-    ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
-}
-
-/// Teclado numérico para los gafetes; el de siempre para nombres y cédulas.
-internal fun tecladoBusquedaActivos(modo: ModoBusqueda): KeyboardOptions =
-    if (modo == ModoBusqueda.SALIDA_GAFETE) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
-
-/// Lo que hace el botón redondo de abajo en Activos (ver `AccionInferior.kt`):
-/// en Persona escanea el documento (para entrar o, si ya está adentro, para
-/// salir: lo decide [ActivosViewModel.elegir]); en Gafete, el gafete de
-/// quien sale. Buscar ya no pasa por acá: es la píldora de búsqueda.
-@Composable
-internal fun AccionActivos(
-    modo: ModoBusqueda,
-    onEscanearCedula: () -> Unit,
-    onEscanearGafete: () -> Unit,
-) {
-    when (modo) {
-        ModoBusqueda.ENTRADA -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
-        ModoBusqueda.SALIDA_GAFETE -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
-    }
+internal fun AccionActivos(onEscanearCedula: () -> Unit) {
+    AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
 }
 
 /// Fallas de consulta, el resultado de una salida por gafetes y el
@@ -127,7 +101,7 @@ internal fun ContenidoListaActivos(
     )
 }
 
-/// Resultados del buscador en modo Persona: el catálogo completo de
+/// Resultados del buscador para una persona: el catálogo completo de
 /// contratistas (tocar = entrar, o salir si ya está adentro). Sin texto, qué
 /// escribir. Sin resultados, registrarlo ahí mismo: antes había que volver,
 /// buscar el "+" de arriba y, después de guardarlo, volver a buscarlo para
@@ -143,7 +117,7 @@ internal fun ResultadosIngreso(
     onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre o una cédula.", Icons.Default.PersonSearch)
+        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre, una cédula o un gafete.", Icons.Default.PersonSearch)
         return
     }
     if (resultadosBusqueda.isEmpty() && !cargando) {
@@ -172,101 +146,84 @@ internal fun ResultadosIngreso(
     }
 }
 
-/// Modo Gafete fuera del buscador: qué hacer (escribir los números abajo o
-/// escanear el gafete con el botón redondo).
-@Composable
-internal fun ContenidoModoSalidaGafete() {
-    EstadoVacio(
-        "Salida por gafete",
-        "Escriba los números en la búsqueda de abajo, o escanee el gafete con la cámara.",
-        IconosLucide.InsigniaConCheck,
-    )
-}
-
-/// Resultados del buscador en modo Gafete -- uno o más números separados por
-/// coma, cada uno con a quién le corresponde, y un único botón que confirma
-/// todos de una vez (la vista previa con nombres hace de confirmación, como
-/// en escritorio). El escaneo por cámara no pasa por acá: escanear ya es la
-/// acción deliberada de sacar un gafete, así que registra la salida al toque
-/// (pedido explícito del usuario 2026-09-20).
+/// Resultados del buscador cuando se escribieron gafetes ("25" o "2, 25,
+/// 85"): la misma tarjeta de la lista de adentro, con el gafete en su cuadro,
+/// pintada de azul de salida; tocarla abre la salida, igual que en la lista
+/// (2026-10-28: antes tenía un diseño propio). Con uno o más encontrados,
+/// además, un botón saca a todos de una vez (la vista previa con nombres hace
+/// de confirmación, como en escritorio). Un gafete que nadie tiene queda en
+/// una fila chica en rojo, para que no desaparezca en silencio.
 @Composable
 internal fun ResultadosGafete(
-    texto: String,
     coincidencias: List<CoincidenciaGafete>,
     enviando: Boolean,
+    onElegir: (FilaActiva) -> Unit,
     onRegistrarSalidaGafetes: () -> Unit,
 ) {
-    if (texto.isBlank()) {
-        EstadoVacio("Salida por gafete", "Escriba uno o más números, separados por coma.", IconosLucide.InsigniaConCheck)
-        return
-    }
     val encontrados = coincidencias.filter { it.fila != null }
+    val tinte = paletaActual.tinteSalida
+    // Sin resaltar: "25" no debe subrayarse dentro de una cédula o un nombre.
+    // El gafete coincide exacto y ya se ve en su cuadro.
+    CompositionLocalProvider(LocalConsultaResaltada provides "") {
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PADDING_RESULTADOS,
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            // Sin `key`: el mismo número escrito dos veces ("2, 2") repetiría la clave.
-            items(coincidencias) { coincidencia ->
-                TarjetaCoincidenciaGafete(coincidencia)
+            // El núcleo ya quitó los números repetidos: cada gafete es su clave.
+            items(coincidencias, key = { it.numero }) { coincidencia ->
+                val fila = coincidencia.fila
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    if (fila != null) {
+                        FilaActivo(fila, onClick = { onElegir(fila) }, tinte = tinte, pista = PISTA_SALIDA)
+                    } else {
+                        FilaGafeteSinIngreso(coincidencia.numero, coincidencia.sinPortador)
+                    }
+                }
             }
         }
+        // Desde uno solo (pedido del usuario 2026-10-29): con un gafete
+        // escrito, el botón saca de una vez sin pasar por la hoja.
         if (encontrados.isNotEmpty()) {
             BotonBrisas(
                 onClick = onRegistrarSalidaGafetes,
                 enabled = !enviando,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
-                Text(if (enviando) "Registrando…" else "Registrar salida (${encontrados.size})")
-            }
-        }
-    }
-}
-
-/// Un número de gafete escrito: el número en una insignia del color de la
-/// sección y, al lado, a quién le corresponde (o, en rojo, que nadie lo tiene).
-@Composable
-private fun TarjetaCoincidenciaGafete(coincidencia: CoincidenciaGafete, modifier: Modifier = Modifier) {
-    val fila = coincidencia.fila
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (fila != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                coincidencia.numero.toString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = if (fila != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            if (fila != null) {
-                Text(fila.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                fila.empresaNombre?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else {
-                Text("Sin ingreso activo", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
                 Text(
-                    "Nadie adentro tiene este gafete.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    when {
+                        enviando -> "Registrando…"
+                        encontrados.size == 1 -> "Registrar salida"
+                        else -> "Registrar salida (${encontrados.size})"
+                    },
                 )
             }
         }
+    }
+    }
+}
+
+/// Un gafete escrito que nadie adentro tiene puesto, con el porqué que da
+/// el núcleo ([GafeteSinPortador]): libre va en gris, porque no es un
+/// error; no existe, perdido o de baja, en rojo.
+@Composable
+private fun FilaGafeteSinIngreso(numero: Int, sinPortador: GafeteSinPortador?) {
+    val libre = sinPortador?.situacion == SituacionGafete.LIBRE
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(if (libre) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            sinPortador?.mensaje ?: "Gafete $numero · nadie adentro",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (libre) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+        )
     }
 }
 
@@ -365,6 +322,8 @@ internal fun DialogoRegistrarSalida(
     accion: String = "Registrar salida",
     aviso: String? = null,
 ) {
+    // Con el teclado del buscador todavía bajando, la hoja espera.
+    if (!rememberTecladoCerrado()) return
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
@@ -376,6 +335,8 @@ internal fun DialogoRegistrarSalida(
         onDismissRequest = onDismiss,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
+        // Sin el lugar del teclado: no tiene campos.
+        contentWindowInsets = { WindowInsets.navigationBars },
     ) {
         Column(
             modifier = Modifier

@@ -31,8 +31,8 @@ luego el ingreso. Ver [Registrar la salida de un contratista](registrar-salida-c
 | Mensaje | Qué hacer |
 |---|---|
 | "El contratista ya tiene un ingreso activo en (sitio)." | Figura adentro en otro sitio. No registre el ingreso. Avise al otro sitio (por ejemplo, por WhatsApp) o a un administrador. |
-| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Está adentro por otra vía. Registre primero esa salida en **Externos**. |
-| "Esta persona ya está adentro como contratista — registre primero esa salida" (al escanear en **Externos**) | Está adentro como contratista. Registre primero esa salida en **Contratistas**. |
+| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Está adentro por otra vía. Toque **Registrar esa salida y continuar** en esa misma pantalla. |
+| "Esta persona ya está adentro como contratista — registre primero esa salida" (al escanear en **Proveedores** o **Correo**) | Está adentro como contratista. Toque **Registrar esa salida y continuar** en esa misma pantalla. |
 
 ## "Tiene un ingreso activo aquí Y en otro sitio"
 

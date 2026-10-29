@@ -52,7 +52,7 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
     }
 
 /// Sin "Por correo": dejó de ser un tipo de contratista (2026-10-03); esas
-/// visitas van en Externos → Por correo.
+/// visitas van en la sección Correo.
 private val TIPOS_CONTRATISTA = TipoIngreso.entries.filter { it != TipoIngreso.POR_CORREO }
 
 /// Estado y llamadas al núcleo en [NuevoContratistaViewModel] (punto M1

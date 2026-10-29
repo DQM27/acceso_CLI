@@ -37,6 +37,14 @@ pub use avisos::{
     TipoAccionAviso, aviso_de_mensaje, cuerpo_registro_accion_aviso,
 };
 
+mod busqueda_activos;
+pub use busqueda_activos::{
+    BusquedaActivos, GafeteSinPortador, SituacionGafete, interpretar_busqueda_activos,
+};
+
+mod otra_via;
+pub use otra_via::{SalidaPorOtraVia, UbicacionSalida, ViaIngreso};
+
 mod manual;
 pub use manual::{
     BloqueManual, CeldaManual, ContenidoTemaManual, FilaManual, GrupoManual, ResultadoManual,
@@ -62,15 +70,15 @@ pub use error::NucleoError;
 use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
-    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
-    IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
-    IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
-    PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
-    RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
-    ResultadoIngresoRegistrado, ResultadoReconexion, ResultadoRegistroEntrada,
-    ResultadoRegistroSalidaRuta, ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta,
-    SalidaRutaActivaResumen, SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion,
-    VehiculoRuta,
+    AvisoAcceso, ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta,
+    EstadoReloj, IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto,
+    IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion,
+    MotivoResultadoIngreso, PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen,
+    PrestamoGafeteProvisionalRemoto, RegistroIngresoCorreoActivoResumen,
+    RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
+    ResultadoReconexion, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta,
+    ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
+    SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
 pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 

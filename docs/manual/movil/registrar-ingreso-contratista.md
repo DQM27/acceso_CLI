@@ -12,8 +12,7 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Sección **Contratistas**, con **Persona** elegido arriba (es lo que se ve
-al entrar).
+Sección **Contratistas** (es la que se ve al entrar).
 
 ## Pasos — escaneando el documento (lo más rápido)
 
@@ -42,13 +41,21 @@ esté en silencio.
 
 ## Pasos — buscando por nombre o cédula
 
-1. En **Contratistas**, toque la búsqueda de abajo (**"Nombre o cédula"**)
-   y escriba.
+1. En **Contratistas**, toque la búsqueda de abajo (**"Nombre, cédula o
+   gafete"**) y escriba el nombre o la cédula (al menos 4 dígitos: con
+   menos, se buscan gafetes).
 2. Toque a la persona en los resultados.
 3. Complete el formulario y toque **Registrar ingreso**.
 
-Quien ya está adentro aparece con **"Adentro · toque para registrar su
-salida"**: tocarlo abre su salida, no un ingreso.
+Algunas tarjetas se distinguen por su color, con un ícono y una palabra a
+la derecha, y un renglón chico que dice qué hacer:
+
+- **Ámbar, ADENTRO**: ya está adentro. Tocarla abre su salida, no un
+  ingreso (**"Toque para registrar su salida"**).
+- **Roja, DENEGADO** (círculo con una raya): no tiene acceso autorizado
+  (**"Acceso denegado"**).
+- **Roja, VENCIDO** (calendario con una X): su PRAIND está vencido
+  (**"PRAIND vencido"**).
 
 ## El formulario de ingreso
 
@@ -85,7 +92,7 @@ Si la persona no puede entrar, en vez del formulario se ve el motivo, con
 | "Acceso denegado · no tiene acceso autorizado" | Un administrador le quitó el acceso. No puede entrar. |
 | "Acceso denegado · la empresa está inactiva" | Su empresa está desactivada. Avise a un administrador. |
 | "El contratista ya tiene un ingreso activo en (sitio)." | Ver [Problemas frecuentes](problemas-frecuentes.md#el-contratista-ya-tiene-un-ingreso-activo). |
-| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Registre primero esa salida en **Externos**. |
+| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Debajo se ve ese ingreso (gafete y hora). Toque **Registrar esa salida y continuar**: se cierra ahí mismo y pasa al formulario de ingreso. |
 
 Otros mensajes al registrar:
 

@@ -108,6 +108,8 @@ pub fn dias_para_vencer_praind(contratista: &Contratista, hoy: NaiveDate) -> Opt
 /// Sólo informa: si puede entrar lo decide `verificar_acceso` al preparar
 /// el ingreso.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 pub enum AvisoAccesoLista {
     AccesoDenegado,
     PraindVencido,

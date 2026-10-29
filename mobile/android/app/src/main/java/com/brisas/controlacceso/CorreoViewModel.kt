@@ -16,6 +16,8 @@ import uniffi.control_acceso_mobile.IngresoCorreoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoCorreoActivoResumen
+import uniffi.control_acceso_mobile.SalidaPorOtraVia
+import uniffi.control_acceso_mobile.ViaIngreso
 import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
 /// Fila fusionada local+remota de los ingresos por correo -- mismo criterio
@@ -66,6 +68,13 @@ class CorreoViewModel(
         private set
     private var avisoCedulaActiva: String? = null
 
+    /// Mismo criterio que [ProveedoresViewModel.salidaPorOtraVia]: está adentro
+    /// como contratista o como proveedor en esta unidad.
+    var salidaPorOtraVia by mutableStateOf<SalidaPorOtraVia?>(null)
+        private set
+    var estadoSalidaOtraVia by mutableStateOf(EstadoSalidaOtraVia())
+        private set
+
     init {
         refrescarActivos()
     }
@@ -109,6 +118,9 @@ class CorreoViewModel(
             null
         }
         if (consultada != cedula) return // ya se tipeó otra
+        val otraVia = if (aviso != null) salidaPorOtraVia(consultada) else null
+        if (consultada != cedula) return
+        salidaPorOtraVia = otraVia
         val anterior = avisoCedulaActiva
         avisoCedulaActiva = aviso
         cedulaConIngresoActivo = aviso != null
@@ -116,6 +128,35 @@ class CorreoViewModel(
             error = aviso
         } else if (anterior != null && error == anterior) {
             error = null
+        }
+    }
+
+    /// Si falla la consulta, sin botón: el aviso queda como antes.
+    private suspend fun salidaPorOtraVia(consultada: String): SalidaPorOtraVia? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("salidaPorOtraVia") { nucleo.salidaPorOtraVia(consultada, ViaIngreso.POR_CORREO) } }
+        } catch (_: NucleoException) {
+            null
+        }
+
+    /// Ver [ProveedoresViewModel.registrarSalidaPorOtraVia].
+    fun registrarSalidaPorOtraVia(onListo: () -> Unit) {
+        val salida = salidaPorOtraVia ?: return
+        if (estadoSalidaOtraVia.registrando) return
+        estadoSalidaOtraVia = EstadoSalidaOtraVia(registrando = true)
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    medirNucleo("registrarSalidaPorOtraVia") { nucleo.registrarSalidaPorOtraVia(salida) }
+                }
+                CambiosNube.cambioLocal()
+                confirmacion.mostrar("Salida registrada · ${salida.nombre}")
+                estadoSalidaOtraVia = EstadoSalidaOtraVia()
+                revisarCedula(cedula)
+                if (avisoCedulaActiva == null) onListo()
+            } catch (excepcion: Exception) {
+                estadoSalidaOtraVia = EstadoSalidaOtraVia(error = excepcion.mensajeDeErrorEsperado())
+            }
         }
     }
 
@@ -201,6 +242,8 @@ class CorreoViewModel(
         placa = ""
         cedulaConIngresoActivo = false
         avisoCedulaActiva = null
+        salidaPorOtraVia = null
+        estadoSalidaOtraVia = EstadoSalidaOtraVia()
         error = null
     }
 

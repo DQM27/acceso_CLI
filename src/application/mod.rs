@@ -28,6 +28,7 @@ mod gafetes_provisionales;
 mod historial;
 #[cfg(feature = "nube")]
 mod nube;
+mod otra_via;
 mod proveedores;
 #[cfg(feature = "nube")]
 mod reconexion;

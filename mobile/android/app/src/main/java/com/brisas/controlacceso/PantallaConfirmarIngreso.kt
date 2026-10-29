@@ -62,6 +62,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.PreparacionIngreso
+import uniffi.control_acceso_mobile.SalidaPorOtraVia
+import androidx.compose.foundation.layout.Arrangement
 
 /// Lo que lleva escrito el formulario de ingreso. Vive afuera de
 /// [HojaIngreso] (lo guarda [PantallaActivos]): la cámara de placa ocupa
@@ -125,6 +127,8 @@ internal fun HojaIngreso(
     onCerrada: () -> Unit,
 ) {
     RegistrarPantalla("confirmar_ingreso")
+    // Con el teclado del buscador todavía bajando, la hoja espera.
+    if (!rememberTecladoCerrado()) return
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val teclado = LocalSoftwareKeyboardController.current
     val hapticos = rememberHapticos()
@@ -370,20 +374,47 @@ internal fun HojaIngreso(
 }
 
 @Composable
-fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, onCambiar: () -> Unit) {
+fun PantallaIngresoBloqueado(
+    preparacion: PreparacionIngreso,
+    mensaje: String,
+    onCambiar: () -> Unit,
+    salida: SalidaPorOtraVia? = null,
+    salidaOtraVia: EstadoSalidaOtraVia = EstadoSalidaOtraVia(),
+    onRegistrarSalidaOtraVia: () -> Unit = {},
+) {
     PantallaBloqueoIngreso(
         titulo = preparacion.nombre,
         subtitulo = "${preparacion.cedula} · ${preparacion.empresaNombre}",
         mensaje = mensaje,
         onVolver = onCambiar,
+        salida = salida,
+        estadoSalida = salidaOtraVia,
+        onRegistrarSalida = onRegistrarSalidaOtraVia,
     )
 }
+
+/// Mientras se cierra la salida por otra vía y, si falló, por qué.
+data class EstadoSalidaOtraVia(val registrando: Boolean = false, val error: String? = null)
 
 /// La persona no puede entrar: su nombre y, en una franja de error, el
 /// motivo. La misma para contratistas, proveedores y por correo (pedido del
 /// usuario 2026-10-26: que los tres frenen igual apenas se escanea).
+///
+/// Con [salida] (está adentro por otra vía en esta unidad), además, ese
+/// ingreso y un botón que lo cierra ahí mismo para seguir con el que se
+/// estaba haciendo (pedido del usuario 2026-10-29: antes había que ir a la
+/// otra sección). El botón es la confirmación: arriba ya se ve a quién se
+/// saca y por qué vía.
 @Composable
-internal fun PantallaBloqueoIngreso(titulo: String, subtitulo: String, mensaje: String, onVolver: () -> Unit) {
+internal fun PantallaBloqueoIngreso(
+    titulo: String,
+    subtitulo: String,
+    mensaje: String,
+    onVolver: () -> Unit,
+    salida: SalidaPorOtraVia? = null,
+    estadoSalida: EstadoSalidaOtraVia = EstadoSalidaOtraVia(),
+    onRegistrarSalida: () -> Unit = {},
+) {
     PantallaConGestoVolver(onVolver = onVolver) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
             EncabezadoPantalla(
@@ -397,7 +428,46 @@ internal fun PantallaBloqueoIngreso(titulo: String, subtitulo: String, mensaje: 
             // más fuerza que el resto del texto. Sin toque de rechazo: tras un
             // escaneo ya suena y vibra la alerta (`AlertaEscaneo.kt`).
             FranjaEstado(mensaje, TipoEstado.ERROR)
+            if (salida != null) {
+                DetalleSalidaOtraVia(salida, modifier = Modifier.padding(top = 16.dp))
+                estadoSalida.error?.let {
+                    FranjaEstado(it, TipoEstado.ERROR, modifier = Modifier.padding(top = 12.dp), vibrar = true)
+                }
+                BotonBrisas(
+                    onClick = onRegistrarSalida,
+                    enabled = !estadoSalida.registrando,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                ) {
+                    Text(if (estadoSalida.registrando) "Registrando…" else "Registrar esa salida y continuar")
+                }
+            }
         }
+    }
+}
+
+/// El ingreso por otra vía: por cuál, el gafete y desde qué hora.
+@Composable
+private fun DetalleSalidaOtraVia(salida: SalidaPorOtraVia, modifier: Modifier = Modifier) {
+    val hora = remember(salida.fechaHoraIngreso) { horaIngreso(salida.fechaHoraIngreso) }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            salida.titulo.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            color = ColorTextoAdvertenciaBrisas,
+        )
+        Text(salida.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(
+            "${textoGafeteSalida(salida.gafeteNumero)} · desde ${hora.texto}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

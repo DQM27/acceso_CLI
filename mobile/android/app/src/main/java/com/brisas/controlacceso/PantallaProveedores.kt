@@ -210,6 +210,10 @@ fun PantallaProveedores(
                             gafeteTexto = ""
                             mostrandoFormulario = false
                         },
+                        // Cerrada la otra salida, queda el formulario con lo leído.
+                        salida = viewModel.salidaPorOtraVia,
+                        estadoSalida = viewModel.estadoSalidaOtraVia,
+                        onRegistrarSalida = { viewModel.registrarSalidaPorOtraVia { bloqueoEscaneo = null } },
                     )
                 } else FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
@@ -225,9 +229,9 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
-                    // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
+                    // Sin título propio: el de la barra de arriba ya dice dónde se
                     // está. Se busca con la píldora de abajo, como en todas las pestañas.
-                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                         viewModel.error?.let { mensaje ->
                             FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                         }

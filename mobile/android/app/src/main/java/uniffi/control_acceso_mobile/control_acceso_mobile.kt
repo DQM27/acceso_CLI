@@ -727,6 +727,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -790,6 +792,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_sin_portador(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
@@ -886,6 +890,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_por_otra_via(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
     ): Int
@@ -1014,6 +1022,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir_cifrado(`rutaBaseDatos`: RustBuffer.ByValue,`clave`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_sin_portador(`ptr`: Long,`numero`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_admite_personal_ruta_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1109,6 +1119,10 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_vincular_dispositivo_inicial(`ptr`: Long,`codigo`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_por_otra_via(`ptr`: Long,`salida`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_salida_por_otra_via(`ptr`: Long,`cedula`: RustBuffer.ByValue,`propia`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1227,6 +1241,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_func_aviso_de_mensaje(`datos`: RustBuffer.ByValue,`tituloNotificacion`: RustBuffer.ByValue,`cuerpoNotificacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_cuerpo_registro_accion_aviso(`accion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_interpretar_busqueda_activos(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1420,6 +1436,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso() and 0xFFFF) != 45442) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos() and 0xFFFF) != 28362) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1514,6 +1533,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva() and 0xFFFF) != 18904) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_sin_portador() and 0xFFFF) != 500) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 65365) {
@@ -1658,6 +1680,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial() and 0xFFFF) != 3515) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_por_otra_via() and 0xFFFF) != 46476) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via() and 0xFFFF) != 45673) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 6459) {
@@ -3645,6 +3673,12 @@ public object FfiConverterTypeEstabilizadorDocumento: FfiConverter<Estabilizador
 public interface NucleoInterface {
     
     /**
+     * Para un gafete que nadie adentro tiene puesto: si existe en el
+     * catálogo de contratistas y en qué estado. Sólo local, sin red.
+     */
+    fun `gafeteSinPortador`(`numero`: kotlin.Int): GafeteSinPortador
+    
+    /**
      * Si el formulario muestra la casilla "personal de ruta" para este
      * tipo -- `domain::contratista::admite_personal_ruta`, la misma regla
      * que después aplica `crear_contratista`.
@@ -4021,6 +4055,20 @@ public interface NucleoInterface {
     fun `vincularDispositivoInicial`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
+     * Cierra ese ingreso con la misma salida de siempre de su vía: la local
+     * (queda en el historial y se sincroniza) o, si es del otro equipo,
+     * contra la nube.
+     */
+    fun `registrarSalidaPorOtraVia`(`salida`: SalidaPorOtraVia)
+    
+    /**
+     * El ingreso por el que esta cédula está adentro por una vía distinta de
+     * `propia` (la de la pantalla que pregunta), o `None`. Sólo local, sin
+     * red. Sin actor: es una lectura.
+     */
+    fun `salidaPorOtraVia`(`cedula`: kotlin.String, `propia`: ViaIngreso): SalidaPorOtraVia?
+    
+    /**
      * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
      * está adentro en este sitio (este equipo o el otro dispositivo), como
      * proveedor o por otra vía (contratista, por correo), `None` si puede
@@ -4349,6 +4397,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
             UniffiLib.uniffi_control_acceso_mobile_fn_clone_nucleo(handle, status)
         }
     }
+
+    
+    /**
+     * Para un gafete que nadie adentro tiene puesto: si existe en el
+     * catálogo de contratistas y en qué estado. Sólo local, sin red.
+     */
+    @Throws(NucleoException::class)override fun `gafeteSinPortador`(`numero`: kotlin.Int): GafeteSinPortador {
+            return FfiConverterTypeGafeteSinPortador.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_sin_portador(
+        it,
+        
+        FfiConverterInt.lower(`numero`),_status)
+}
+    }
+    )
+    }
+    
 
     
     /**
@@ -5325,6 +5392,46 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterString.lower(`plataforma`),
         FfiConverterString.lower(`versionBuild`),
         FfiConverterString.lower(`appVersion`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Cierra ese ingreso con la misma salida de siempre de su vía: la local
+     * (queda en el historial y se sincroniza) o, si es del otro equipo,
+     * contra la nube.
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaPorOtraVia`(`salida`: SalidaPorOtraVia)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_por_otra_via(
+        it,
+        
+        FfiConverterTypeSalidaPorOtraVia.lower(`salida`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * El ingreso por el que esta cédula está adentro por una vía distinta de
+     * `propia` (la de la pantalla que pregunta), o `None`. Sólo local, sin
+     * red. Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `salidaPorOtraVia`(`cedula`: kotlin.String, `propia`: ViaIngreso): SalidaPorOtraVia? {
+            return FfiConverterOptionalTypeSalidaPorOtraVia.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_salida_por_otra_via(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterTypeViaIngreso.lower(`propia`),_status)
 }
     }
     )
@@ -6802,6 +6909,12 @@ data class ContratistaResumen (
      * reloj; Kotlin sólo lo muestra.
      */
     var `avisoAcceso`: kotlin.String?
+    , 
+    /**
+     * El mismo aviso como tipo: la tarjeta elige ícono, palabra y color con
+     * esto, sin comparar textos. Cuál gana si hay dos lo decide el núcleo.
+     */
+    var `tipoAvisoAcceso`: AvisoAcceso?
     
 ){
     
@@ -6827,6 +6940,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalTypeAvisoAcceso.read(buf),
         )
     }
 
@@ -6839,7 +6953,8 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.allocationSize(value.`fechaVencimientoPraind`) +
             FfiConverterBoolean.allocationSize(value.`tieneAcceso`) +
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
-            FfiConverterOptionalString.allocationSize(value.`avisoAcceso`)
+            FfiConverterOptionalString.allocationSize(value.`avisoAcceso`) +
+            FfiConverterOptionalTypeAvisoAcceso.allocationSize(value.`tipoAvisoAcceso`)
     )
 
     override fun write(value: ContratistaResumen, buf: ByteBuffer) {
@@ -6852,6 +6967,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
             FfiConverterOptionalString.write(value.`avisoAcceso`, buf)
+            FfiConverterOptionalTypeAvisoAcceso.write(value.`tipoAvisoAcceso`, buf)
     }
 }
 
@@ -7518,6 +7634,47 @@ public object FfiConverterTypeFilaManual: FfiConverterRustBuffer<FilaManual> {
 
     override fun write(value: FilaManual, buf: ByteBuffer) {
             FfiConverterSequenceTypeCeldaManual.write(value.`celdas`, buf)
+    }
+}
+
+
+
+data class GafeteSinPortador (
+    var `situacion`: SituacionGafete
+    , 
+    /**
+     * "Gafete 130 · no existe", listo para mostrar.
+     */
+    var `mensaje`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGafeteSinPortador: FfiConverterRustBuffer<GafeteSinPortador> {
+    override fun read(buf: ByteBuffer): GafeteSinPortador {
+        return GafeteSinPortador(
+            FfiConverterTypeSituacionGafete.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: GafeteSinPortador) = (
+            FfiConverterTypeSituacionGafete.allocationSize(value.`situacion`) +
+            FfiConverterString.allocationSize(value.`mensaje`)
+    )
+
+    override fun write(value: GafeteSinPortador, buf: ByteBuffer) {
+            FfiConverterTypeSituacionGafete.write(value.`situacion`, buf)
+            FfiConverterString.write(value.`mensaje`, buf)
     }
 }
 
@@ -9261,6 +9418,74 @@ public object FfiConverterTypeRuta: FfiConverterRustBuffer<Ruta> {
 
 
 /**
+ * El ingreso por otra vía, listo para mostrar y cerrar.
+ */
+data class SalidaPorOtraVia (
+    var `via`: ViaIngreso
+    , 
+    /**
+     * "Ya está adentro como proveedor".
+     */
+    var `titulo`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long?
+    , 
+    /**
+     * Como viene de la base (ISO); la hora la arma Kotlin igual que en las
+     * listas.
+     */
+    var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `ubicacion`: UbicacionSalida
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSalidaPorOtraVia: FfiConverterRustBuffer<SalidaPorOtraVia> {
+    override fun read(buf: ByteBuffer): SalidaPorOtraVia {
+        return SalidaPorOtraVia(
+            FfiConverterTypeViaIngreso.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeUbicacionSalida.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SalidaPorOtraVia) = (
+            FfiConverterTypeViaIngreso.allocationSize(value.`via`) +
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterTypeUbicacionSalida.allocationSize(value.`ubicacion`)
+    )
+
+    override fun write(value: SalidaPorOtraVia, buf: ByteBuffer) {
+            FfiConverterTypeViaIngreso.write(value.`via`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterTypeUbicacionSalida.write(value.`ubicacion`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `SalidaRutaActivaResumen` -- fila de "rutas activas" (salidas
  * sin retorno todavía), análoga a `IngresoActivoResumen`.
  */
@@ -9949,6 +10174,43 @@ public object FfiConverterTypeAlmacenClaveError : FfiConverterRustBuffer<Almacen
 
 
 /**
+ * Espejo de `AvisoAccesoLista` del núcleo.
+ */
+
+enum class AvisoAcceso {
+    
+    ACCESO_DENEGADO,
+    PRAIND_VENCIDO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAvisoAcceso: FfiConverterRustBuffer<AvisoAcceso> {
+    override fun read(buf: ByteBuffer) = try {
+        AvisoAcceso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: AvisoAcceso) = 4UL
+
+    override fun write(value: AvisoAcceso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Un bloque para dibujar. Las listas llegan aplanadas: cada elemento con su
  * marca ("1.", "•") y su sangría (0 arriba, 1 en una sublista…).
  */
@@ -10103,6 +10365,103 @@ public object FfiConverterTypeBloqueManual : FfiConverterRustBuffer<BloqueManual
                 buf.putInt(4)
                 FfiConverterSequenceTypeCeldaManual.write(value.`encabezado`, buf)
                 FfiConverterSequenceTypeFilaManual.write(value.`filas`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+sealed class BusquedaActivos {
+    
+    /**
+     * Campo vacío: se ve la lista de quién está adentro.
+     */
+    object Vacia : BusquedaActivos()
+    
+    
+    /**
+     * Nombre o cédula, contra el catálogo de contratistas.
+     */
+    object Personas : BusquedaActivos()
+    
+    
+    /**
+     * Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito
+     * y sin repetidos.
+     */
+    data class Gafetes(
+        val `numeros`: List<kotlin.Int>) : BusquedaActivos()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBusquedaActivos : FfiConverterRustBuffer<BusquedaActivos>{
+    override fun read(buf: ByteBuffer): BusquedaActivos {
+        return when(buf.getInt()) {
+            1 -> BusquedaActivos.Vacia
+            2 -> BusquedaActivos.Personas
+            3 -> BusquedaActivos.Gafetes(
+                FfiConverterSequenceInt.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: BusquedaActivos): ULong = when(value) {
+        is BusquedaActivos.Vacia -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is BusquedaActivos.Personas -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is BusquedaActivos.Gafetes -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceInt.allocationSize(value.`numeros`)
+            )
+        }
+    }
+
+    override fun write(value: BusquedaActivos, buf: ByteBuffer) {
+        when(value) {
+            is BusquedaActivos.Vacia -> {
+                buf.putInt(1)
+                Unit
+            }
+            is BusquedaActivos.Personas -> {
+                buf.putInt(2)
+                Unit
+            }
+            is BusquedaActivos.Gafetes -> {
+                buf.putInt(3)
+                FfiConverterSequenceInt.write(value.`numeros`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -11331,6 +11690,53 @@ public object FfiConverterTypeRolUsuario: FfiConverterRustBuffer<RolUsuario> {
 
 
 /**
+ * Por qué nadie adentro tiene un gafete escrito: "nadie adentro" a secas
+ * no distinguía un gafete libre de uno que ni existe (pedido del usuario
+ * 2026-10-28).
+ */
+
+enum class SituacionGafete {
+    
+    /**
+     * No está en el catálogo de gafetes de contratista: número mal escrito.
+     */
+    NO_EXISTE,
+    /**
+     * Existe y está disponible: nadie lo tiene puesto.
+     */
+    LIBRE,
+    PERDIDO,
+    DE_BAJA;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSituacionGafete: FfiConverterRustBuffer<SituacionGafete> {
+    override fun read(buf: ByteBuffer) = try {
+        SituacionGafete.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: SituacionGafete) = 4UL
+
+    override fun write(value: SituacionGafete, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Lo que la persona hizo con un aviso. Se escribe tal cual en
  * `avisos_acciones.accion` (ver la migración `avisos_acciones`).
  */
@@ -11495,6 +11901,94 @@ public object FfiConverterTypeTipoVehiculoDetectado: FfiConverterRustBuffer<Tipo
 
 
 /**
+ * Dónde está abierto el ingreso: en este teléfono o en el otro equipo de la
+ * unidad. Kotlin no lo mira: lo devuelve tal cual a
+ * [`Nucleo::registrar_salida_por_otra_via`].
+ */
+sealed class UbicacionSalida {
+    
+    data class Local(
+        val `registroId`: kotlin.Long) : UbicacionSalida()
+        
+    {
+        
+
+        companion object
+    }
+    
+    data class Remota(
+        val `uuid`: kotlin.String) : UbicacionSalida()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUbicacionSalida : FfiConverterRustBuffer<UbicacionSalida>{
+    override fun read(buf: ByteBuffer): UbicacionSalida {
+        return when(buf.getInt()) {
+            1 -> UbicacionSalida.Local(
+                FfiConverterLong.read(buf),
+                )
+            2 -> UbicacionSalida.Remota(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: UbicacionSalida): ULong = when(value) {
+        is UbicacionSalida.Local -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterLong.allocationSize(value.`registroId`)
+            )
+        }
+        is UbicacionSalida.Remota -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`uuid`)
+            )
+        }
+    }
+
+    override fun write(value: UbicacionSalida, buf: ByteBuffer) {
+        when(value) {
+            is UbicacionSalida.Local -> {
+                buf.putInt(1)
+                FfiConverterLong.write(value.`registroId`, buf)
+                Unit
+            }
+            is UbicacionSalida.Remota -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`uuid`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
  * Qué sigue con una cédula.
  */
 sealed class VerificacionVisita {
@@ -11611,6 +12105,44 @@ public object FfiConverterTypeVerificacionVisita : FfiConverterRustBuffer<Verifi
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
+ * Las tres vías de ingreso de una persona.
+ */
+
+enum class ViaIngreso {
+    
+    CONTRATISTA,
+    PROVEEDOR,
+    POR_CORREO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeViaIngreso: FfiConverterRustBuffer<ViaIngreso> {
+    override fun read(buf: ByteBuffer) = try {
+        ViaIngreso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ViaIngreso) = 4UL
+
+    override fun write(value: ViaIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
     }
 }
 
@@ -12198,6 +12730,38 @@ public object FfiConverterOptionalTypeLecturaVehiculo: FfiConverterRustBuffer<Le
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeSalidaPorOtraVia: FfiConverterRustBuffer<SalidaPorOtraVia?> {
+    override fun read(buf: ByteBuffer): SalidaPorOtraVia? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeSalidaPorOtraVia.read(buf)
+    }
+
+    override fun allocationSize(value: SalidaPorOtraVia?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeSalidaPorOtraVia.allocationSize(value)
+        }
+    }
+
+    override fun write(value: SalidaPorOtraVia?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeSalidaPorOtraVia.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeVehiculoRutaDetectado: FfiConverterRustBuffer<VehiculoRutaDetectado?> {
     override fun read(buf: ByteBuffer): VehiculoRutaDetectado? {
         if (buf.get().toInt() == 0) {
@@ -12220,6 +12784,38 @@ public object FfiConverterOptionalTypeVehiculoRutaDetectado: FfiConverterRustBuf
         } else {
             buf.put(1)
             FfiConverterTypeVehiculoRutaDetectado.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeAvisoAcceso: FfiConverterRustBuffer<AvisoAcceso?> {
+    override fun read(buf: ByteBuffer): AvisoAcceso? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAvisoAcceso.read(buf)
+    }
+
+    override fun allocationSize(value: AvisoAcceso?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAvisoAcceso.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AvisoAcceso?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAvisoAcceso.write(value, buf)
         }
     }
 }
@@ -12316,6 +12912,34 @@ public object FfiConverterOptionalTypeTipoDocumento: FfiConverterRustBuffer<Tipo
         } else {
             buf.put(1)
             FfiConverterTypeTipoDocumento.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceInt: FfiConverterRustBuffer<List<kotlin.Int>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Int> {
+        val len = buf.getInt()
+        return List<kotlin.Int>(len) {
+            FfiConverterInt.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Int>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterInt.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Int>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterInt.write(it, buf)
         }
     }
 }
@@ -13285,6 +13909,22 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterTypeAccionAviso.lower(`accion`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Lee lo escrito en el buscador de Activos. Son gafetes sólo si cada número
+         * separado por coma tiene de 1 a [`MAX_DIGITOS_GAFETE`] dígitos; cualquier
+         * otra cosa (letras, una cédula, "117 900 735" con espacios) es una persona.
+         */ fun `interpretarBusquedaActivos`(`texto`: kotlin.String): BusquedaActivos {
+            return FfiConverterTypeBusquedaActivos.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_interpretar_busqueda_activos(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
 }
     )
     }

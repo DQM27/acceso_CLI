@@ -17,7 +17,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.ContratistaResumen
+import uniffi.control_acceso_mobile.GafeteSinPortador
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.MedioIngreso
@@ -25,6 +27,9 @@ import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
+import uniffi.control_acceso_mobile.SalidaPorOtraVia
+import uniffi.control_acceso_mobile.ViaIngreso
+import uniffi.control_acceso_mobile.interpretarBusquedaActivos
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
 /// selección (buscador visible), verificando (prepararIngreso en vuelo),
@@ -35,20 +40,16 @@ sealed class SeleccionIngreso {
 
     data object Cargando : SeleccionIngreso()
 
-    data class Bloqueada(val preparacion: PreparacionIngreso, val mensaje: String) : SeleccionIngreso()
+    /// Con [salidaOtraVia], está adentro como proveedor o por correo en esta
+    /// unidad: la pantalla ofrece cerrar esa salida y seguir.
+    data class Bloqueada(
+        val preparacion: PreparacionIngreso,
+        val mensaje: String,
+        val salidaOtraVia: SalidaPorOtraVia? = null,
+    ) : SeleccionIngreso()
 
     data class Formulario(val preparacion: PreparacionIngreso) : SeleccionIngreso()
 }
-
-/// Qué busca el campo de abajo: personas (nombre o cédula) o números de
-/// gafete. Antes había un tercer modo, "Salida", que acotaba la lista de
-/// quién está adentro; se fue (2026-10-26) porque elegir —o escanear— a
-/// alguien que ya está adentro abre directo su salida (ver [elegir]), así
-/// que buscar a una persona sirve para entrar y para salir. `SALIDA_GAFETE`
-/// sigue aparte porque la búsqueda de texto libre de Rust mezcla
-/// nombre/cédula con gafete en el mismo OR — buscar "7" como gafete también
-/// traería cualquier cédula que lo contenga.
-enum class ModoBusqueda { ENTRADA, SALIDA_GAFETE }
 
 /// Un número de gafete escrito y, si ya se buscó, el activo encontrado (o
 /// `null` si nadie adentro tiene ese gafete puesto). Puede ser local o
@@ -57,8 +58,13 @@ enum class ModoBusqueda { ENTRADA, SALIDA_GAFETE }
 /// también tiene que poder cerrarse por número desde acá — la fila de
 /// `CoincidenciaGafete` es lo que se pinta en el modo Salida: gafete antes
 /// de confirmar, mismo rol que la tabla de vista previa de
-/// `SalidaModal.tsx` en desktop.
-data class CoincidenciaGafete(val numero: Int, val fila: FilaActiva?)
+/// `SalidaModal.tsx` en desktop. Sin `fila`, [sinPortador] dice por qué
+/// (libre, no existe, perdido o de baja), según el catálogo del núcleo.
+data class CoincidenciaGafete(
+    val numero: Int,
+    val fila: FilaActiva?,
+    val sinPortador: GafeteSinPortador? = null,
+)
 
 /// Fila local (este dispositivo) o remota (abierta por el otro dispositivo
 /// del mismo sitio, cacheada en `ingresos_remotos` -- nunca vive en el
@@ -85,23 +91,6 @@ sealed class FilaActiva {
     }
 }
 
-private const val MAX_LARGO_GAFETES = 60
-
-/// Espejo de `sanearGafetes` (desktop/src/api/ingresos.ts): sólo dígitos,
-/// comas y espacios — todo lo demás que el usuario pegue o teclee se
-/// descarta en silencio en vez de rechazarlo con un error.
-private fun sanearGafetesTexto(texto: String): String =
-    texto.filter { it.isDigit() || it == ',' || it.isWhitespace() }.take(MAX_LARGO_GAFETES)
-
-/// Espejo de `gafetesDe` (desktop/src/api/ingresos.ts): "2, 25, 85" -> [2,
-/// 25, 85]; tokens vacíos o no numéricos se ignoran en vez de fallar toda
-/// la búsqueda por un error de tipeo en un solo número.
-private fun gafetesDeTexto(texto: String): List<Int> =
-    texto.split(",")
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .mapNotNull { it.toIntOrNull() }
-
 /// Dueño de todo el estado de [PantallaActivos] y de las llamadas a
 /// [Nucleo] — ver mobile/android/arquitectura.md. El `@Composable` sólo lee
 /// este estado (propiedades de sólo lectura desde afuera) y reporta
@@ -123,9 +112,18 @@ class ActivosViewModel(
     // por defecto es el real que usa la app.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
-    var texto by mutableStateOf("")
-        private set
-    var modo by mutableStateOf(ModoBusqueda.ENTRADA)
+    private var textoEstado by mutableStateOf("")
+
+    /// Lo escrito en el buscador. Al cambiar, el núcleo decide qué se busca
+    /// ([busqueda]): un solo campo para personas y gafetes (2026-10-28: antes
+    /// eran dos pestañas, "Persona" y "Gafete").
+    var texto: String
+        get() = textoEstado
+        private set(valor) {
+            textoEstado = valor
+            busqueda = interpretarBusquedaActivos(valor)
+        }
+    var busqueda by mutableStateOf<BusquedaActivos>(BusquedaActivos.Vacia)
         private set
     var activos by mutableStateOf<List<FilaActiva>>(emptyList())
         private set
@@ -200,7 +198,7 @@ class ActivosViewModel(
     }
 
     fun cambiarTexto(nuevo: String) {
-        texto = if (modo == ModoBusqueda.SALIDA_GAFETE) sanearGafetesTexto(nuevo) else nuevo
+        texto = nuevo
         // Mismo criterio que `cambiarTexto` en SalidaModal.tsx: escribir de
         // nuevo abandona el mensaje de la confirmación anterior.
         mensaje = null
@@ -225,7 +223,6 @@ class ActivosViewModel(
     /// cédula que quedó escrita dejaba la lista sin recargar (2026-10-27).
     fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado): Job {
         val valor = documento.textoBusqueda ?: documento.numeroDocumento
-        modo = ModoBusqueda.ENTRADA
         mensaje = null
         trabajoBusqueda?.cancel()
         val inicioBusqueda = System.nanoTime()
@@ -252,24 +249,14 @@ class ActivosViewModel(
         return trabajoBusqueda!!
     }
 
-    fun cambiarModo(nuevo: ModoBusqueda) {
-        modo = nuevo
-        // Al cambiar de modo el texto que había queda escrito con otro
-        // sentido (un nombre no significa nada en modo Gafete) — se limpia
-        // para no arrastrar una búsqueda que ya no aplica.
-        texto = ""
-        mensaje = null
-        buscar()
-    }
-
     fun refrescar() {
         buscar()
-        if (modo != ModoBusqueda.ENTRADA || texto.isNotBlank()) recargarActivos()
+        if (busqueda != BusquedaActivos.Vacia) recargarActivos()
     }
 
     /// Relee la lista de adentro y [totalAdentro] cuando la búsqueda en curso
-    /// no la trae (en modo Ingreso con el campo vacío ya la lee [buscar]). En
-    /// modo Ingreso la lista se ve también con algo escrito en el buscador:
+    /// no la trae (con el campo vacío ya la lee [buscar]). La lista se ve
+    /// también con algo escrito en el buscador:
     /// antes acá sólo se recontaba el globito y, con una cédula escaneada
     /// pero sin ingresar, quien salía seguía en la lista (pruebas reales,
     /// 2026-10-27).
@@ -314,25 +301,22 @@ class ActivosViewModel(
         trabajoBusqueda = viewModelScope.launch {
             try {
                 if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
-                when (modo) {
-                    ModoBusqueda.ENTRADA -> {
-                        if (texto.isBlank()) {
-                            activos = leerActivos()
-                            totalAdentro = activos.size
-                        } else {
-                            resultadosBusqueda =
-                                withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
-                        }
+                when (val actual = busqueda) {
+                    BusquedaActivos.Vacia -> {
+                        activos = leerActivos()
+                        totalAdentro = activos.size
                     }
-                    ModoBusqueda.SALIDA_GAFETE -> {
-                        val numeros = gafetesDeTexto(texto)
-                        coincidenciasGafete = if (numeros.isEmpty()) {
-                            emptyList()
-                        } else {
-                            // Una sola lectura de la caché remota para todos
-                            // los números escritos, no una por gafete.
-                            val remotos = remotosSeguro()
-                            numeros.map { numero -> CoincidenciaGafete(numero, filaPorGafete(numero, remotos)) }
+                    BusquedaActivos.Personas -> {
+                        resultadosBusqueda =
+                            withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
+                    }
+                    is BusquedaActivos.Gafetes -> {
+                        // Una sola lectura de la caché remota para todos los
+                        // números escritos, no una por gafete.
+                        val remotos = remotosSeguro()
+                        coincidenciasGafete = actual.numeros.map { numero ->
+                            val fila = filaPorGafete(numero, remotos)
+                            CoincidenciaGafete(numero, fila, if (fila == null) gafeteSinPortador(numero) else null)
                         }
                     }
                 }
@@ -357,6 +341,14 @@ class ActivosViewModel(
         if (local != null) return FilaActiva.Local(local)
         return remotos.firstOrNull { it.gafeteNumero == numero.toLong() }?.let { FilaActiva.Remota(it) }
     }
+
+    /// Si falla la consulta, la fila queda con el "nadie adentro" de siempre.
+    private suspend fun gafeteSinPortador(numero: Int): GafeteSinPortador? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("gafeteSinPortador") { nucleo.gafeteSinPortador(numero) } }
+        } catch (_: NucleoException) {
+            null
+        }
 
     /// Local: cierra en `registro_ingresos` (este dispositivo). Remota:
     /// cierra directo contra la nube (`Nucleo.cerrarIngresoRemoto`) -- nunca
@@ -420,9 +412,13 @@ class ActivosViewModel(
                 }
                 msNucleo = milisegundosDesde(inicioElegir)
                 val salida = if (preparacion.mensajeBloqueo != null) filaAdentro(preparacion) else null
+                // Bloqueado sin estar adentro como contratista: quizá lo está
+                // como proveedor o por correo en esta unidad (el núcleo dice
+                // cuál ingreso es, para ofrecer cerrarlo ahí mismo).
+                val otraVia = if (preparacion.mensajeBloqueo != null && salida == null) salidaPorOtraVia(preparacion.cedula) else null
                 seleccionIngreso = when {
                     salida != null -> SeleccionIngreso.Ninguna
-                    preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!)
+                    preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!, otraVia)
                     else -> SeleccionIngreso.Formulario(preparacion)
                 }
                 if (salida != null) {
@@ -468,11 +464,48 @@ class ActivosViewModel(
             }
         }
 
+    /// Si falla la consulta, la pantalla queda como antes: sin el botón.
+    private suspend fun salidaPorOtraVia(cedula: String): SalidaPorOtraVia? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("salidaPorOtraVia") { nucleo.salidaPorOtraVia(cedula, ViaIngreso.CONTRATISTA) } }
+        } catch (_: NucleoException) {
+            null
+        }
+
+    var salidaOtraVia by mutableStateOf(EstadoSalidaOtraVia())
+        private set
+
+    /// "Registrar esa salida y continuar" en la pantalla de bloqueo: cierra el
+    /// ingreso por la otra vía y vuelve a elegir al contratista, que ahora
+    /// pasa al formulario de ingreso (o al motivo, si queda otro bloqueo).
+    fun registrarSalidaPorOtraVia() {
+        val bloqueada = seleccionIngreso as? SeleccionIngreso.Bloqueada ?: return
+        val salida = bloqueada.salidaOtraVia ?: return
+        if (salidaOtraVia.registrando) return
+        salidaOtraVia = EstadoSalidaOtraVia(registrando = true)
+        viewModelScope.launch {
+            try {
+                mutexMutaciones.withLock {
+                    withContext(dispatcherIO) {
+                        medirNucleo("registrarSalidaPorOtraVia") { nucleo.registrarSalidaPorOtraVia(salida) }
+                    }
+                }
+                CambiosNube.cambioLocal()
+                confirmacion.mostrar("Salida registrada · ${salida.nombre}")
+                salidaOtraVia = EstadoSalidaOtraVia()
+                elegir(bloqueada.preparacion.contratistaId)
+            } catch (excepcion: Exception) {
+                salidaOtraVia = EstadoSalidaOtraVia(error = excepcion.mensajeDeErrorEsperado())
+            }
+        }
+    }
+
     /// Cancelar el ingreso (o volver del bloqueo) también borra lo que quedó
     /// en el buscador: la cédula escaneada o el nombre ya no buscan nada.
     fun cancelarSeleccionIngreso() {
         seleccionIngreso = SeleccionIngreso.Ninguna
         errorIngreso = null
+        salidaOtraVia = EstadoSalidaOtraVia()
         if (texto.isNotEmpty()) {
             texto = ""
             buscar()
@@ -605,7 +638,6 @@ class ActivosViewModel(
             mensajeEsError = true
             return
         }
-        modo = ModoBusqueda.SALIDA_GAFETE
         texto = numero.toString()
         mensaje = null
         trabajoBusqueda?.cancel()

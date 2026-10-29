@@ -479,6 +479,44 @@ fn listar_activos_por_gafete_es_exacto_sin_ruido_de_cedula() {
 }
 
 #[test]
+fn gafete_sin_portador_distingue_libre_inexistente_y_de_otro_tipo() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            // Un gafete PERDIDO siempre tiene a quién se le perdió (CHECK
+            // de la tabla).
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+             INSERT INTO contratistas (
+                 cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+             ) VALUES ('111111111', 'Perdio Gafete', 1, 'SWAT', 0, 1);
+             INSERT INTO gafetes (numero, tipo, estado) VALUES
+                 (11, 'CONTRATISTA', 'DISPONIBLE'),
+                 (13, 'CONTRATISTA', 'DE_BAJA'),
+                 (40, 'VISITA', 'DISPONIBLE');
+             INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id)
+                 VALUES (12, 'CONTRATISTA', 'PERDIDO', 1);",
+        )
+        .unwrap();
+    drop(conexion);
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+
+    let situacion = |numero| nucleo.gafete_sin_portador(numero).unwrap().situacion;
+    assert_eq!(situacion(11), SituacionGafete::Libre);
+    assert_eq!(situacion(12), SituacionGafete::Perdido);
+    assert_eq!(situacion(13), SituacionGafete::DeBaja);
+    assert_eq!(situacion(130), SituacionGafete::NoExiste);
+    // Un gafete de visita no es uno de contratista.
+    assert_eq!(situacion(40), SituacionGafete::NoExiste);
+    assert_eq!(
+        nucleo.gafete_sin_portador(130).unwrap().mensaje,
+        "Gafete 130 · no existe"
+    );
+}
+
+#[test]
 fn listar_empresas_y_crear_contratista() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
@@ -1212,6 +1250,57 @@ fn el_aviso_de_proveedor_y_de_correo_ve_a_quien_esta_adentro_por_otra_via() {
     assert!(
         nucleo
             .aviso_proveedor_con_ingreso_activo("222222222".to_string())
+            .unwrap()
+            .is_none()
+    );
+}
+
+/// Desde la vía que la frena, la salida de la otra se ve y se cierra ahí
+/// mismo; después la persona ya puede entrar (pedido del usuario
+/// 2026-10-29: antes había que ir a la otra sección).
+#[test]
+fn la_salida_por_otra_via_se_ve_y_se_cierra_desde_donde_se_la_encontro() {
+    let nucleo = nucleo_con_actor_y_gafete_de_visita();
+    nucleo
+        .registrar_ingreso_correo_verificado(
+            "1-1111-1111".to_string(),
+            "Ana Solano".to_string(),
+            "Entrevista RH".to_string(),
+            None,
+            5,
+        )
+        .unwrap();
+
+    let salida = nucleo
+        .salida_por_otra_via("111111111".to_string(), ViaIngreso::Proveedor)
+        .unwrap()
+        .expect("está adentro por correo");
+    assert_eq!(salida.via, ViaIngreso::PorCorreo);
+    assert_eq!(salida.titulo, "Ya está adentro por correo");
+    // El núcleo guarda los nombres en mayúsculas.
+    assert_eq!(salida.nombre, "ANA SOLANO");
+    assert_eq!(salida.gafete_numero, Some(5));
+    assert!(matches!(salida.ubicacion, UbicacionSalida::Local { .. }));
+    // Desde su propia vía no es "otra".
+    assert_eq!(
+        nucleo
+            .salida_por_otra_via("111111111".to_string(), ViaIngreso::PorCorreo)
+            .unwrap(),
+        None
+    );
+
+    nucleo.registrar_salida_por_otra_via(salida).unwrap();
+
+    assert_eq!(nucleo.listar_correos_activos().unwrap(), Vec::new());
+    assert_eq!(
+        nucleo
+            .salida_por_otra_via("111111111".to_string(), ViaIngreso::Proveedor)
+            .unwrap(),
+        None
+    );
+    assert!(
+        nucleo
+            .aviso_proveedor_con_ingreso_activo("111111111".to_string())
             .unwrap()
             .is_none()
     );

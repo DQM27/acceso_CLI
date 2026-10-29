@@ -59,6 +59,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
@@ -126,6 +127,7 @@ internal fun CampoBusquedaBrisas(
     ayuda: String,
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    forma: Shape = FormaBusquedaBrisas,
 ) {
     val interaccion = remember { MutableInteractionSource() }
     val teclado = LocalSoftwareKeyboardController.current
@@ -187,16 +189,49 @@ internal fun CampoBusquedaBrisas(
                     isError = false,
                     interactionSource = interaccion,
                     colors = colores,
-                    shape = FormaBusquedaBrisas,
+                    shape = forma,
                 )
             },
         )
     }
 }
 
-/** Cápsula del buscador: la misma forma que la píldora de búsqueda de abajo
+/** Forma del buscador: la misma que la píldora de búsqueda de abajo
  * ([PildoraBusqueda]), así el campo que se abre parece la misma pieza. */
-internal val FormaBusquedaBrisas = RoundedCornerShape(percent = 50)
+internal val FormaBusquedaBrisas: Shape get() = FormaPiezaEntera
+
+// Las piezas de abajo (barra de secciones, botón de acción, búsqueda) con
+// esquinas suaves y no de cápsula (pedido del usuario 2026-10-29). Una barra
+// y su botón (o el campo de búsqueda y su X) van como una sola pieza con un
+// corte: redondeadas por fuera, casi rectas donde se juntan, separadas por
+// una ranura fina.
+
+/** Radio de las esquinas de afuera de las piezas de abajo. */
+internal val RADIO_PIEZA = 18.dp
+
+/** Radio de las esquinas del corte, donde se juntan dos piezas. */
+internal val RADIO_CORTE = 6.dp
+
+/** La ranura entre las dos mitades de una pieza cortada. */
+internal val ESPACIO_CORTE = 4.dp
+
+internal val FormaPiezaEntera = RoundedCornerShape(RADIO_PIEZA)
+
+/** La mitad izquierda de una pieza cortada: el corte a la derecha. */
+internal val FormaPiezaInicio = RoundedCornerShape(
+    topStart = RADIO_PIEZA,
+    topEnd = RADIO_CORTE,
+    bottomEnd = RADIO_CORTE,
+    bottomStart = RADIO_PIEZA,
+)
+
+/** La mitad derecha de una pieza cortada: el corte a la izquierda. */
+internal val FormaPiezaFin = RoundedCornerShape(
+    topStart = RADIO_CORTE,
+    topEnd = RADIO_PIEZA,
+    bottomEnd = RADIO_PIEZA,
+    bottomStart = RADIO_CORTE,
+)
 
 /** Cuánto tapa abajo la barra de secciones flotante de [PantallaPrincipal]:
  * el contenido pasa por detrás de ella (apenas se ve a través de su velo), así que
@@ -403,6 +438,11 @@ fun AvatarBrisas(inicial: String, modifier: Modifier = Modifier, tamano: Dp = 48
     }
 }
 
+/// Lado de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra de
+/// arriba ocupe menos (pedido del usuario 2026-10-29); sigue sobre el mínimo
+/// táctil con el aire alrededor.
+internal val TAMANO_BOTON_CUADRADO = 36.dp
+
 /** Botón de icono dentro de un cuadradito blanco redondeado -- reemplaza el
  * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. */
 @Composable
@@ -414,7 +454,7 @@ fun BotonIconoCuadradoBrisas(
 ) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(TAMANO_BOTON_CUADRADO)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .clickable(enabled = enabled, onClick = onClick),
@@ -505,8 +545,9 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
  * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
  * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
- * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
- * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+ * si no, el scroll dejaría un hueco sin nada que desvanecer. Sólo en las
+ * pantallas ocultas (Rutas, Visitas): las listas de las secciones ya no lo
+ * usan desde que la búsqueda bajó (pedido del usuario 2026-10-29). */
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {

@@ -16,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +32,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import uniffi.control_acceso_mobile.AvisoAcceso
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
@@ -39,15 +44,15 @@ import uniffi.control_acceso_mobile.TipoIngreso
 // de la auditoría móvil: sólo se movió código).
 
 @Composable
-internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit) {
+internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit, tinte: TinteTarjeta? = null, pista: String? = null) {
     when (fila) {
-        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick)
-        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick)
+        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick, tinte, pista)
+        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick, tinte, pista)
     }
 }
 
 @Composable
-private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
+private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, tinte: TinteTarjeta?, pista: String?) {
     TarjetaActivo(
         nombre = activo.contratistaNombre,
         detalle = "${activo.cedula} · ${activo.empresaNombre}",
@@ -55,6 +60,8 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
         fechaHoraIngreso = activo.fechaHoraIngreso,
         otroEquipo = false,
         onClick = onClick,
+        tinte = tinte,
+        pista = pista,
     )
 }
 
@@ -63,7 +70,7 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
 /// `ingresos_remotos`. Cédula, empresa y gafete sí viajan en la caché desde
 /// la migración 24, así que no hay motivo para mostrar menos acá.
 @Composable
-private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
+private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: TinteTarjeta?, pista: String?) {
     TarjetaActivo(
         nombre = remoto.contratistaNombre,
         detalle = "${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"}",
@@ -71,6 +78,8 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
         fechaHoraIngreso = remoto.horaEntrada,
         otroEquipo = true,
         onClick = onClick,
+        tinte = tinte,
+        pista = pista,
     )
 }
 
@@ -84,6 +93,10 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
 /// debajo la hora, todas alineadas en columna para leerlas de un vistazo (con
 /// el día sólo si fue otro día), con la nube si entró por otro equipo. Quién
 /// dio el ingreso quedó para el historial del escritorio y el panel.
+///
+/// Con [tinte], fondo y franja propios (la búsqueda por gafete la pinta de
+/// azul de salida) y, con [pista], un tercer renglón chico que dice qué pasa
+/// al tocarla.
 @Composable
 internal fun TarjetaActivo(
     nombre: String,
@@ -92,12 +105,14 @@ internal fun TarjetaActivo(
     fechaHoraIngreso: String,
     otroEquipo: Boolean,
     onClick: () -> Unit,
+    tinte: TinteTarjeta? = null,
+    pista: String? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
+            .fondoTarjeta(tinte)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -133,6 +148,7 @@ internal fun TarjetaActivo(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (pista != null) TextoPista(pista)
         }
         Spacer(Modifier.width(12.dp))
         Column(
@@ -197,46 +213,132 @@ internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
     )
 }
 
+/// Cómo se marca una tarjeta de la búsqueda de contratistas, si hace falta
+/// (ver [marcaContratista]).
+/// Con su [pista]: qué hacer con esa persona, en un renglón chico bajo la
+/// cédula, para no enredarse (pedido del usuario 2026-10-29).
+internal enum class MarcaContratista(val palabra: String, val pista: String) {
+    ADENTRO("ADENTRO", PISTA_SALIDA),
+    DENEGADO("DENEGADO", "Acceso denegado"),
+    VENCIDO("VENCIDO", "PRAIND vencido"),
+}
+
+/// La pista de quien está adentro, en la búsqueda por nombre o por gafete.
+internal const val PISTA_SALIDA = "Toque para registrar su salida"
+
+/// El renglón chico y gris de una pista.
+@Composable
+private fun TextoPista(pista: String) {
+    Text(
+        pista,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/// Adentro gana: con esa persona lo que se hace es la salida, que siempre se
+/// permite. Entre denegado y vencido ya decidió el núcleo (un solo aviso).
+internal fun marcaContratista(contratista: ContratistaResumen): MarcaContratista? = when {
+    contratista.tieneIngresoActivo -> MarcaContratista.ADENTRO
+    contratista.tipoAvisoAcceso == AvisoAcceso.ACCESO_DENEGADO -> MarcaContratista.DENEGADO
+    contratista.tipoAvisoAcceso == AvisoAcceso.PRAIND_VENCIDO -> MarcaContratista.VENCIDO
+    else -> null
+}
+
+/// En la búsqueda salen juntos quienes pueden entrar, quienes ya están
+/// adentro y quienes no pueden entrar. Se distinguen sin leer (antes era una
+/// línea de texto al final), con fondo, franja, ícono y una palabra:
+/// adentro en ámbar con la señal de "ya está adentro"; acceso denegado y
+/// PRAIND vencido en rojo, con el "prohibido" o el calendario con una X.
 @Composable
 internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
-    Column(
+    val marca = marcaContratista(contratista)
+    val adentro = marca == MarcaContratista.ADENTRO
+    val paleta = paletaActual
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
+            .fondoTarjeta(
+                when (marca) {
+                    MarcaContratista.ADENTRO -> paleta.tinteAdentro
+                    MarcaContratista.DENEGADO, MarcaContratista.VENCIDO -> paleta.tinteBloqueado
+                    null -> null
+                },
+            )
             .clickable(onClick = onClick)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            textoResaltado(contratista.nombre),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            textoResaltado("${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}"),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
-        // su reloj: sólo se muestra, en negrita para que se lea con fuerza.
-        contratista.avisoAcceso?.let { aviso ->
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                aviso,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.Bold,
+                textoResaltado(contratista.nombre),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
             )
+            Text(
+                textoResaltado("${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
+            // su reloj. Sin estar adentro, lo dicen el ícono y la palabra de
+            // la derecha; adentro queda como línea chica, para que se sepa que
+            // no podrá volver a entrar.
+            val aviso = contratista.avisoAcceso
+            if (aviso != null && (adentro || marca == null)) {
+                Text(
+                    aviso,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (marca != null) TextoPista(marca.pista)
         }
-        if (contratista.tieneIngresoActivo) {
-            Text(
-                "Adentro · toque para registrar su salida",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        if (marca != null) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                when (marca) {
+                    MarcaContratista.ADENTRO -> SenalAdentro()
+                    MarcaContratista.DENEGADO -> IconoMarca(IconosLucide.Prohibido, paleta.textoBloqueado)
+                    MarcaContratista.VENCIDO -> IconoMarca(IconosLucide.CalendarioConX, paleta.textoBloqueado)
+                }
+                Text(
+                    marca.palabra,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (adentro) paleta.textoAdentro else paleta.textoBloqueado,
+                )
+            }
         }
     }
 }
+
+/// Ícono de la marca de una tarjeta, del alto de la señal de "adentro".
+@Composable
+private fun IconoMarca(icono: ImageVector, color: Color) {
+    Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+}
+
+/// El fondo de siempre (`surface`) o, con [tinte], el suyo con la franja a
+/// la izquierda.
+@Composable
+private fun Modifier.fondoTarjeta(tinte: TinteTarjeta?): Modifier =
+    if (tinte == null) {
+        background(MaterialTheme.colorScheme.surface)
+    } else {
+        background(tinte.fondo).drawBehind {
+            drawRect(tinte.franja, size = Size(ANCHO_FRANJA_TARJETA.toPx(), size.height))
+        }
+    }
+
+private val ANCHO_FRANJA_TARJETA = 4.dp
 
 private fun etiquetaTipoIngreso(tipo: TipoIngreso): String =
     when (tipo) {

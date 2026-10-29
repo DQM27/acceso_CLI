@@ -80,7 +80,7 @@ private fun ListaCorreoActivos(
 /// 2026-10-03): buscador + lista de activos (locales y del otro dispositivo
 /// del sitio) y un formulario aparte con las mismas tarjetas numeradas --
 /// datos de la persona (con escáner de cédula), motivo de la visita, y placa
-/// y gafete de visita. Vive bajo la pestaña "Externos" ([PantallaExternos]).
+/// y gafete de visita. Es la sección "Correo" de la barra de abajo.
 @Composable
 fun PantallaPorCorreo(
     nucleo: Nucleo,
@@ -189,6 +189,10 @@ fun PantallaPorCorreo(
                             gafeteTexto = ""
                             mostrandoFormulario = false
                         },
+                        // Cerrada la otra salida, queda el formulario con lo leído.
+                        salida = viewModel.salidaPorOtraVia,
+                        estadoSalida = viewModel.estadoSalidaOtraVia,
+                        onRegistrarSalida = { viewModel.registrarSalidaPorOtraVia { bloqueoEscaneo = null } },
                     )
                 } else FormularioNuevoIngresoCorreo(
                     viewModel = viewModel,
@@ -205,7 +209,7 @@ fun PantallaPorCorreo(
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
                     // Se busca con la píldora de abajo, como en todas las pestañas.
-                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                         viewModel.error?.let { mensaje ->
                             FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                         }

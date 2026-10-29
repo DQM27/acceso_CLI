@@ -24,7 +24,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,6 +62,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -81,6 +87,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EstadoBandeja
@@ -130,13 +137,10 @@ fun PantallaPrincipal(
     // expulsión en vivo.
     var mostrarReconexion by remember { mutableStateOf(false) }
     var equipoRetirado by remember { mutableStateOf(false) }
-    // La pestaña elegida y, dentro de Externos, el tipo (Proveedor o Correo,
-    // que cambia el color de la sección y de la pestaña de arriba: ver
-    // `AcentoSeccion.kt`). Viven acá y no junto a las pestañas: al abrir la
+    // La pestaña elegida. Vive acá y no junto a las pestañas: al abrir la
     // bandeja o "Nuevo contratista" las pestañas salen de la composición, y
     // al volver se caía siempre en Activos.
     var pestana by rememberSaveable { mutableIntStateOf(0) }
-    var indiceExterno by rememberSaveable { mutableIntStateOf(0) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
@@ -341,12 +345,14 @@ fun PantallaPrincipal(
     // pantalla obligaba a la barra de secciones a recomponerse también.
     val totalActivos = activosViewModel.totalAdentro ?: 0
     val totalKof = gafetesViewModel.activos.size
-    val totalExternos = proveedoresViewModel.activos.size + correoViewModel.activos.size
-    val adentro = remember(totalActivos, totalKof, totalExternos) {
+    val totalProveedores = proveedoresViewModel.activos.size
+    val totalCorreo = correoViewModel.activos.size
+    val adentro = remember(totalActivos, totalKof, totalProveedores, totalCorreo) {
         mapOf(
             SeccionPrincipal.ACTIVOS to totalActivos,
             SeccionPrincipal.KOF to totalKof,
-            SeccionPrincipal.EXTERNOS to totalExternos,
+            SeccionPrincipal.PROVEEDORES to totalProveedores,
+            SeccionPrincipal.CORREO to totalCorreo,
         )
     }
     // "Ingreso registrado · …" y compañía, de cualquier sección, arriba.
@@ -363,13 +369,11 @@ fun PantallaPrincipal(
     LaunchedEffect(refrescarNube) {
         if (refrescarNube == 0) return@LaunchedEffect
         val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-        val externo = tipoExternoVisible(indiceExterno)
         val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda || mostrarReconexion
-        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !fueraDePestanas
         if (seccion != SeccionPrincipal.ACTIVOS || fueraDePestanas) activosViewModel.refrescar()
         if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
-        if (!(enExternos && externo == TipoExterno.PROVEEDOR)) proveedoresViewModel.refrescarActivos()
-        if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
+        if (seccion != SeccionPrincipal.PROVEEDORES || fueraDePestanas) proveedoresViewModel.refrescarActivos()
+        if (seccion != SeccionPrincipal.CORREO || fueraDePestanas) correoViewModel.refrescarActivos()
     }
 
     // Qué ocupa la pantalla debajo de la barra superior.
@@ -386,8 +390,16 @@ fun PantallaPrincipal(
     // La acción del botón redondo y la búsqueda de la píldora las pone la
     // pantalla a la vista.
     val accionesInferiores = remember { AccionesInferiores() }
-    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-    val externo = tipoExternoVisible(indiceExterno)
+    // Las secciones son páginas que se pasan deslizando de lado (pedido del
+    // usuario 2026-10-28), además de tocando la barra. `pestana` sigue siendo
+    // la sección elegida; las dos se sincronizan dentro de las pestañas.
+    val paginas = rememberPagerState(initialPage = pestana) { SECCIONES_VISIBLES.size }
+    val hapticosSecciones = rememberHapticos()
+    // La lista a la vista está desplazada: línea fina bajo la barra de arriba.
+    val listaDesplazada = remember { mutableStateOf(false) }
+    // La que está a la vista: cambia a mitad del deslizamiento, así el título,
+    // el color y la barra acompañan al dedo.
+    val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
 
     CompositionLocalProvider(LocalAvisosBreves provides avisosBreves) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -401,33 +413,23 @@ fun PantallaPrincipal(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // El título grande es la sección a la vista (como el de cada
-            // pestaña de iOS) y, debajo, la unidad. Cuántos hay adentro lo
-            // dice el globito de la barra de abajo; repetirlo acá sobraba. El
-            // nombre de la app ya se ve en el login. Quién tiene la sesión
-            // vive en el menú de la cuenta.
-            Column(modifier = Modifier.weight(1f)) {
-                AnimatedContent(
-                    targetState = seccion,
-                    transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
-                    label = "tituloSeccion",
-                ) { seccionTitulo ->
-                    Text(
-                        seccionTitulo.etiqueta,
-                        style = MaterialTheme.typography.headlineMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (textoUnidad != null) {
-                    Text(
-                        textoUnidad,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            // El título es la sección a la vista (como el de cada pestaña de
+            // iOS), en una sola línea y no tan grande: la barra ocupaba
+            // mucho alto (pedido del usuario 2026-10-29). Cuántos hay adentro
+            // lo dice el globito de la barra de abajo; quién tiene la sesión
+            // y la unidad, el menú de la cuenta.
+            AnimatedContent(
+                targetState = seccion,
+                modifier = Modifier.weight(1f),
+                transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
+                label = "tituloSeccion",
+            ) { seccionTitulo ->
+                Text(
+                    seccionTitulo.etiqueta,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = {
@@ -452,6 +454,7 @@ fun PantallaPrincipal(
                     viewModel(factory = ActualizacionViewModel.factory(LocalContext.current))
                 MenuCuenta(
                     sesion = sesion,
+                    unidad = textoUnidad,
                     temaElegido = GestorTema.temaForzado,
                     onElegirTema = GestorTema::elegir,
                     onAyuda = {
@@ -464,6 +467,18 @@ fun PantallaPrincipal(
                 )
             }
         }
+        // Sin degradado: con la lista desplazada, una línea fina marca dónde
+        // pasan las tarjetas por debajo; arriba de todo no se ve (como iOS).
+        val alfaLinea by animateFloatAsState(
+            targetValue = if (listaDesplazada.value) 1f else 0f,
+            animationSpec = tween(MS_FUNDIDO_ENTRADA),
+            label = "lineaBarraSuperior",
+        )
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            modifier = Modifier.graphicsLayer { alpha = alfaLinea },
+        )
         }
 
         // Arriba de todo lo demás: una emergencia sin leer es lo primero que
@@ -592,7 +607,7 @@ fun PantallaPrincipal(
                 // al desplazar); al volver hacia arriba, o al cambiar de
                 // sección, reaparece.
                 var barraCompacta by remember { mutableStateOf(false) }
-                LaunchedEffect(seccion, externo) { barraCompacta = false }
+                LaunchedEffect(seccion) { barraCompacta = false }
                 val replegarAlDesplazar = remember {
                     object : NestedScrollConnection {
                         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
@@ -605,31 +620,54 @@ fun PantallaPrincipal(
                     }
                 }
                 Box(modifier = Modifier.fillMaxSize().nestedScroll(replegarAlDesplazar)) {
-                    // `AnimatedContent` (que por dentro es un `Box`) le pasa a sus
-                    // hijos restricciones acotadas: un `LazyColumn` (como el de
-                    // `PantallaActivos`) revienta con `IllegalStateException` si lo
-                    // miden con altura infinita, como hace un `Column` sin peso.
-                    // Desliza y funde entre pestañas (ver `TransicionesPantalla.kt`).
+                    // Tocar la barra lleva a la página; deslizar hasta otra la
+                    // elige. `settledPage` y no `currentPage`: al tocar una
+                    // sección lejana el carrusel pasa por las del medio y no
+                    // debe quedarse en la primera que cruza.
+                    LaunchedEffect(pestana) {
+                        if (paginas.settledPage != pestana) paginas.animateScrollToPage(pestana)
+                    }
+                    // Sin el primer valor: al volver de otra pantalla que eligió
+                    // la sección (p. ej. "Nuevo contratista" deja Contratistas),
+                    // la página vieja la pisaría antes de que el carrusel llegue.
+                    //
+                    // Si la página nueva no es la que ya estaba elegida, el cambio
+                    // vino de deslizar: vibra como al tocar la barra (al tocarla,
+                    // `pestana` ya cambió y vibró el toque).
+                    LaunchedEffect(paginas) {
+                        snapshotFlow { paginas.settledPage }.drop(1).collect { pagina ->
+                            if (pagina != pestana) hapticosSecciones(Haptico.SELECCION)
+                            pestana = pagina
+                        }
+                    }
                     CompositionLocalProvider(
                         LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
                         LocalPantallasCompletas provides pantallasCompletas,
-                        LocalAccionesInferiores provides accionesInferiores,
                     ) {
-                        AnimatedContent(
-                            targetState = seccion,
+                        // Con una cámara, un formulario o el buscador abiertos
+                        // (lo que esconde la barra) no se desliza: no se cambia
+                        // de sección por accidente a mitad de un ingreso.
+                        HorizontalPager(
+                            state = paginas,
                             modifier = Modifier.fillMaxSize(),
-                            transitionSpec = {
-                                transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
-                            },
-                            label = "seccion",
-                        ) { seccionMostrada ->
+                            userScrollEnabled = pantallasCompletas.cantidad == 0,
+                            key = { SECCIONES_VISIBLES[it] },
+                        ) { pagina ->
+                            val seccionMostrada = SECCIONES_VISIBLES[pagina]
+                            // Mientras se desliza conviven dos páginas: sólo la
+                            // que está a la vista pone su botón redondo y su
+                            // búsqueda abajo (sin `AccionesInferiores`, las
+                            // demás no registran nada).
+                            val aLaVista = pagina == paginas.currentPage
+                            CompositionLocalProvider(
+                                LocalAccionesInferiores provides accionesInferiores.takeIf { aLaVista },
+                                LocalListaDesplazada provides listaDesplazada.takeIf { aLaVista },
+                            ) {
                             // `when` exhaustivo sobre el enum: agregar una sección sin
                             // su pantalla no compila (antes eran textos y un `else`
                             // que caía en Activos en silencio ante un error de tipeo).
-                            // Con `seccionMostrada` y no `seccion`: durante la
-                            // transición la pantalla que se va sigue con su propio
-                            // acento y no salta al de la nueva.
-                            TemaSeccion(seccionMostrada, externo) {
+                            // Cada página con su propio acento.
+                            TemaSeccion(seccionMostrada) {
                                 when (seccionMostrada) {
                                     SeccionPrincipal.ACTIVOS -> PantallaActivos(
                                         nucleo,
@@ -650,15 +688,21 @@ fun PantallaPrincipal(
                                         sincronizando = nubeViewModel.sincronizando,
                                         onSincronizar = nubeViewModel::sincronizar,
                                     )
-                                    SeccionPrincipal.EXTERNOS -> PantallaExternos(
+                                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(
                                         nucleo,
                                         refrescarNube,
-                                        tipo = indiceExterno,
-                                        onCambiarTipo = { indiceExterno = it },
-                                        sincronizando = nubeViewModel.sincronizando,
-                                        onSincronizar = nubeViewModel::sincronizar,
+                                        nubeViewModel.sincronizando,
+                                        nubeViewModel::sincronizar,
                                     )
+                                    SeccionPrincipal.CORREO -> PantallaPorCorreo(
+                                        nucleo,
+                                        refrescarNube,
+                                        nubeViewModel.sincronizando,
+                                        nubeViewModel::sincronizar,
+                                    )
+                                    SeccionPrincipal.VISITAS -> PantallaVisitas(nucleo, refrescarNube)
                                 }
+                            }
                             }
                         }
                     }
@@ -702,17 +746,17 @@ fun PantallaPrincipal(
                             // `AccionInferior.kt`), como la app Teléfono de iOS.
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(ESPACIO_CORTE),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                val accion = accionesInferiores.actual
                                 BarraSecciones(
                                     seleccionada = seccion,
-                                    externo = externo,
+                                    posicion = { paginas.currentPage + paginas.currentPageOffsetFraction },
                                     adentro = adentro,
                                     onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
                                     modifier = Modifier.weight(1f),
                                 )
-                                val accion = accionesInferiores.actual
                                 if (accion != null) {
                                     BotonRedondoAccion(accion, tamano = ALTO_BARRA_SECCIONES)
                                 }
@@ -765,8 +809,9 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
 ///   Sin desenfoque a propósito (Haze, 2026-10-22): redibujar el contenido
 ///   desenfocado detrás de la barra en cada frame duplicó el render de
 ///   Activos (p90 de 5,5 a 10,1 ms) y subió los frames trabados.
-/// - La pestaña elegida: una píldora gris suave que se desliza hasta ella
-///   (como [FilaPildoras]); su ícono y su nombre van en el acento de la
+/// - La pestaña elegida: una píldora gris suave que acompaña al carrusel de
+///   secciones ([posicion], en páginas: se mueve con el dedo al deslizar y
+///   con la animación al tocar); su ícono y su nombre van en el acento de la
 ///   sección (ver `AcentoSeccion.kt`).
 /// - Cada sección lleva un globito con cuántos hay adentro.
 ///
@@ -777,7 +822,8 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
 @Composable
 private fun BarraSecciones(
     seleccionada: SeccionPrincipal,
-    externo: TipoExterno,
+    // Se lee al dibujar: seguir al dedo no recompone la barra en cada frame.
+    posicion: () -> Float,
     adentro: Map<SeccionPrincipal, Int>,
     onSeleccionar: (SeccionPrincipal) -> Unit,
     modifier: Modifier = Modifier,
@@ -785,12 +831,13 @@ private fun BarraSecciones(
     val oscuro = temaActual().oscuro
     val superficie = MaterialTheme.colorScheme.surface
     val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
-    val posicion by animateFloatAsState(
-        targetValue = SECCIONES_VISIBLES.indexOf(seleccionada).toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-        label = "posicionSeccion",
-    )
-    val forma = RoundedCornerShape(percent = 50)
+    // Menos redonda que una cápsula e igual de los dos lados (pedidos del
+    // usuario 2026-10-29). La píldora de la sección elegida, concéntrica: el
+    // radio de afuera menos el margen interior, así las curvas quedan
+    // paralelas.
+    val forma = FormaPiezaEntera
+    val radioPildora = RADIO_PIEZA - MARGEN_INTERIOR_BARRA
+    val formaPildora = RoundedCornerShape(radioPildora)
     val hapticos = rememberHapticos()
     Row(
         modifier = modifier
@@ -798,22 +845,24 @@ private fun BarraSecciones(
             .clip(forma)
             .background(superficie.copy(alpha = ALFA_VELO))
             .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
-            .padding(5.dp)
+            .padding(MARGEN_INTERIOR_BARRA)
             .drawBehind {
                 val cantidad = SECCIONES_VISIBLES.size
                 val ancho = size.width / cantidad
+                val actual = posicion()
+                val radio = radioPildora.toPx()
                 drawRoundRect(
                     color = colorPildora,
-                    topLeft = Offset(posicion * ancho, 0f),
+                    topLeft = Offset(actual * ancho, 0f),
                     size = Size(ancho, size.height),
-                    cornerRadius = CornerRadius(size.height / 2),
+                    cornerRadius = CornerRadius(radio),
                 )
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SECCIONES_VISIBLES.forEach { seccion ->
             val elegida = seccion == seleccionada
-            val acento = acentoDeSeccion(seccion, oscuro, externo)?.color ?: MaterialTheme.colorScheme.primary
+            val acento = acentoDeSeccion(seccion, oscuro)?.color ?: MaterialTheme.colorScheme.primary
             val color by animateColorAsState(
                 targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(MS_FUNDIDO_ENTRADA),
@@ -824,7 +873,7 @@ private fun BarraSecciones(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(forma)
+                    .clip(formaPildora)
                     .selectable(
                         selected = elegida,
                         role = Role.Tab,
@@ -850,7 +899,7 @@ private fun BarraSecciones(
                         }
                     },
                 ) {
-                    Icon(iconoSeccion(seccion, externo), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                    Icon(iconoSeccion(seccion), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
                 Text(
                     seccion.etiqueta,
@@ -865,14 +914,20 @@ private fun BarraSecciones(
 }
 
 private val ALTO_BARRA_SECCIONES = 58.dp
-private val MARGEN_LATERAL_BARRA = 12.dp
+private val MARGEN_INTERIOR_BARRA = 5.dp
+/// El mismo margen que las tarjetas de las listas: con 12dp la barra y la
+/// búsqueda sobresalían 4dp de cada lado (pruebas del usuario 2026-10-29).
+private val MARGEN_LATERAL_BARRA = 16.dp
 /// Despegada del borde (pedido del usuario 2026-10-21): pegada abajo quedaba
-/// incómoda para el pulgar. 18dp se sentía bajo y 28dp alto; 24dp.
-private val MARGEN_INFERIOR_BARRA = 24.dp
+/// incómoda para el pulgar. 18dp se sentía bajo y 28dp alto; 24dp, y 20dp
+/// desde que la barra dejó de ser una cápsula (2026-10-29).
+private val MARGEN_INFERIOR_BARRA = 20.dp
 private val MARGEN_SUPERIOR_BARRA = 6.dp
 
-/// Entre la píldora de búsqueda y la barra de secciones.
-private val ESPACIO_PILDORA_BARRA = 8.dp
+/// Entre la píldora de búsqueda y la barra de secciones: la misma ranura del
+/// corte entre la barra y su botón, así se leen como un solo bloque (eran
+/// 8dp).
+private val ESPACIO_PILDORA_BARRA = ESPACIO_CORTE
 
 /// Lo que tapa la barra flotante con la píldora de búsqueda encima (altos +
 /// margen de abajo + un respiro), para [LocalMargenBarraInferior]. Fijo
@@ -881,14 +936,15 @@ private val ESPACIO_PILDORA_BARRA = 8.dp
 private val MARGEN_BARRA_SECCIONES =
     ALTO_BARRA_SECCIONES + ALTO_PILDORA_BUSQUEDA + ESPACIO_PILDORA_BARRA + MARGEN_INFERIOR_BARRA + 6.dp
 
-/// Los mismos íconos que el escritorio (ver [IconosLucide]). Externos cambia
-/// con el tipo elegido, igual que su color: Proveedor o Correo.
-private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): ImageVector = when (seccion) {
+/// Los mismos íconos que el escritorio (ver [IconosLucide]).
+private fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccion) {
     SeccionPrincipal.ACTIVOS -> IconosLucide.UsuarioConCheck
-    // Oculta de la barra (en desarrollo).
-    SeccionPrincipal.RUTAS -> Icons.Default.Route
     SeccionPrincipal.KOF -> IconosLucide.InsigniaConCheck
-    SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) IconosLucide.Sobre else IconosLucide.Cajas
+    SeccionPrincipal.PROVEEDORES -> IconosLucide.Cajas
+    SeccionPrincipal.CORREO -> IconosLucide.Sobre
+    // Ocultas de la barra (en desarrollo).
+    SeccionPrincipal.RUTAS -> Icons.Default.Route
+    SeccionPrincipal.VISITAS -> Icons.Default.Event
 }
 
 /// Qué ocupa la pantalla principal debajo de la barra superior.
@@ -907,14 +963,21 @@ private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 /// [BarraSecciones]).
 enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
     // "Contratistas" y no "Activos" (pedido del usuario 2026-10-26): la
-    // pestaña es sólo de contratistas; KOF y Externos también tienen gente
-    // adentro.
+    // pestaña es sólo de contratistas; KOF, Proveedores y Correo también
+    // tienen gente adentro.
+    // En el orden de lo que más se usa (pedido del usuario 2026-10-29).
     ACTIVOS("Contratistas"),
     RUTAS("Rutas", enDesarrollo = true),
+    // Proveedores y Correo eran una sola sección, "Externos", con un
+    // selector adentro; se separaron (pedido del usuario 2026-10-29): con el
+    // deslizamiento entre secciones, cada una queda a un gesto y con su
+    // propio globito.
+    PROVEEDORES("Proveedores"),
+    CORREO("Correo"),
     KOF("KOF"),
-    // Antes "Proveedores": ahora agrupa a quien entra sin catálogo
-    // (proveedores e ingresos por correo, ver [PantallaExternos]).
-    EXTERNOS("Externos"),
+    // Visitas agendadas en la web (`PantallaVisitas`): oculta desde
+    // 2026-10-17; para volver a mostrarla basta con sacarla de `enDesarrollo`.
+    VISITAS("Visitas", enDesarrollo = true),
 }
 
 private val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }

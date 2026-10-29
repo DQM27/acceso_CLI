@@ -48,6 +48,50 @@ class PaletaLattisTest {
     }
 
     @Test
+    fun laTarjetaDeAdentroSeLeeYSeDistingue() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto adentro", p.texto, p.adentroSuave, 4.5)
+            exigir("$tema secundario adentro", p.textoSecundario, p.adentroSuave, 4.5)
+            exigir("$tema error adentro", p.error, p.adentroSuave, 4.5)
+            exigir("$tema palabra ADENTRO", p.textoAdentro, p.adentroSuave, 4.5)
+            // La franja, contra el fondo de la propia tarjeta (elemento
+            // gráfico: 3:1).
+            exigir("$tema franja adentro", p.franjaAdentro, p.adentroSuave, 3.0)
+        }
+        // Que no se confunda con una tarjeta normal.
+        assertTrue(PaletaDia.adentroSuave != PaletaDia.tarjeta)
+        assertTrue(PaletaNoche.adentroSuave != PaletaNoche.tarjeta)
+    }
+
+    @Test
+    fun laTarjetaDeQuienNoPuedeEntrarSeLeeYSeDistingue() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto bloqueado", p.texto, p.bloqueadoSuave, 4.5)
+            exigir("$tema secundario bloqueado", p.textoSecundario, p.bloqueadoSuave, 4.5)
+            exigir("$tema palabra DENEGADO/VENCIDO", p.textoBloqueado, p.bloqueadoSuave, 4.5)
+            exigir("$tema franja bloqueado", p.franjaBloqueado, p.bloqueadoSuave, 3.0)
+        }
+        for (p in listOf(PaletaDia, PaletaNoche)) {
+            assertTrue(p.bloqueadoSuave != p.adentroSuave)
+            assertTrue(p.bloqueadoSuave != p.salidaSuave)
+            assertTrue(p.bloqueadoSuave != p.tarjeta)
+        }
+    }
+
+    @Test
+    fun laTarjetaDeSalidaPorGafeteSeLee() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto salida", p.texto, p.salidaSuave, 4.5)
+            exigir("$tema secundario salida", p.textoSecundario, p.salidaSuave, 4.5)
+            // La hora de otro día sale en ámbar.
+            exigir("$tema hora de otro día salida", p.textoAdvertencia, p.salidaSuave, 4.5)
+            exigir("$tema franja salida", p.franjaSalida, p.salidaSuave, 3.0)
+        }
+        assertTrue(PaletaDia.salidaSuave != PaletaDia.adentroSuave)
+        assertTrue(PaletaNoche.salidaSuave != PaletaNoche.adentroSuave)
+    }
+
+    @Test
     fun enOscuroLaTarjetaSeSeparaDelFondo() {
         // Con Tokyo Night daba 1,05:1 y la lista parecía una sola mancha.
         exigir("tarjeta contra fondo", PaletaNoche.tarjeta, PaletaNoche.fondo, 1.15)

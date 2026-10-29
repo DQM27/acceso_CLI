@@ -18,6 +18,7 @@ class CoincidenciaEscaneoTest {
         tieneAcceso = true,
         tieneIngresoActivo = false,
         avisoAcceso = null,
+        tipoAvisoAcceso = null,
     )
 
     @Test

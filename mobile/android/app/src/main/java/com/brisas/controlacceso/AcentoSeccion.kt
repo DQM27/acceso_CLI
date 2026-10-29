@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
 /// Color de cada sección principal (pedido del usuario 2026-10-19): con un
-/// solo acento azul para todo, Contratistas, KOF y Externos se confundían de
+/// solo acento azul para todo, Contratistas, KOF y Proveedores se confundían de
 /// un vistazo. Lleva el contexto del guardia: "estoy en la pestaña roja".
 ///
 /// El acento pinta sólo el marco (pestaña activa, botones, bordes, íconos y
@@ -38,19 +38,20 @@ class AcentoSeccion(
 )
 
 /// `null` = sin acento propio: la sección conserva el de la paleta base
-/// (Rutas, que está en desarrollo y no se ve en la fila de pestañas).
+/// (Rutas y Visitas, que están en desarrollo y no se ven en la barra).
 ///
-/// `externo`: dentro de Externos, "Por correo" tiene su propio color (violeta,
-/// pedido del usuario 2026-10-19: es una clase aparte de Proveedor, como en la
-/// columna "Clase" del escritorio) y con él cambia también la pestaña de
-/// arriba. En cualquier otra sección no cuenta.
-fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean, externo: TipoExterno? = null): AcentoSeccion? {
+/// Correo va en violeta (pedido del usuario 2026-10-19: es una clase aparte
+/// de Proveedor, como en la columna "Clase" del escritorio). Desde
+/// 2026-10-29 Proveedores y Correo son secciones propias; antes compartían
+/// "Externos" y el color cambiaba con el tipo elegido adentro.
+fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): AcentoSeccion? {
     val paleta = if (oscuro) PaletaNoche else PaletaDia
     val tono = when (seccion) {
         SeccionPrincipal.ACTIVOS -> paleta.contratistas
         SeccionPrincipal.KOF -> paleta.kof
-        SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) paleta.porCorreo else paleta.proveedores
-        SeccionPrincipal.RUTAS -> return null
+        SeccionPrincipal.PROVEEDORES -> paleta.proveedores
+        SeccionPrincipal.CORREO -> paleta.porCorreo
+        SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS -> return null
     }
     return AcentoSeccion(tono.acento, paleta.sobreAcento, tono.relleno, paleta.sobreRelleno)
 }
@@ -59,11 +60,11 @@ fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean, externo: TipoExt
 /// principal de la paleta. Todo lo que lee `MaterialTheme.colorScheme.primary`
 /// lo toma solo; no hace falta tocar cada pantalla.
 @Composable
-fun TemaSeccion(seccion: SeccionPrincipal, externo: TipoExterno? = null, contenido: @Composable () -> Unit) {
+fun TemaSeccion(seccion: SeccionPrincipal, contenido: @Composable () -> Unit) {
     val base = MaterialTheme.colorScheme
     val oscuro = temaActual().oscuro
-    val esquema = remember(base, seccion, externo, oscuro) {
-        val acento = acentoDeSeccion(seccion, oscuro, externo) ?: return@remember base
+    val esquema = remember(base, seccion, oscuro) {
+        val acento = acentoDeSeccion(seccion, oscuro) ?: return@remember base
         base.copy(
             primary = acento.color,
             onPrimary = acento.sobreColor,
@@ -74,7 +75,7 @@ fun TemaSeccion(seccion: SeccionPrincipal, externo: TipoExterno? = null, conteni
             inversePrimary = acento.color,
         )
     }
-    val relleno = remember(seccion, externo, oscuro) { acentoDeSeccion(seccion, oscuro, externo) }
+    val relleno = remember(seccion, oscuro) { acentoDeSeccion(seccion, oscuro) }
     MaterialTheme(colorScheme = esquema) {
         // Los botones principales ([BotonBrisas]) también van en el color de la
         // sección: antes quedaban en el azul fijo de la app (un "Entregar" azul

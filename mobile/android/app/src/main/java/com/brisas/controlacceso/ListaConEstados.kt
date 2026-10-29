@@ -27,7 +27,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +51,12 @@ import androidx.compose.ui.unit.dp
 /// marcadores de posición mientras carga por primera vez, o un mensaje si no
 /// hay nadie.
 private enum class EstadoLista { MARCADORES, VACIA, LISTA }
+
+/// Si la lista de la sección a la vista está desplazada hacia abajo: la barra
+/// de arriba muestra entonces una línea fina en su borde, para que las
+/// tarjetas no se corten en seco. Sólo la página a la vista la recibe (como
+/// `LocalAccionesInferiores`).
+internal val LocalListaDesplazada = staticCompositionLocalOf<MutableState<Boolean>?> { null }
 
 /// Lista de gente adentro (contratistas, proveedores, visitas por correo,
 /// gafetes provisionales KOF): mismo comportamiento en todas.
@@ -80,6 +92,18 @@ internal fun <T> ListaConEstados(
         cargando -> EstadoLista.MARCADORES
         else -> EstadoLista.VACIA
     }
+    val estadoLista = rememberLazyListState()
+    val desplazada = LocalListaDesplazada.current
+    if (desplazada != null) {
+        LaunchedEffect(desplazada, estadoLista, estado) {
+            if (estado != EstadoLista.LISTA) {
+                desplazada.value = false
+            } else {
+                snapshotFlow { estadoLista.canScrollBackward }.collect { desplazada.value = it }
+            }
+        }
+        DisposableEffect(desplazada) { onDispose { desplazada.value = false } }
+    }
     PullToRefreshBox(
         isRefreshing = sincronizando,
         onRefresh = onSincronizar,
@@ -94,15 +118,14 @@ internal fun <T> ListaConEstados(
             label = "estadoListaActivos",
         ) { mostrado ->
             when (mostrado) {
-                EstadoLista.LISTA -> ListaConDesvanecido {
-                    LazyColumn(
-                        contentPadding = contentPadding,
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        items(filas, key = { fila -> clave(fila) }) { fila ->
-                            Box(modifier = Modifier.animateItem()) {
-                                contenidoFila(fila)
-                            }
+                EstadoLista.LISTA -> LazyColumn(
+                    state = estadoLista,
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    items(filas, key = { fila -> clave(fila) }) { fila ->
+                        Box(modifier = Modifier.animateItem()) {
+                            contenidoFila(fila)
                         }
                     }
                 }
