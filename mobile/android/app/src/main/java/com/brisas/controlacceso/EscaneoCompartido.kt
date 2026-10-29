@@ -375,6 +375,22 @@ fun vibrarConfirmacion(contexto: android.content.Context) {
     }
 }
 
+/// Toque corto al cambiar de sección o de opción, más suave que el de éxito.
+/// Por el motor y no con `HapticFeedbackType`: en el Samsung A25 la háptica
+/// del sistema no se sentía nunca (pruebas del usuario 2026-10-29).
+fun vibrarSeleccion(contexto: android.content.Context) {
+    val vibrador = obtenerVibrador(contexto) ?: return
+    if (!vibrador.hasVibrator()) return
+    try {
+        vibrarComoAlarma(
+            vibrador,
+            android.os.VibrationEffect.createOneShot(DURACION_VIBRACION_SELECCION_MS, AMPLITUD_VIBRACION_SELECCION),
+        )
+    } catch (e: RuntimeException) {
+        // Idem.
+    }
+}
+
 /// Vibración de error -- dos golpes cortos a máxima amplitud en vez de un
 /// solo toque, para que se sienta claramente distinta de la de éxito sin
 /// necesidad de mirar la pantalla (documento no reconocido/no soportado,
@@ -439,3 +455,5 @@ private fun vibrarComoAlarma(vibrador: android.os.Vibrator, efecto: android.os.V
 // (Samsung A, Honor): el motor ni llega a arrancar del todo.
 private const val DURACION_VIBRACION_EXITO_MS = 80L
 private const val AMPLITUD_VIBRACION_EXITO = 200 // sobre 255 -- un poco más fuerte que el default semántico
+private const val DURACION_VIBRACION_SELECCION_MS = 50L
+private const val AMPLITUD_VIBRACION_SELECCION = 160

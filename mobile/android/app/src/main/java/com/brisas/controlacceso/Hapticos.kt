@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /// Los toques de vibración de la interfaz, como los de iOS: uno seco al
@@ -27,8 +28,19 @@ internal fun tipoHaptico(haptico: Haptico): HapticFeedbackType = when (haptico) 
     Haptico.DESACTIVAR -> HapticFeedbackType.ToggleOff
 }
 
+/// La selección va por el motor (`vibrarSeleccion`): la del sistema no se
+/// sentía en el Samsung A25 ni con `VirtualKey`.
 @Composable
 internal fun rememberHapticos(): (Haptico) -> Unit {
     val retroalimentacion = LocalHapticFeedback.current
-    return remember(retroalimentacion) { { haptico -> retroalimentacion.performHapticFeedback(tipoHaptico(haptico)) } }
+    val contexto = LocalContext.current
+    return remember(retroalimentacion, contexto) {
+        { haptico ->
+            if (haptico == Haptico.SELECCION) {
+                vibrarSeleccion(contexto)
+            } else {
+                retroalimentacion.performHapticFeedback(tipoHaptico(haptico))
+            }
+        }
+    }
 }

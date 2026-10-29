@@ -72,9 +72,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.util.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
@@ -738,7 +735,6 @@ fun PantallaPrincipal(
                             // La cápsula de secciones y, a su derecha, el botón
                             // redondo con la acción de la pantalla a la vista (ver
                             // `AccionInferior.kt`), como la app Teléfono de iOS.
-                            // Una sola pieza con un corte (ver `FormaPiezaInicio`).
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(ESPACIO_CORTE),
@@ -751,7 +747,6 @@ fun PantallaPrincipal(
                                     adentro = adentro,
                                     onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
                                     modifier = Modifier.weight(1f),
-                                    conAccion = accion != null,
                                 )
                                 if (accion != null) {
                                     BotonRedondoAccion(accion, tamano = ALTO_BARRA_SECCIONES)
@@ -823,21 +818,17 @@ private fun BarraSecciones(
     adentro: Map<SeccionPrincipal, Int>,
     onSeleccionar: (SeccionPrincipal) -> Unit,
     modifier: Modifier = Modifier,
-    // Con el botón de acción al lado: el corte va a la derecha.
-    conAccion: Boolean = false,
 ) {
     val oscuro = temaActual().oscuro
     val superficie = MaterialTheme.colorScheme.surface
     val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
-    // Menos redonda que una cápsula (pedido del usuario 2026-10-29) y, con
-    // el botón de acción al lado, la mitad izquierda de una pieza cortada
-    // (ver `FormaPiezaInicio`). La píldora de la sección elegida, concéntrica:
-    // cada esquina con el radio de afuera menos el margen interior, así las
-    // curvas quedan paralelas (casi recta al llegar al corte).
-    val forma = if (conAccion) FormaPiezaInicio else FormaPiezaEntera
+    // Menos redonda que una cápsula e igual de los dos lados (pedidos del
+    // usuario 2026-10-29). La píldora de la sección elegida, concéntrica: el
+    // radio de afuera menos el margen interior, así las curvas quedan
+    // paralelas.
+    val forma = FormaPiezaEntera
     val radioPildora = RADIO_PIEZA - MARGEN_INTERIOR_BARRA
-    val radioPildoraCorte = (RADIO_CORTE - MARGEN_INTERIOR_BARRA).coerceAtLeast(2.dp)
-    val ultima = SECCIONES_VISIBLES.lastIndex
+    val formaPildora = RoundedCornerShape(radioPildora)
     val hapticos = rememberHapticos()
     Row(
         modifier = modifier
@@ -851,44 +842,17 @@ private fun BarraSecciones(
                 val ancho = size.width / cantidad
                 val actual = posicion()
                 val radio = radioPildora.toPx()
-                // Al acercarse a la última sección, sus esquinas derechas se
-                // van achicando hasta las del corte.
-                val haciaElCorte = if (conAccion) (actual - (ultima - 1)).coerceIn(0f, 1f) else 0f
-                val radioDerecho = lerp(radio, radioPildoraCorte.toPx(), haciaElCorte)
-                val izquierda = actual * ancho
-                drawPath(
-                    Path().apply {
-                        addRoundRect(
-                            RoundRect(
-                                left = izquierda,
-                                top = 0f,
-                                right = izquierda + ancho,
-                                bottom = size.height,
-                                topLeftCornerRadius = CornerRadius(radio),
-                                topRightCornerRadius = CornerRadius(radioDerecho),
-                                bottomRightCornerRadius = CornerRadius(radioDerecho),
-                                bottomLeftCornerRadius = CornerRadius(radio),
-                            ),
-                        )
-                    },
+                drawRoundRect(
                     color = colorPildora,
+                    topLeft = Offset(actual * ancho, 0f),
+                    size = Size(ancho, size.height),
+                    cornerRadius = CornerRadius(radio),
                 )
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SECCIONES_VISIBLES.forEachIndexed { indice, seccion ->
+        SECCIONES_VISIBLES.forEach { seccion ->
             val elegida = seccion == seleccionada
-            // El efecto del toque con la forma de la píldora en ese lugar.
-            val formaPildora = if (conAccion && indice == ultima) {
-                RoundedCornerShape(
-                    topStart = radioPildora,
-                    topEnd = radioPildoraCorte,
-                    bottomEnd = radioPildoraCorte,
-                    bottomStart = radioPildora,
-                )
-            } else {
-                RoundedCornerShape(radioPildora)
-            }
             val acento = acentoDeSeccion(seccion, oscuro)?.color ?: MaterialTheme.colorScheme.primary
             val color by animateColorAsState(
                 targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,

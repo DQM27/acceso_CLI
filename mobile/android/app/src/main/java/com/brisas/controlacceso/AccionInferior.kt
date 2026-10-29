@@ -204,15 +204,17 @@ internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Mo
         modifier = modifier,
         forma = CircleShape,
     ) {
+        // Por acción y no por ícono: rebota en cada cambio de sección, también
+        // entre dos con el mismo ícono (Proveedores y Correo).
         AnimatedContent(
-            targetState = accion.icono,
+            targetState = accion,
             transitionSpec = {
                 (fadeIn(tween(MS_FUNDIDO_ENTRADA)) + scaleIn(ResorteBoton, initialScale = 0.4f)) togetherWith
                     (fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.4f)) using null
             },
             label = "iconoAccion",
-        ) { icono ->
-            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        ) { mostrada ->
+            Icon(mostrada.icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         }
     }
 }
