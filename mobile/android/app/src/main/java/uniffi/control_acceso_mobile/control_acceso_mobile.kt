@@ -891,6 +891,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_por_otra_via(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor(
@@ -1115,6 +1119,10 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_vincular_dispositivo_inicial(`ptr`: Long,`codigo`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_por_otra_via(`ptr`: Long,`salida`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_salida_por_otra_via(`ptr`: Long,`cedula`: RustBuffer.ByValue,`propia`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1672,6 +1680,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial() and 0xFFFF) != 3515) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_por_otra_via() and 0xFFFF) != 46476) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via() and 0xFFFF) != 45673) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 6459) {
@@ -4041,6 +4055,20 @@ public interface NucleoInterface {
     fun `vincularDispositivoInicial`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
+     * Cierra ese ingreso con la misma salida de siempre de su vía: la local
+     * (queda en el historial y se sincroniza) o, si es del otro equipo,
+     * contra la nube.
+     */
+    fun `registrarSalidaPorOtraVia`(`salida`: SalidaPorOtraVia)
+    
+    /**
+     * El ingreso por el que esta cédula está adentro por una vía distinta de
+     * `propia` (la de la pantalla que pregunta), o `None`. Sólo local, sin
+     * red. Sin actor: es una lectura.
+     */
+    fun `salidaPorOtraVia`(`cedula`: kotlin.String, `propia`: ViaIngreso): SalidaPorOtraVia?
+    
+    /**
      * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
      * está adentro en este sitio (este equipo o el otro dispositivo), como
      * proveedor o por otra vía (contratista, por correo), `None` si puede
@@ -5364,6 +5392,46 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterString.lower(`plataforma`),
         FfiConverterString.lower(`versionBuild`),
         FfiConverterString.lower(`appVersion`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Cierra ese ingreso con la misma salida de siempre de su vía: la local
+     * (queda en el historial y se sincroniza) o, si es del otro equipo,
+     * contra la nube.
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaPorOtraVia`(`salida`: SalidaPorOtraVia)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_por_otra_via(
+        it,
+        
+        FfiConverterTypeSalidaPorOtraVia.lower(`salida`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * El ingreso por el que esta cédula está adentro por una vía distinta de
+     * `propia` (la de la pantalla que pregunta), o `None`. Sólo local, sin
+     * red. Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `salidaPorOtraVia`(`cedula`: kotlin.String, `propia`: ViaIngreso): SalidaPorOtraVia? {
+            return FfiConverterOptionalTypeSalidaPorOtraVia.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_salida_por_otra_via(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterTypeViaIngreso.lower(`propia`),_status)
 }
     }
     )
@@ -9350,6 +9418,74 @@ public object FfiConverterTypeRuta: FfiConverterRustBuffer<Ruta> {
 
 
 /**
+ * El ingreso por otra vía, listo para mostrar y cerrar.
+ */
+data class SalidaPorOtraVia (
+    var `via`: ViaIngreso
+    , 
+    /**
+     * "Ya está adentro como proveedor".
+     */
+    var `titulo`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long?
+    , 
+    /**
+     * Como viene de la base (ISO); la hora la arma Kotlin igual que en las
+     * listas.
+     */
+    var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `ubicacion`: UbicacionSalida
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSalidaPorOtraVia: FfiConverterRustBuffer<SalidaPorOtraVia> {
+    override fun read(buf: ByteBuffer): SalidaPorOtraVia {
+        return SalidaPorOtraVia(
+            FfiConverterTypeViaIngreso.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeUbicacionSalida.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SalidaPorOtraVia) = (
+            FfiConverterTypeViaIngreso.allocationSize(value.`via`) +
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterTypeUbicacionSalida.allocationSize(value.`ubicacion`)
+    )
+
+    override fun write(value: SalidaPorOtraVia, buf: ByteBuffer) {
+            FfiConverterTypeViaIngreso.write(value.`via`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterTypeUbicacionSalida.write(value.`ubicacion`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `SalidaRutaActivaResumen` -- fila de "rutas activas" (salidas
  * sin retorno todavía), análoga a `IngresoActivoResumen`.
  */
@@ -11764,6 +11900,94 @@ public object FfiConverterTypeTipoVehiculoDetectado: FfiConverterRustBuffer<Tipo
 
 
 /**
+ * Dónde está abierto el ingreso: en este teléfono o en el otro equipo de la
+ * unidad. Kotlin no lo mira: lo devuelve tal cual a
+ * [`Nucleo::registrar_salida_por_otra_via`].
+ */
+sealed class UbicacionSalida {
+    
+    data class Local(
+        val `registroId`: kotlin.Long) : UbicacionSalida()
+        
+    {
+        
+
+        companion object
+    }
+    
+    data class Remota(
+        val `uuid`: kotlin.String) : UbicacionSalida()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUbicacionSalida : FfiConverterRustBuffer<UbicacionSalida>{
+    override fun read(buf: ByteBuffer): UbicacionSalida {
+        return when(buf.getInt()) {
+            1 -> UbicacionSalida.Local(
+                FfiConverterLong.read(buf),
+                )
+            2 -> UbicacionSalida.Remota(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: UbicacionSalida): ULong = when(value) {
+        is UbicacionSalida.Local -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterLong.allocationSize(value.`registroId`)
+            )
+        }
+        is UbicacionSalida.Remota -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`uuid`)
+            )
+        }
+    }
+
+    override fun write(value: UbicacionSalida, buf: ByteBuffer) {
+        when(value) {
+            is UbicacionSalida.Local -> {
+                buf.putInt(1)
+                FfiConverterLong.write(value.`registroId`, buf)
+                Unit
+            }
+            is UbicacionSalida.Remota -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`uuid`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
  * Qué sigue con una cédula.
  */
 sealed class VerificacionVisita {
@@ -11880,6 +12104,44 @@ public object FfiConverterTypeVerificacionVisita : FfiConverterRustBuffer<Verifi
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
+ * Las tres vías de ingreso de una persona.
+ */
+
+enum class ViaIngreso {
+    
+    CONTRATISTA,
+    PROVEEDOR,
+    POR_CORREO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeViaIngreso: FfiConverterRustBuffer<ViaIngreso> {
+    override fun read(buf: ByteBuffer) = try {
+        ViaIngreso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ViaIngreso) = 4UL
+
+    override fun write(value: ViaIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
     }
 }
 
@@ -12457,6 +12719,38 @@ public object FfiConverterOptionalTypeLecturaVehiculo: FfiConverterRustBuffer<Le
         } else {
             buf.put(1)
             FfiConverterTypeLecturaVehiculo.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeSalidaPorOtraVia: FfiConverterRustBuffer<SalidaPorOtraVia?> {
+    override fun read(buf: ByteBuffer): SalidaPorOtraVia? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeSalidaPorOtraVia.read(buf)
+    }
+
+    override fun allocationSize(value: SalidaPorOtraVia?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeSalidaPorOtraVia.allocationSize(value)
+        }
+    }
+
+    override fun write(value: SalidaPorOtraVia?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeSalidaPorOtraVia.write(value, buf)
         }
     }
 }

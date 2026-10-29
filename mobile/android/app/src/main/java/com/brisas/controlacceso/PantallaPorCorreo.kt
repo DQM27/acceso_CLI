@@ -189,6 +189,10 @@ fun PantallaPorCorreo(
                             gafeteTexto = ""
                             mostrandoFormulario = false
                         },
+                        // Cerrada la otra salida, queda el formulario con lo leído.
+                        salida = viewModel.salidaPorOtraVia,
+                        estadoSalida = viewModel.estadoSalidaOtraVia,
+                        onRegistrarSalida = { viewModel.registrarSalidaPorOtraVia { bloqueoEscaneo = null } },
                     )
                 } else FormularioNuevoIngresoCorreo(
                     viewModel = viewModel,

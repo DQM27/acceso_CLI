@@ -21,6 +21,7 @@ import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.SituacionGafete
+import uniffi.control_acceso_mobile.ViaIngreso
 
 /// `ActivosViewModel` sí usa `viewModelScope.launch` + `withContext`, así
 /// que estos tests corren con un `StandardTestDispatcher` compartido entre
@@ -107,6 +108,69 @@ class ActivosViewModelTest {
         val seleccion = viewModel.seleccionIngreso
         assertTrue(seleccion is SeleccionIngreso.Formulario)
         assertEquals("Contratista Test", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
+    }
+
+    @Test
+    fun `quien esta adentro por correo se saca desde el bloqueo y sigue al formulario`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+            """
+            INSERT INTO registro_ingresos_correo (
+                cedula, nombre, motivo, gafete_numero, fecha_hora_ingreso,
+                usuario_ingreso_id, usuario_ingreso_nombre, uuid
+            ) VALUES (
+                '111111111', 'CONTRATISTA TEST', 'Entrevista RH', 4,
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hour'),
+                (SELECT id FROM usuarios LIMIT 1), 'Root', 'uuid-correo'
+            );
+            """.trimIndent(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.elegir(1)
+        advanceUntilIdle()
+        val bloqueada = viewModel.seleccionIngreso as SeleccionIngreso.Bloqueada
+        val salida = bloqueada.salidaOtraVia!!
+        assertEquals(ViaIngreso.POR_CORREO, salida.via)
+        assertEquals(4L, salida.gafeteNumero)
+
+        viewModel.registrarSalidaPorOtraVia()
+        advanceUntilIdle()
+
+        assertNull(viewModel.salidaOtraVia.error)
+        assertTrue(nucleo.listarCorreosActivos().isEmpty())
+        val seleccion = viewModel.seleccionIngreso
+        assertTrue("quedó en $seleccion", seleccion is SeleccionIngreso.Formulario)
+    }
+
+    @Test
+    fun `un bloqueo que no es por otra via no ofrece sacar a nadie`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('222222222', 'Sin Acceso', 1, 'SWAT', 0, 0);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.elegir(1)
+        advanceUntilIdle()
+
+        assertNull((viewModel.seleccionIngreso as SeleccionIngreso.Bloqueada).salidaOtraVia)
     }
 
     @Test

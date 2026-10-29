@@ -27,6 +27,8 @@ import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
+import uniffi.control_acceso_mobile.SalidaPorOtraVia
+import uniffi.control_acceso_mobile.ViaIngreso
 import uniffi.control_acceso_mobile.interpretarBusquedaActivos
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
@@ -38,7 +40,13 @@ sealed class SeleccionIngreso {
 
     data object Cargando : SeleccionIngreso()
 
-    data class Bloqueada(val preparacion: PreparacionIngreso, val mensaje: String) : SeleccionIngreso()
+    /// Con [salidaOtraVia], está adentro como proveedor o por correo en esta
+    /// unidad: la pantalla ofrece cerrar esa salida y seguir.
+    data class Bloqueada(
+        val preparacion: PreparacionIngreso,
+        val mensaje: String,
+        val salidaOtraVia: SalidaPorOtraVia? = null,
+    ) : SeleccionIngreso()
 
     data class Formulario(val preparacion: PreparacionIngreso) : SeleccionIngreso()
 }
@@ -404,9 +412,13 @@ class ActivosViewModel(
                 }
                 msNucleo = milisegundosDesde(inicioElegir)
                 val salida = if (preparacion.mensajeBloqueo != null) filaAdentro(preparacion) else null
+                // Bloqueado sin estar adentro como contratista: quizá lo está
+                // como proveedor o por correo en esta unidad (el núcleo dice
+                // cuál ingreso es, para ofrecer cerrarlo ahí mismo).
+                val otraVia = if (preparacion.mensajeBloqueo != null && salida == null) salidaPorOtraVia(preparacion.cedula) else null
                 seleccionIngreso = when {
                     salida != null -> SeleccionIngreso.Ninguna
-                    preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!)
+                    preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!, otraVia)
                     else -> SeleccionIngreso.Formulario(preparacion)
                 }
                 if (salida != null) {
@@ -452,11 +464,48 @@ class ActivosViewModel(
             }
         }
 
+    /// Si falla la consulta, la pantalla queda como antes: sin el botón.
+    private suspend fun salidaPorOtraVia(cedula: String): SalidaPorOtraVia? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("salidaPorOtraVia") { nucleo.salidaPorOtraVia(cedula, ViaIngreso.CONTRATISTA) } }
+        } catch (_: NucleoException) {
+            null
+        }
+
+    var salidaOtraVia by mutableStateOf(EstadoSalidaOtraVia())
+        private set
+
+    /// "Registrar esa salida y continuar" en la pantalla de bloqueo: cierra el
+    /// ingreso por la otra vía y vuelve a elegir al contratista, que ahora
+    /// pasa al formulario de ingreso (o al motivo, si queda otro bloqueo).
+    fun registrarSalidaPorOtraVia() {
+        val bloqueada = seleccionIngreso as? SeleccionIngreso.Bloqueada ?: return
+        val salida = bloqueada.salidaOtraVia ?: return
+        if (salidaOtraVia.registrando) return
+        salidaOtraVia = EstadoSalidaOtraVia(registrando = true)
+        viewModelScope.launch {
+            try {
+                mutexMutaciones.withLock {
+                    withContext(dispatcherIO) {
+                        medirNucleo("registrarSalidaPorOtraVia") { nucleo.registrarSalidaPorOtraVia(salida) }
+                    }
+                }
+                CambiosNube.cambioLocal()
+                confirmacion.mostrar("Salida registrada · ${salida.nombre}")
+                salidaOtraVia = EstadoSalidaOtraVia()
+                elegir(bloqueada.preparacion.contratistaId)
+            } catch (excepcion: Exception) {
+                salidaOtraVia = EstadoSalidaOtraVia(error = excepcion.mensajeDeErrorEsperado())
+            }
+        }
+    }
+
     /// Cancelar el ingreso (o volver del bloqueo) también borra lo que quedó
     /// en el buscador: la cédula escaneada o el nombre ya no buscan nada.
     fun cancelarSeleccionIngreso() {
         seleccionIngreso = SeleccionIngreso.Ninguna
         errorIngreso = null
+        salidaOtraVia = EstadoSalidaOtraVia()
         if (texto.isNotEmpty()) {
             texto = ""
             buscar()

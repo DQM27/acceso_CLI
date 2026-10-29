@@ -17,6 +17,8 @@ import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoProveedorActivoResumen
+import uniffi.control_acceso_mobile.SalidaPorOtraVia
+import uniffi.control_acceso_mobile.ViaIngreso
 import uniffi.control_acceso_mobile.nombreEnMayusculas
 import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
@@ -81,6 +83,13 @@ class ProveedoresViewModel(
         private set
     private var avisoCedulaActiva: String? = null
 
+    /// Si el aviso es porque está adentro como contratista o por correo en
+    /// esta unidad: ese ingreso, para ofrecer cerrarlo ahí mismo.
+    var salidaPorOtraVia by mutableStateOf<SalidaPorOtraVia?>(null)
+        private set
+    var estadoSalidaOtraVia by mutableStateOf(EstadoSalidaOtraVia())
+        private set
+
     // Buscador de empresa proveedora -- mismo criterio que el buscador de
     // encargado en `GafetesProvisionalesViewModel`, con la diferencia de
     // que acá SÍ se puede crear una empresa nueva inline cuando la
@@ -136,6 +145,9 @@ class ProveedoresViewModel(
             null
         }
         if (consultada != cedula) return // ya se tipeó otra
+        val otraVia = if (aviso != null) salidaPorOtraVia(consultada) else null
+        if (consultada != cedula) return
+        salidaPorOtraVia = otraVia
         // Proveedor que vuelve: se propone la empresa de la última vez
         // (se cambia en el mismo renglón si hoy viene por otra).
         if (empresaSeleccionada == null && aviso == null) {
@@ -158,6 +170,37 @@ class ProveedoresViewModel(
             error = aviso
         } else if (anterior != null && error == anterior) {
             error = null
+        }
+    }
+
+    /// Si falla la consulta, sin botón: el aviso queda como antes.
+    private suspend fun salidaPorOtraVia(consultada: String): SalidaPorOtraVia? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("salidaPorOtraVia") { nucleo.salidaPorOtraVia(consultada, ViaIngreso.PROVEEDOR) } }
+        } catch (_: NucleoException) {
+            null
+        }
+
+    /// "Registrar esa salida y continuar": cierra el ingreso por la otra vía,
+    /// vuelve a revisar la cédula y, si ya puede entrar, [onListo] (la
+    /// pantalla deja ver el formulario con lo ya leído).
+    fun registrarSalidaPorOtraVia(onListo: () -> Unit) {
+        val salida = salidaPorOtraVia ?: return
+        if (estadoSalidaOtraVia.registrando) return
+        estadoSalidaOtraVia = EstadoSalidaOtraVia(registrando = true)
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    medirNucleo("registrarSalidaPorOtraVia") { nucleo.registrarSalidaPorOtraVia(salida) }
+                }
+                CambiosNube.cambioLocal()
+                confirmacion.mostrar("Salida registrada · ${salida.nombre}")
+                estadoSalidaOtraVia = EstadoSalidaOtraVia()
+                revisarCedula(cedula)
+                if (avisoCedulaActiva == null) onListo()
+            } catch (excepcion: Exception) {
+                estadoSalidaOtraVia = EstadoSalidaOtraVia(error = excepcion.mensajeDeErrorEsperado())
+            }
         }
     }
 
@@ -307,6 +350,8 @@ class ProveedoresViewModel(
         empresaSeleccionada = null
         cedulaConIngresoActivo = false
         avisoCedulaActiva = null
+        salidaPorOtraVia = null
+        estadoSalidaOtraVia = EstadoSalidaOtraVia()
         error = null
     }
 

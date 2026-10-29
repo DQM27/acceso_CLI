@@ -71,6 +71,114 @@ pub fn adentro_por_otra_via(
     Ok(None)
 }
 
+/// Dónde está abierto un ingreso: en este equipo (el `id` de su tabla) o en
+/// el otro equipo de la unidad (el `uuid` de la caché `*_remotos`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UbicacionIngreso {
+    Local(i64),
+    Remoto(String),
+}
+
+/// El ingreso abierto por otra vía, con lo necesario para mostrarlo y
+/// cerrarlo sin ir a su sección (pedido del usuario 2026-10-29).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoPorOtraVia {
+    pub via: ViaIngreso,
+    pub nombre: String,
+    pub gafete_numero: Option<i64>,
+    pub fecha_hora_ingreso: String,
+    pub ubicacion: UbicacionIngreso,
+}
+
+/// Por cada vía, lo abierto en este equipo y lo abierto en el otro: id (o
+/// uuid), nombre, gafete y hora de entrada. En el mismo orden que
+/// [`CONSULTAS`], para que [`ingreso_por_otra_via`] encuentre la misma vía
+/// que [`adentro_por_otra_via`].
+const FILAS: [(ViaIngreso, &str, &str); 3] = [
+    (
+        ViaIngreso::Contratista,
+        "SELECT id, contratista_nombre, gafete_numero, fecha_hora_ingreso
+         FROM registro_ingresos
+         WHERE fecha_hora_salida IS NULL
+           AND NORMALIZAR_CEDULA(contratista_cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+        "SELECT uuid, contratista_nombre, gafete_numero, hora_entrada
+         FROM ingresos_remotos
+         WHERE NORMALIZAR_CEDULA(contratista_cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+    ),
+    (
+        ViaIngreso::Proveedor,
+        "SELECT id, nombre, gafete_numero, fecha_hora_ingreso
+         FROM registro_ingresos_proveedor
+         WHERE fecha_hora_salida IS NULL
+           AND NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+        "SELECT uuid, nombre, gafete_numero, hora_entrada
+         FROM ingresos_proveedor_remotos
+         WHERE NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+    ),
+    (
+        ViaIngreso::PorCorreo,
+        "SELECT id, nombre, gafete_numero, fecha_hora_ingreso
+         FROM registro_ingresos_correo
+         WHERE fecha_hora_salida IS NULL
+           AND NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+        "SELECT uuid, nombre, gafete_numero, hora_entrada
+         FROM ingresos_correo_remotos
+         WHERE NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+         LIMIT 1",
+    ),
+];
+
+/// El ingreso por el que esta cédula está adentro por una vía distinta de
+/// `propia`: primero lo de este equipo, después lo del otro de la unidad.
+/// `None` si no está adentro por ninguna otra.
+pub fn ingreso_por_otra_via(
+    connection: &Connection,
+    cedula: &str,
+    propia: ViaIngreso,
+) -> Result<Option<IngresoPorOtraVia>, DatabaseError> {
+    use rusqlite::OptionalExtension;
+
+    for (via, local, remoto) in FILAS {
+        if via == propia {
+            continue;
+        }
+        let abierto = connection
+            .query_row(local, params![cedula], |fila| {
+                Ok(IngresoPorOtraVia {
+                    via,
+                    ubicacion: UbicacionIngreso::Local(fila.get(0)?),
+                    nombre: fila.get(1)?,
+                    gafete_numero: fila.get(2)?,
+                    fecha_hora_ingreso: fila.get(3)?,
+                })
+            })
+            .optional()?;
+        if abierto.is_some() {
+            return Ok(abierto);
+        }
+        let abierto = connection
+            .query_row(remoto, params![cedula], |fila| {
+                Ok(IngresoPorOtraVia {
+                    via,
+                    ubicacion: UbicacionIngreso::Remoto(fila.get(0)?),
+                    nombre: fila.get(1)?,
+                    gafete_numero: fila.get(2)?,
+                    fecha_hora_ingreso: fila.get(3)?,
+                })
+            })
+            .optional()?;
+        if abierto.is_some() {
+            return Ok(abierto);
+        }
+    }
+    Ok(None)
+}
+
 /// ¿Esta cédula tiene un ingreso de contratista abierto, en este equipo o en
 /// el otro de la unidad? Para no cambiarle la cédula a quien está adentro.
 pub fn contratista_adentro(connection: &Connection, cedula: &str) -> Result<bool, DatabaseError> {
@@ -140,6 +248,66 @@ mod tests {
         assert_eq!(
             adentro_por_otra_via(&connection, "333333333", ViaIngreso::Contratista).unwrap(),
             Some(ViaIngreso::Proveedor)
+        );
+    }
+
+    #[test]
+    fn ingreso_por_otra_via_trae_lo_necesario_para_cerrarlo() {
+        let connection = conexion();
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('111111111', 'Ana', 'Entrevista RH', 4,
+                    '2026-10-03T14:00:00Z', 1, 'Operador', 'u1')",
+                [],
+            )
+            .unwrap();
+        let id: i64 = connection
+            .query_row("SELECT id FROM registro_ingresos_correo", [], |fila| fila.get(0))
+            .unwrap();
+
+        assert_eq!(
+            ingreso_por_otra_via(&connection, "1-1111-1111", ViaIngreso::Contratista).unwrap(),
+            Some(IngresoPorOtraVia {
+                via: ViaIngreso::PorCorreo,
+                nombre: "Ana".to_owned(),
+                gafete_numero: Some(4),
+                fecha_hora_ingreso: "2026-10-03T14:00:00Z".to_owned(),
+                ubicacion: UbicacionIngreso::Local(id),
+            })
+        );
+        // La vía propia no cuenta, igual que en `adentro_por_otra_via`.
+        assert_eq!(
+            ingreso_por_otra_via(&connection, "111111111", ViaIngreso::PorCorreo).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn ingreso_por_otra_via_encuentra_lo_del_otro_equipo_por_su_uuid() {
+        let connection = conexion();
+        connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                    empresa_nombre, gafete_numero, hora_entrada, usuario_entrada_nombre,
+                    dispositivo_entrada_id, actualizado_en)
+                 VALUES ('r1', 's1', '333333333', 'Luis', 'ACME', 9,
+                    '2026-10-03T14:00:00Z', 'Otro', 'd2', '2026-10-03T14:00:00Z')",
+                [],
+            )
+            .unwrap();
+
+        let ingreso = ingreso_por_otra_via(&connection, "333333333", ViaIngreso::Contratista)
+            .unwrap()
+            .unwrap();
+        assert_eq!(ingreso.via, ViaIngreso::Proveedor);
+        assert_eq!(ingreso.ubicacion, UbicacionIngreso::Remoto("r1".to_owned()));
+        assert_eq!(ingreso.gafete_numero, Some(9));
+        // La misma vía que dice la regla que frena el ingreso.
+        assert_eq!(
+            adentro_por_otra_via(&connection, "333333333", ViaIngreso::Contratista).unwrap(),
+            Some(ingreso.via)
         );
     }
 

@@ -90,7 +90,7 @@ Si la persona no puede entrar, en vez del formulario se ve el motivo, con
 | "Acceso denegado · no tiene acceso autorizado" | Un administrador le quitó el acceso. No puede entrar. |
 | "Acceso denegado · la empresa está inactiva" | Su empresa está desactivada. Avise a un administrador. |
 | "El contratista ya tiene un ingreso activo en (sitio)." | Ver [Problemas frecuentes](problemas-frecuentes.md#el-contratista-ya-tiene-un-ingreso-activo). |
-| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Registre primero esa salida en **Proveedores** (o en **Correo**). |
+| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Debajo se ve ese ingreso (gafete y hora). Toque **Registrar esa salida y continuar**: se cierra ahí mismo y pasa al formulario de ingreso. |
 
 Otros mensajes al registrar:
 

@@ -42,6 +42,9 @@ pub use busqueda_activos::{
     BusquedaActivos, GafeteSinPortador, SituacionGafete, interpretar_busqueda_activos,
 };
 
+mod otra_via;
+pub use otra_via::{SalidaPorOtraVia, UbicacionSalida, ViaIngreso};
+
 mod manual;
 pub use manual::{
     BloqueManual, CeldaManual, ContenidoTemaManual, FilaManual, GrupoManual, ResultadoManual,

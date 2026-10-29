@@ -35,8 +35,12 @@ nombre, motivo y gafete.
 
 Si la persona **ya está adentro** (por correo, como contratista o como
 proveedor), al escanear su cédula **suena la alarma de denegado** y, en vez
-del formulario, se ve su nombre y el motivo, con **‹ Volver**. Registre
-primero esa salida.
+del formulario, se ve su nombre y el motivo, con **‹ Volver**.
+
+Si está adentro **como contratista o como proveedor** en esta unidad,
+debajo se ve ese ingreso (gafete y hora) y el botón **Registrar esa salida
+y continuar**: la cierra ahí mismo y abre el formulario con lo ya leído. Si
+está adentro por correo, registre primero su salida en la lista.
 
 Si escribe la cédula a mano, el aviso aparece debajo de la cédula y
 **Registrar ingreso** queda deshabilitado.

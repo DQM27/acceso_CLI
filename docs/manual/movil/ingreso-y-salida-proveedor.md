@@ -39,7 +39,12 @@ nombre, empresa y gafete. **‹ Volver** cancela.
 Si la persona **ya está adentro** (como proveedor, como contratista o por
 correo), al escanear su cédula **suena la alarma de denegado** y, en vez
 del formulario, se ve su nombre y el motivo, con **‹ Volver**. No hace
-falta llenar nada: registre primero esa salida.
+falta llenar nada.
+
+Si está adentro **como contratista o por correo** en esta unidad, debajo
+se ve ese ingreso (gafete y hora) y el botón **Registrar esa salida y
+continuar**: la cierra ahí mismo y abre el formulario con lo ya leído. Si
+está adentro como proveedor, registre primero su salida en la lista.
 
 Si escribe la cédula a mano, el aviso aparece debajo de la cédula y
 **Registrar ingreso** queda deshabilitado.

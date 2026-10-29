@@ -128,6 +128,9 @@ fun PantallaActivos(
                     preparacion = mostrado.seleccion.preparacion,
                     mensaje = mostrado.seleccion.mensaje,
                     onCambiar = { viewModel.cancelarSeleccionIngreso() },
+                    salida = mostrado.seleccion.salidaOtraVia,
+                    salidaOtraVia = viewModel.salidaOtraVia,
+                    onRegistrarSalidaOtraVia = viewModel::registrarSalidaPorOtraVia,
                 )
             }
             PanelActivos.EscanerCedula -> {
