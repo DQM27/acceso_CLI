@@ -41,15 +41,15 @@ import uniffi.control_acceso_mobile.TipoIngreso
 // de la auditoría móvil: sólo se movió código).
 
 @Composable
-internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit) {
+internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit, tinte: TinteTarjeta? = null) {
     when (fila) {
-        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick)
-        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick)
+        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick, tinte)
+        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick, tinte)
     }
 }
 
 @Composable
-private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
+private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, tinte: TinteTarjeta?) {
     TarjetaActivo(
         nombre = activo.contratistaNombre,
         detalle = "${activo.cedula} · ${activo.empresaNombre}",
@@ -57,6 +57,7 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
         fechaHoraIngreso = activo.fechaHoraIngreso,
         otroEquipo = false,
         onClick = onClick,
+        tinte = tinte,
     )
 }
 
@@ -65,7 +66,7 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
 /// `ingresos_remotos`. Cédula, empresa y gafete sí viajan en la caché desde
 /// la migración 24, así que no hay motivo para mostrar menos acá.
 @Composable
-private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
+private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: TinteTarjeta?) {
     TarjetaActivo(
         nombre = remoto.contratistaNombre,
         detalle = "${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"}",
@@ -73,6 +74,7 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
         fechaHoraIngreso = remoto.horaEntrada,
         otroEquipo = true,
         onClick = onClick,
+        tinte = tinte,
     )
 }
 
@@ -86,6 +88,9 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
 /// debajo la hora, todas alineadas en columna para leerlas de un vistazo (con
 /// el día sólo si fue otro día), con la nube si entró por otro equipo. Quién
 /// dio el ingreso quedó para el historial del escritorio y el panel.
+///
+/// Con [tinte], fondo y franja propios (la búsqueda por gafete la pinta de
+/// azul de salida).
 @Composable
 internal fun TarjetaActivo(
     nombre: String,
@@ -94,12 +99,13 @@ internal fun TarjetaActivo(
     fechaHoraIngreso: String,
     otroEquipo: Boolean,
     onClick: () -> Unit,
+    tinte: TinteTarjeta? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
+            .fondoTarjeta(tinte)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -210,16 +216,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(if (adentro) paleta.adentroSuave else MaterialTheme.colorScheme.surface)
-            .then(
-                if (adentro) {
-                    Modifier.drawBehind {
-                        drawRect(paleta.franjaAdentro, size = Size(ANCHO_FRANJA_ADENTRO.toPx(), size.height))
-                    }
-                } else {
-                    Modifier
-                },
-            )
+            .fondoTarjeta(if (adentro) paleta.tinteAdentro else null)
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -271,7 +268,19 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
     }
 }
 
-private val ANCHO_FRANJA_ADENTRO = 4.dp
+/// El fondo de siempre (`surface`) o, con [tinte], el suyo con la franja a
+/// la izquierda.
+@Composable
+private fun Modifier.fondoTarjeta(tinte: TinteTarjeta?): Modifier =
+    if (tinte == null) {
+        background(MaterialTheme.colorScheme.surface)
+    } else {
+        background(tinte.fondo).drawBehind {
+            drawRect(tinte.franja, size = Size(ANCHO_FRANJA_TARJETA.toPx(), size.height))
+        }
+    }
+
+private val ANCHO_FRANJA_TARJETA = 4.dp
 
 private fun etiquetaTipoIngreso(tipo: TipoIngreso): String =
     when (tipo) {

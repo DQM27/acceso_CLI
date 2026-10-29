@@ -64,6 +64,19 @@ class PaletaLattisTest {
     }
 
     @Test
+    fun laTarjetaDeSalidaPorGafeteSeLee() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto salida", p.texto, p.salidaSuave, 4.5)
+            exigir("$tema secundario salida", p.textoSecundario, p.salidaSuave, 4.5)
+            // La hora de otro día sale en ámbar.
+            exigir("$tema hora de otro día salida", p.textoAdvertencia, p.salidaSuave, 4.5)
+            exigir("$tema franja salida", p.franjaSalida, p.salidaSuave, 3.0)
+        }
+        assertTrue(PaletaDia.salidaSuave != PaletaDia.adentroSuave)
+        assertTrue(PaletaNoche.salidaSuave != PaletaNoche.adentroSuave)
+    }
+
+    @Test
     fun enOscuroLaTarjetaSeSeparaDelFondo() {
         // Con Tokyo Night daba 1,05:1 y la lista parecía una sola mancha.
         exigir("tarjeta contra fondo", PaletaNoche.tarjeta, PaletaNoche.fondo, 1.15)

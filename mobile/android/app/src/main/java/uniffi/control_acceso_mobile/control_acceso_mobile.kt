@@ -727,6 +727,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -1228,6 +1230,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_cuerpo_registro_accion_aviso(`accion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_interpretar_busqueda_activos(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_func_extraer_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1418,6 +1422,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso() and 0xFFFF) != 45442) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos() and 0xFFFF) != 28362) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
@@ -10113,6 +10120,102 @@ public object FfiConverterTypeBloqueManual : FfiConverterRustBuffer<BloqueManual
 
 
 
+sealed class BusquedaActivos {
+    
+    /**
+     * Campo vacío: se ve la lista de quién está adentro.
+     */
+    object Vacia : BusquedaActivos()
+    
+    
+    /**
+     * Nombre o cédula, contra el catálogo de contratistas.
+     */
+    object Personas : BusquedaActivos()
+    
+    
+    /**
+     * Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito.
+     */
+    data class Gafetes(
+        val `numeros`: List<kotlin.Int>) : BusquedaActivos()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBusquedaActivos : FfiConverterRustBuffer<BusquedaActivos>{
+    override fun read(buf: ByteBuffer): BusquedaActivos {
+        return when(buf.getInt()) {
+            1 -> BusquedaActivos.Vacia
+            2 -> BusquedaActivos.Personas
+            3 -> BusquedaActivos.Gafetes(
+                FfiConverterSequenceInt.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: BusquedaActivos): ULong = when(value) {
+        is BusquedaActivos.Vacia -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is BusquedaActivos.Personas -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is BusquedaActivos.Gafetes -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceInt.allocationSize(value.`numeros`)
+            )
+        }
+    }
+
+    override fun write(value: BusquedaActivos, buf: ByteBuffer) {
+        when(value) {
+            is BusquedaActivos.Vacia -> {
+                buf.putInt(1)
+                Unit
+            }
+            is BusquedaActivos.Personas -> {
+                buf.putInt(2)
+                Unit
+            }
+            is BusquedaActivos.Gafetes -> {
+                buf.putInt(3)
+                FfiConverterSequenceInt.write(value.`numeros`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
 /**
  * Campo de un MRZ sobre el que se puede intentar una corrección acotada de
  * caracteres ambiguos -- sólo los campos con su propio dígito verificador
@@ -12326,6 +12429,34 @@ public object FfiConverterOptionalTypeTipoDocumento: FfiConverterRustBuffer<Tipo
 /**
  * @suppress
  */
+public object FfiConverterSequenceInt: FfiConverterRustBuffer<List<kotlin.Int>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Int> {
+        val len = buf.getInt()
+        return List<kotlin.Int>(len) {
+            FfiConverterInt.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Int>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterInt.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Int>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterInt.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>> {
     override fun read(buf: ByteBuffer): List<kotlin.Long> {
         val len = buf.getInt()
@@ -13285,6 +13416,22 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterTypeAccionAviso.lower(`accion`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Lee lo escrito en el buscador de Activos. Son gafetes sólo si cada número
+         * separado por coma tiene de 1 a [`MAX_DIGITOS_GAFETE`] dígitos; cualquier
+         * otra cosa (letras, una cédula, "117 900 735" con espacios) es una persona.
+         */ fun `interpretarBusquedaActivos`(`texto`: kotlin.String): BusquedaActivos {
+            return FfiConverterTypeBusquedaActivos.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_interpretar_busqueda_activos(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
 }
     )
     }

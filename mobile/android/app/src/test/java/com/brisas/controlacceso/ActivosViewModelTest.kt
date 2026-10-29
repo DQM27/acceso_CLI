@@ -16,6 +16,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
@@ -228,7 +229,6 @@ class ActivosViewModelTest {
         )
         advanceUntilIdle()
 
-        assertEquals(ModoBusqueda.SALIDA_GAFETE, viewModel.modo)
         assertEquals("Salida registrada: Con Gafete Siete", viewModel.mensaje)
         assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
     }
@@ -253,8 +253,6 @@ class ActivosViewModelTest {
         )
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
         val viewModel = viewModel()
-        advanceUntilIdle()
-        viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
         advanceUntilIdle()
 
         viewModel.cambiarTexto("25, 30")
@@ -378,18 +376,23 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `cambiarModo limpia el texto y el mensaje anterior`() = runTest(dispatcher) {
+    fun `un mismo buscador decide entre gafetes y personas por lo escrito`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
         val viewModel = viewModel()
         advanceUntilIdle()
-        viewModel.cambiarTexto("algo")
-        advanceUntilIdle()
 
-        viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
+        viewModel.cambiarTexto("7")
         advanceUntilIdle()
+        assertEquals(BusquedaActivos.Gafetes(listOf(7)), viewModel.busqueda)
+        assertEquals(listOf(CoincidenciaGafete(7, null)), viewModel.coincidenciasGafete)
 
-        assertEquals(ModoBusqueda.SALIDA_GAFETE, viewModel.modo)
-        assertEquals("", viewModel.texto)
+        viewModel.cambiarTexto("1179")
+        advanceUntilIdle()
+        assertEquals(BusquedaActivos.Personas, viewModel.busqueda)
+
+        viewModel.cambiarTexto("")
+        advanceUntilIdle()
+        assertEquals(BusquedaActivos.Vacia, viewModel.busqueda)
     }
 
 

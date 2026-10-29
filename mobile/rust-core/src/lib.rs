@@ -37,6 +37,9 @@ pub use avisos::{
     TipoAccionAviso, aviso_de_mensaje, cuerpo_registro_accion_aviso,
 };
 
+mod busqueda_activos;
+pub use busqueda_activos::{BusquedaActivos, interpretar_busqueda_activos};
+
 mod manual;
 pub use manual::{
     BloqueManual, CeldaManual, ContenidoTemaManual, FilaManual, GrupoManual, ResultadoManual,

@@ -78,11 +78,22 @@ internal class Paleta(
     val adentroSuave: Color,
     val franjaAdentro: Color,
     val textoAdentro: Color,
+    /// Las tarjetas de una búsqueda por gafete, que siempre es para la
+    /// salida: azul, el acento general, distinto del ámbar de "adentro".
+    val salidaSuave: Color,
+    val franjaSalida: Color,
     val contratistas: TonoSeccion,
     val kof: TonoSeccion,
     val proveedores: TonoSeccion,
     val porCorreo: TonoSeccion,
-)
+) {
+    val tinteAdentro = TinteTarjeta(adentroSuave, franjaAdentro)
+    val tinteSalida = TinteTarjeta(salidaSuave, franjaSalida)
+}
+
+/// Fondo y franja izquierda de una tarjeta que se distingue de las demás.
+@Immutable
+internal class TinteTarjeta(val fondo: Color, val franja: Color)
 
 /// Tokyo Day: paleta oficial de folke/tokyonight.nvim (`tokyonight_day`), con
 /// los textos y estados ajustados en el escritorio para llegar a 4,5:1. Se
@@ -118,6 +129,8 @@ internal val PaletaDia = Paleta(
     // #E0A100 daba 2:1 sobre el crema.
     franjaAdentro = Color(0xFFA87400),
     textoAdentro = Color(0xFF7F5600),
+    salidaSuave = Color(0xFFDCE6FA),
+    franjaSalida = Color(0xFF2959AA),
     contratistas = TonoSeccion(acento = Color(0xFF00806A), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFC4161C), relleno = Color(0xFFC4161C)),
     proveedores = TonoSeccion(acento = Color(0xFFB85C00), relleno = Color(0xFFB85C00)),
@@ -156,6 +169,8 @@ internal val PaletaNoche = Paleta(
     adentroSuave = Color(0xFF2E2610),
     franjaAdentro = Color(0xFFFBBF24),
     textoAdentro = Color(0xFFFBBF24),
+    salidaSuave = Color(0xFF16233A),
+    franjaSalida = Color(0xFF6EA8FF),
     contratistas = TonoSeccion(acento = Color(0xFF5CC8B2), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFFF6B5E), relleno = Color(0xFFD0312D)),
     proveedores = TonoSeccion(acento = Color(0xFFFFB547), relleno = Color(0xFFB85C00)),

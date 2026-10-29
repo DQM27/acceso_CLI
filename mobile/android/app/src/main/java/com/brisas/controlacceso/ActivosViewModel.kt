@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
@@ -25,6 +26,7 @@ import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
+import uniffi.control_acceso_mobile.interpretarBusquedaActivos
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
 /// selección (buscador visible), verificando (prepararIngreso en vuelo),
@@ -39,16 +41,6 @@ sealed class SeleccionIngreso {
 
     data class Formulario(val preparacion: PreparacionIngreso) : SeleccionIngreso()
 }
-
-/// Qué busca el campo de abajo: personas (nombre o cédula) o números de
-/// gafete. Antes había un tercer modo, "Salida", que acotaba la lista de
-/// quién está adentro; se fue (2026-10-26) porque elegir —o escanear— a
-/// alguien que ya está adentro abre directo su salida (ver [elegir]), así
-/// que buscar a una persona sirve para entrar y para salir. `SALIDA_GAFETE`
-/// sigue aparte porque la búsqueda de texto libre de Rust mezcla
-/// nombre/cédula con gafete en el mismo OR — buscar "7" como gafete también
-/// traería cualquier cédula que lo contenga.
-enum class ModoBusqueda { ENTRADA, SALIDA_GAFETE }
 
 /// Un número de gafete escrito y, si ya se buscó, el activo encontrado (o
 /// `null` si nadie adentro tiene ese gafete puesto). Puede ser local o
@@ -85,23 +77,6 @@ sealed class FilaActiva {
     }
 }
 
-private const val MAX_LARGO_GAFETES = 60
-
-/// Espejo de `sanearGafetes` (desktop/src/api/ingresos.ts): sólo dígitos,
-/// comas y espacios — todo lo demás que el usuario pegue o teclee se
-/// descarta en silencio en vez de rechazarlo con un error.
-private fun sanearGafetesTexto(texto: String): String =
-    texto.filter { it.isDigit() || it == ',' || it.isWhitespace() }.take(MAX_LARGO_GAFETES)
-
-/// Espejo de `gafetesDe` (desktop/src/api/ingresos.ts): "2, 25, 85" -> [2,
-/// 25, 85]; tokens vacíos o no numéricos se ignoran en vez de fallar toda
-/// la búsqueda por un error de tipeo en un solo número.
-private fun gafetesDeTexto(texto: String): List<Int> =
-    texto.split(",")
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .mapNotNull { it.toIntOrNull() }
-
 /// Dueño de todo el estado de [PantallaActivos] y de las llamadas a
 /// [Nucleo] — ver mobile/android/arquitectura.md. El `@Composable` sólo lee
 /// este estado (propiedades de sólo lectura desde afuera) y reporta
@@ -123,9 +98,18 @@ class ActivosViewModel(
     // por defecto es el real que usa la app.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
-    var texto by mutableStateOf("")
-        private set
-    var modo by mutableStateOf(ModoBusqueda.ENTRADA)
+    private var textoEstado by mutableStateOf("")
+
+    /// Lo escrito en el buscador. Al cambiar, el núcleo decide qué se busca
+    /// ([busqueda]): un solo campo para personas y gafetes (2026-10-28: antes
+    /// eran dos pestañas, "Persona" y "Gafete").
+    var texto: String
+        get() = textoEstado
+        private set(valor) {
+            textoEstado = valor
+            busqueda = interpretarBusquedaActivos(valor)
+        }
+    var busqueda by mutableStateOf<BusquedaActivos>(BusquedaActivos.Vacia)
         private set
     var activos by mutableStateOf<List<FilaActiva>>(emptyList())
         private set
@@ -200,7 +184,7 @@ class ActivosViewModel(
     }
 
     fun cambiarTexto(nuevo: String) {
-        texto = if (modo == ModoBusqueda.SALIDA_GAFETE) sanearGafetesTexto(nuevo) else nuevo
+        texto = nuevo
         // Mismo criterio que `cambiarTexto` en SalidaModal.tsx: escribir de
         // nuevo abandona el mensaje de la confirmación anterior.
         mensaje = null
@@ -225,7 +209,6 @@ class ActivosViewModel(
     /// cédula que quedó escrita dejaba la lista sin recargar (2026-10-27).
     fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado): Job {
         val valor = documento.textoBusqueda ?: documento.numeroDocumento
-        modo = ModoBusqueda.ENTRADA
         mensaje = null
         trabajoBusqueda?.cancel()
         val inicioBusqueda = System.nanoTime()
@@ -252,24 +235,14 @@ class ActivosViewModel(
         return trabajoBusqueda!!
     }
 
-    fun cambiarModo(nuevo: ModoBusqueda) {
-        modo = nuevo
-        // Al cambiar de modo el texto que había queda escrito con otro
-        // sentido (un nombre no significa nada en modo Gafete) — se limpia
-        // para no arrastrar una búsqueda que ya no aplica.
-        texto = ""
-        mensaje = null
-        buscar()
-    }
-
     fun refrescar() {
         buscar()
-        if (modo != ModoBusqueda.ENTRADA || texto.isNotBlank()) recargarActivos()
+        if (busqueda != BusquedaActivos.Vacia) recargarActivos()
     }
 
     /// Relee la lista de adentro y [totalAdentro] cuando la búsqueda en curso
-    /// no la trae (en modo Ingreso con el campo vacío ya la lee [buscar]). En
-    /// modo Ingreso la lista se ve también con algo escrito en el buscador:
+    /// no la trae (con el campo vacío ya la lee [buscar]). La lista se ve
+    /// también con algo escrito en el buscador:
     /// antes acá sólo se recontaba el globito y, con una cédula escaneada
     /// pero sin ingresar, quien salía seguía en la lista (pruebas reales,
     /// 2026-10-27).
@@ -314,26 +287,21 @@ class ActivosViewModel(
         trabajoBusqueda = viewModelScope.launch {
             try {
                 if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
-                when (modo) {
-                    ModoBusqueda.ENTRADA -> {
-                        if (texto.isBlank()) {
-                            activos = leerActivos()
-                            totalAdentro = activos.size
-                        } else {
-                            resultadosBusqueda =
-                                withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
-                        }
+                when (val actual = busqueda) {
+                    BusquedaActivos.Vacia -> {
+                        activos = leerActivos()
+                        totalAdentro = activos.size
                     }
-                    ModoBusqueda.SALIDA_GAFETE -> {
-                        val numeros = gafetesDeTexto(texto)
-                        coincidenciasGafete = if (numeros.isEmpty()) {
-                            emptyList()
-                        } else {
-                            // Una sola lectura de la caché remota para todos
-                            // los números escritos, no una por gafete.
-                            val remotos = remotosSeguro()
-                            numeros.map { numero -> CoincidenciaGafete(numero, filaPorGafete(numero, remotos)) }
-                        }
+                    BusquedaActivos.Personas -> {
+                        resultadosBusqueda =
+                            withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
+                    }
+                    is BusquedaActivos.Gafetes -> {
+                        // Una sola lectura de la caché remota para todos los
+                        // números escritos, no una por gafete.
+                        val remotos = remotosSeguro()
+                        coincidenciasGafete =
+                            actual.numeros.map { numero -> CoincidenciaGafete(numero, filaPorGafete(numero, remotos)) }
                     }
                 }
                 error = null
@@ -605,7 +573,6 @@ class ActivosViewModel(
             mensajeEsError = true
             return
         }
-        modo = ModoBusqueda.SALIDA_GAFETE
         texto = numero.toString()
         mensaje = null
         trabajoBusqueda?.cancel()
