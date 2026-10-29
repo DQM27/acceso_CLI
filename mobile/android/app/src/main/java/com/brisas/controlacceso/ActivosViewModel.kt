@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.ContratistaResumen
+import uniffi.control_acceso_mobile.GafeteSinPortador
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.MedioIngreso
@@ -49,8 +50,13 @@ sealed class SeleccionIngreso {
 /// también tiene que poder cerrarse por número desde acá — la fila de
 /// `CoincidenciaGafete` es lo que se pinta en el modo Salida: gafete antes
 /// de confirmar, mismo rol que la tabla de vista previa de
-/// `SalidaModal.tsx` en desktop.
-data class CoincidenciaGafete(val numero: Int, val fila: FilaActiva?)
+/// `SalidaModal.tsx` en desktop. Sin `fila`, [sinPortador] dice por qué
+/// (libre, no existe, perdido o de baja), según el catálogo del núcleo.
+data class CoincidenciaGafete(
+    val numero: Int,
+    val fila: FilaActiva?,
+    val sinPortador: GafeteSinPortador? = null,
+)
 
 /// Fila local (este dispositivo) o remota (abierta por el otro dispositivo
 /// del mismo sitio, cacheada en `ingresos_remotos` -- nunca vive en el
@@ -300,8 +306,10 @@ class ActivosViewModel(
                         // Una sola lectura de la caché remota para todos los
                         // números escritos, no una por gafete.
                         val remotos = remotosSeguro()
-                        coincidenciasGafete =
-                            actual.numeros.map { numero -> CoincidenciaGafete(numero, filaPorGafete(numero, remotos)) }
+                        coincidenciasGafete = actual.numeros.map { numero ->
+                            val fila = filaPorGafete(numero, remotos)
+                            CoincidenciaGafete(numero, fila, if (fila == null) gafeteSinPortador(numero) else null)
+                        }
                     }
                 }
                 error = null
@@ -325,6 +333,14 @@ class ActivosViewModel(
         if (local != null) return FilaActiva.Local(local)
         return remotos.firstOrNull { it.gafeteNumero == numero.toLong() }?.let { FilaActiva.Remota(it) }
     }
+
+    /// Si falla la consulta, la fila queda con el "nadie adentro" de siempre.
+    private suspend fun gafeteSinPortador(numero: Int): GafeteSinPortador? =
+        try {
+            withContext(dispatcherIO) { medirNucleo("gafeteSinPortador") { nucleo.gafeteSinPortador(numero) } }
+        } catch (_: NucleoException) {
+            null
+        }
 
     /// Local: cierra en `registro_ingresos` (este dispositivo). Remota:
     /// cierra directo contra la nube (`Nucleo.cerrarIngresoRemoto`) -- nunca

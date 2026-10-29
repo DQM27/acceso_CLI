@@ -479,6 +479,44 @@ fn listar_activos_por_gafete_es_exacto_sin_ruido_de_cedula() {
 }
 
 #[test]
+fn gafete_sin_portador_distingue_libre_inexistente_y_de_otro_tipo() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            // Un gafete PERDIDO siempre tiene a quién se le perdió (CHECK
+            // de la tabla).
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+             INSERT INTO contratistas (
+                 cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+             ) VALUES ('111111111', 'Perdio Gafete', 1, 'SWAT', 0, 1);
+             INSERT INTO gafetes (numero, tipo, estado) VALUES
+                 (11, 'CONTRATISTA', 'DISPONIBLE'),
+                 (13, 'CONTRATISTA', 'DE_BAJA'),
+                 (40, 'VISITA', 'DISPONIBLE');
+             INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id)
+                 VALUES (12, 'CONTRATISTA', 'PERDIDO', 1);",
+        )
+        .unwrap();
+    drop(conexion);
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+
+    let situacion = |numero| nucleo.gafete_sin_portador(numero).unwrap().situacion;
+    assert_eq!(situacion(11), SituacionGafete::Libre);
+    assert_eq!(situacion(12), SituacionGafete::Perdido);
+    assert_eq!(situacion(13), SituacionGafete::DeBaja);
+    assert_eq!(situacion(130), SituacionGafete::NoExiste);
+    // Un gafete de visita no es uno de contratista.
+    assert_eq!(situacion(40), SituacionGafete::NoExiste);
+    assert_eq!(
+        nucleo.gafete_sin_portador(130).unwrap().mensaje,
+        "Gafete 130 · no existe"
+    );
+}
+
+#[test]
 fn listar_empresas_y_crear_contratista() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();

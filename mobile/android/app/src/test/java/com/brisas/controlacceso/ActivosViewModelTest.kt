@@ -20,6 +20,7 @@ import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.SituacionGafete
 
 /// `ActivosViewModel` sí usa `viewModelScope.launch` + `withContext`, así
 /// que estos tests corren con un `StandardTestDispatcher` compartido entre
@@ -384,7 +385,11 @@ class ActivosViewModelTest {
         viewModel.cambiarTexto("7")
         advanceUntilIdle()
         assertEquals(BusquedaActivos.Gafetes(listOf(7)), viewModel.busqueda)
-        assertEquals(listOf(CoincidenciaGafete(7, null)), viewModel.coincidenciasGafete)
+        // Sin gafetes en el catálogo de prueba: el 7 no existe.
+        val (siete) = viewModel.coincidenciasGafete
+        assertNull(siete.fila)
+        assertEquals(SituacionGafete.NO_EXISTE, siete.sinPortador?.situacion)
+        assertEquals("Gafete 7 · no existe", siete.sinPortador?.mensaje)
 
         viewModel.cambiarTexto("1179")
         advanceUntilIdle()

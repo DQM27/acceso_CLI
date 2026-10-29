@@ -38,7 +38,9 @@ pub use avisos::{
 };
 
 mod busqueda_activos;
-pub use busqueda_activos::{BusquedaActivos, interpretar_busqueda_activos};
+pub use busqueda_activos::{
+    BusquedaActivos, GafeteSinPortador, SituacionGafete, interpretar_busqueda_activos,
+};
 
 mod manual;
 pub use manual::{

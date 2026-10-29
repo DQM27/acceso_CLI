@@ -793,6 +793,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_sin_portador(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
@@ -1016,6 +1018,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir_cifrado(`rutaBaseDatos`: RustBuffer.ByValue,`clave`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_sin_portador(`ptr`: Long,`numero`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_admite_personal_ruta_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1521,6 +1525,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva() and 0xFFFF) != 18904) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_sin_portador() and 0xFFFF) != 500) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 65365) {
@@ -3652,6 +3659,12 @@ public object FfiConverterTypeEstabilizadorDocumento: FfiConverter<Estabilizador
 public interface NucleoInterface {
     
     /**
+     * Para un gafete que nadie adentro tiene puesto: si existe en el
+     * catálogo de contratistas y en qué estado. Sólo local, sin red.
+     */
+    fun `gafeteSinPortador`(`numero`: kotlin.Int): GafeteSinPortador
+    
+    /**
      * Si el formulario muestra la casilla "personal de ruta" para este
      * tipo -- `domain::contratista::admite_personal_ruta`, la misma regla
      * que después aplica `crear_contratista`.
@@ -4356,6 +4369,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
             UniffiLib.uniffi_control_acceso_mobile_fn_clone_nucleo(handle, status)
         }
     }
+
+    
+    /**
+     * Para un gafete que nadie adentro tiene puesto: si existe en el
+     * catálogo de contratistas y en qué estado. Sólo local, sin red.
+     */
+    @Throws(NucleoException::class)override fun `gafeteSinPortador`(`numero`: kotlin.Int): GafeteSinPortador {
+            return FfiConverterTypeGafeteSinPortador.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_sin_portador(
+        it,
+        
+        FfiConverterInt.lower(`numero`),_status)
+}
+    }
+    )
+    }
+    
 
     
     /**
@@ -7525,6 +7557,47 @@ public object FfiConverterTypeFilaManual: FfiConverterRustBuffer<FilaManual> {
 
     override fun write(value: FilaManual, buf: ByteBuffer) {
             FfiConverterSequenceTypeCeldaManual.write(value.`celdas`, buf)
+    }
+}
+
+
+
+data class GafeteSinPortador (
+    var `situacion`: SituacionGafete
+    , 
+    /**
+     * "Gafete 130 · no existe", listo para mostrar.
+     */
+    var `mensaje`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGafeteSinPortador: FfiConverterRustBuffer<GafeteSinPortador> {
+    override fun read(buf: ByteBuffer): GafeteSinPortador {
+        return GafeteSinPortador(
+            FfiConverterTypeSituacionGafete.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: GafeteSinPortador) = (
+            FfiConverterTypeSituacionGafete.allocationSize(value.`situacion`) +
+            FfiConverterString.allocationSize(value.`mensaje`)
+    )
+
+    override fun write(value: GafeteSinPortador, buf: ByteBuffer) {
+            FfiConverterTypeSituacionGafete.write(value.`situacion`, buf)
+            FfiConverterString.write(value.`mensaje`, buf)
     }
 }
 
@@ -11425,6 +11498,53 @@ public object FfiConverterTypeRolUsuario: FfiConverterRustBuffer<RolUsuario> {
     override fun allocationSize(value: RolUsuario) = 4UL
 
     override fun write(value: RolUsuario, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Por qué nadie adentro tiene un gafete escrito: "nadie adentro" a secas
+ * no distinguía un gafete libre de uno que ni existe (pedido del usuario
+ * 2026-10-28).
+ */
+
+enum class SituacionGafete {
+    
+    /**
+     * No está en el catálogo de gafetes de contratista: número mal escrito.
+     */
+    NO_EXISTE,
+    /**
+     * Existe y está disponible: nadie lo tiene puesto.
+     */
+    LIBRE,
+    PERDIDO,
+    DE_BAJA;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSituacionGafete: FfiConverterRustBuffer<SituacionGafete> {
+    override fun read(buf: ByteBuffer) = try {
+        SituacionGafete.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: SituacionGafete) = 4UL
+
+    override fun write(value: SituacionGafete, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }

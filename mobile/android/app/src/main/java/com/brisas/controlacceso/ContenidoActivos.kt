@@ -35,6 +35,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
+import uniffi.control_acceso_mobile.GafeteSinPortador
+import uniffi.control_acceso_mobile.SituacionGafete
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
 // contenido por modo y la ficha de salida (sacado de `PantallaActivos.kt`,
@@ -170,7 +172,7 @@ internal fun ResultadosGafete(
                     if (fila != null) {
                         FilaActivo(fila, onClick = { onElegir(fila) }, tinte = tinte)
                     } else {
-                        FilaGafeteSinIngreso(coincidencia.numero)
+                        FilaGafeteSinIngreso(coincidencia.numero, coincidencia.sinPortador)
                     }
                 }
             }
@@ -187,28 +189,25 @@ internal fun ResultadosGafete(
     }
 }
 
-/// Un gafete escrito que nadie adentro tiene puesto.
+/// Un gafete escrito que nadie adentro tiene puesto, con el porqué que da
+/// el núcleo ([GafeteSinPortador]): libre va en gris, porque no es un
+/// error; no existe, perdido o de baja, en rojo.
 @Composable
-private fun FilaGafeteSinIngreso(numero: Int) {
+private fun FilaGafeteSinIngreso(numero: Int, sinPortador: GafeteSinPortador?) {
+    val libre = sinPortador?.situacion == SituacionGafete.LIBRE
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.errorContainer)
+            .background(if (libre) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "Gafete $numero",
+            sinPortador?.mensaje ?: "Gafete $numero · nadie adentro",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "· nadie adentro",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
+            color = if (libre) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
         )
     }
 }
