@@ -7,6 +7,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -37,10 +39,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /// Hacia dónde va la persona (pedido del usuario 2026-10-27): el ingreso
 /// avanza hacia la derecha, como se lee; la salida retrocede hacia la
@@ -81,6 +85,29 @@ internal fun rememberHojaArriba(estado: SheetState): Boolean {
     }
     return arriba
 }
+
+/// `true` cuando ya no hay teclado a la vista: recién entonces se muestra una
+/// hoja que sube desde abajo. Al elegir desde el buscador el teclado sigue
+/// bajando, y la hoja (su propia ventana) se acomodaba a la pantalla achicada
+/// y después se corría hacia abajo junto con el teclado (pruebas del usuario
+/// 2026-10-29). Lo pide cerrar y espera a que termine, con tope: si el
+/// teclado no informa su alto, la hoja igual aparece.
+@Composable
+internal fun rememberTecladoCerrado(): Boolean {
+    val ime = WindowInsets.ime
+    val densidad = LocalDensity.current
+    val teclado = LocalSoftwareKeyboardController.current
+    var cerrado by remember { mutableStateOf(ime.getBottom(densidad) == 0) }
+    LaunchedEffect(Unit) {
+        if (cerrado) return@LaunchedEffect
+        teclado?.hide()
+        withTimeoutOrNull(MS_ESPERA_TECLADO) { snapshotFlow { ime.getBottom(densidad) }.first { it == 0 } }
+        cerrado = true
+    }
+    return cerrado
+}
+
+private const val MS_ESPERA_TECLADO = 600L
 
 /// "Persona con ingreso activo" (se escaneó a alguien que ya estaba adentro):
 /// una señal de advertencia de tránsito, triángulo amarillo con borde y "!"

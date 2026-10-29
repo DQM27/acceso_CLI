@@ -314,6 +314,8 @@ internal fun DialogoRegistrarSalida(
     accion: String = "Registrar salida",
     aviso: String? = null,
 ) {
+    // Con el teclado del buscador todavía bajando, la hoja espera.
+    if (!rememberTecladoCerrado()) return
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
@@ -325,9 +327,7 @@ internal fun DialogoRegistrarSalida(
         onDismissRequest = onDismiss,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
-        // Sin el lugar del teclado: no tiene campos, y al elegir desde el
-        // buscador el teclado todavía está bajando; con él, la hoja subía
-        // hasta media pantalla y se encogía (pruebas del usuario 2026-10-29).
+        // Sin el lugar del teclado: no tiene campos.
         contentWindowInsets = { WindowInsets.navigationBars },
     ) {
         Column(
