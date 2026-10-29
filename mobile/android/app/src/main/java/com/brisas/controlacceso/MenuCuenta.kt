@@ -37,8 +37,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,12 +72,13 @@ import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// Menú de la cuenta de quien tiene la sesión, mismo lugar y misma marca que el
-/// menú de usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`):
-/// la inicial dentro de un engranaje ([EngranajeConInicial]) arriba a la
-/// derecha. Queda arriba y no en la barra de secciones a propósito: abajo es lo
-/// operativo y rápido, y ahí se tocaría por error (decisión del usuario
-/// 2026-10-21).
+/// Menú de la cuenta de quien tiene la sesión, mismo lugar que el menú de
+/// usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`): la
+/// inicial arriba a la derecha, en el mismo cuadradito que la campanita (el
+/// engranaje del escritorio desentonaba con los otros íconos, pedido del
+/// usuario 2026-10-29). Queda arriba y no en la barra de secciones a
+/// propósito: abajo es lo operativo y rápido, y ahí se tocaría por error
+/// (decisión del usuario 2026-10-21).
 ///
 /// Al tocarlo brota un panel chico, a la manera de los menús de iOS 26
 /// (rediseño 2026-10-21): el nombre, el tema (sol/luna), la Ayuda, la
@@ -87,7 +86,7 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// grueso para no tocarlo por error. Es un panel propio y no un
 /// `DropdownMenu`: el de Material no deja cambiar cómo aparece.
 ///
-/// Si hay una versión nueva, un puntito late unos segundos sobre el engranaje y
+/// Si hay una versión nueva, un puntito late unos segundos sobre la inicial y
 /// luego queda fijo; el ítem de actualización cambia de "Buscar" a "Actualizar".
 ///
 /// Sólo UI: el tema lo guarda [GestorTema], el estado de la actualización es de
@@ -105,8 +104,6 @@ fun MenuCuenta(
     // Mantiene el panel en pantalla mientras se encoge al cerrarse.
     val visible = remember { MutableTransitionState(false) }
     visible.targetState = abierto
-    val giro = remember { Animatable(0f) }
-    val alcance = rememberCoroutineScope()
     val estadoActualizacion by actualizador.estado.collectAsState()
     val busqueda by actualizador.busqueda.collectAsState()
     val hayPendiente = estadoActualizacion is EstadoActualizacion.ConNovedad
@@ -121,7 +118,7 @@ fun MenuCuenta(
 
     // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
     // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
-    // tarjeta flotante y el puntito en el engranaje.
+    // tarjeta flotante y el puntito en la inicial.
     val avisosBreves = LocalAvisosBreves.current
     LaunchedEffect(busqueda) {
         val aviso = avisoDeBusqueda(busqueda) ?: return@LaunchedEffect
@@ -136,22 +133,16 @@ fun MenuCuenta(
     }
 
     Box {
-        BotonIconoCuadradoBrisas(onClick = {
-            abierto = !abierto
-            // La rueda da media vuelta con rebote al tocarla (pedido del
-            // usuario 2026-10-21); cada toque suma otra media vuelta.
-            alcance.launch { giro.animateTo(giro.targetValue + 180f, ResorteRebote) }
-        }) {
+        BotonIconoCuadradoBrisas(onClick = { abierto = !abierto }) {
             // Mientras busca, el círculo girando dice que algo está pasando.
             if (busqueda == EstadoBusqueda.BUSCANDO) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                EngranajeConInicial(
+                Text(
                     inicialDe(sesion.nombre),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    tamano = 28.dp,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics { contentDescription = "Cuenta de ${sesion.nombre}" },
-                    giro = { giro.value },
                 )
             }
         }
@@ -238,7 +229,20 @@ private fun PanelCuenta(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    EngranajeConInicial(inicialDe(sesion.nombre), color = MaterialTheme.colorScheme.primary, tamano = 34.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            inicialDe(sesion.nombre),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
                     Text(
                         sesion.nombre,
@@ -454,7 +458,7 @@ private val ResorteMenu = spring<Float>(
     stiffness = Spring.StiffnessMedium,
 )
 
-/// Puntito sobre el engranaje: late unas veces al aparecer (llama la atención
+/// Puntito sobre la inicial: late unas veces al aparecer (llama la atención
 /// una vez) y queda fijo. Si el sistema tiene las animaciones apagadas, las
 /// animaciones de Compose terminan al instante y sólo queda el punto.
 @Composable

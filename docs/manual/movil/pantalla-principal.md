@@ -19,7 +19,7 @@ Cualquier usuario con sesión abierta.
 - **Persona con un +**: [Nuevo contratista](nuevo-contratista.md).
 - **Campanita**: [avisos de la administración](avisos-de-la-administracion.md).
   Un globito dice cuántos hay sin leer.
-- **Engranaje con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md).
+- **Cuadrito con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md).
 
 ## Abajo, al alcance del pulgar
 

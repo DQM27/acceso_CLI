@@ -540,8 +540,9 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
  * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
  * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
- * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
- * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+ * si no, el scroll dejaría un hueco sin nada que desvanecer. Sólo en las
+ * pantallas ocultas (Rutas, Visitas): las listas de las secciones ya no lo
+ * usan desde que la búsqueda bajó (pedido del usuario 2026-10-29). */
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {

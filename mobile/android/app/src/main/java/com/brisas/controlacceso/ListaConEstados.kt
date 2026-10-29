@@ -94,15 +94,13 @@ internal fun <T> ListaConEstados(
             label = "estadoListaActivos",
         ) { mostrado ->
             when (mostrado) {
-                EstadoLista.LISTA -> ListaConDesvanecido {
-                    LazyColumn(
-                        contentPadding = contentPadding,
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        items(filas, key = { fila -> clave(fila) }) { fila ->
-                            Box(modifier = Modifier.animateItem()) {
-                                contenidoFila(fila)
-                            }
+                EstadoLista.LISTA -> LazyColumn(
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    items(filas, key = { fila -> clave(fila) }) { fila ->
+                        Box(modifier = Modifier.animateItem()) {
+                            contenidoFila(fila)
                         }
                     }
                 }
