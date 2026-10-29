@@ -23,7 +23,8 @@ Cualquier usuario con sesión abierta. Hace falta internet.
 2. Toque **Actualizar** en la tarjeta (o **Actualizar a X** en el menú de
    la cuenta).
 3. Verá **"Descargando X… N %"** y luego **"Instalando X. Vuelva a abrir
-   Lattis."**
+   Lattis."** Si actualizó desde el menú, el menú queda abierto con
+   **"Descargando N %"** y una barra que avanza.
 4. Si Android lo pide, confirme la instalación.
 5. Abra Lattis de nuevo e inicie sesión.
 
@@ -37,9 +38,11 @@ mientras tanto puede seguir registrando.
 
 ## Buscar a mano
 
-En el menú de la cuenta, toque **Buscar actualizaciones**. La respuesta
-sale como mensaje corto: **"Está al día"** o **"No se pudo revisar"**
-(sin internet). Si hay versión nueva, aparece la tarjeta.
+En el menú de la cuenta, toque **Buscar actualizaciones**. El menú queda
+abierto y dice **"Buscando…"** con una ruedita girando. La respuesta sale
+como mensaje corto: **"Está al día"** o **"No se pudo revisar"** (sin
+internet). Si hay versión nueva, el ítem pasa a **"Actualizar a X"** y
+aparece la tarjeta.
 
 ## Mensajes que pueden aparecer
 

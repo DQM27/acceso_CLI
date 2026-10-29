@@ -26,7 +26,9 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -118,8 +120,9 @@ fun MenuCuenta(
         actualizador.olvidarBusqueda()
     }
 
-    // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
-    // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
+    // La respuesta de "Buscar actualizaciones" sale como un aviso corto (el
+    // menú sigue abierto, con el ítem de nuevo en "Buscar"); si hay versión
+    // nueva no hay aviso: el ítem pasa a "Actualizar a…", y aparecen la
     // tarjeta flotante y el puntito en la inicial.
     val avisosBreves = LocalAvisosBreves.current
     LaunchedEffect(busqueda) {
@@ -180,17 +183,13 @@ fun MenuCuenta(
                             onAyuda()
                         },
                         actualizacion =if (actualizador.activo) opcionActualizacion(estadoActualizacion, busqueda) else null,
+                        // El menú queda abierto: se ve la ruedita mientras busca
+                        // y la barra mientras descarga (pedido del usuario
+                        // 2026-10-29; antes se cerraba y no se veía nada).
                         onActualizacion = { accion ->
                             when (accion) {
-                                // Cierra el menú: la respuesta llega como aviso corto.
-                                AccionActualizacion.BUSCAR -> {
-                                    cerrar()
-                                    actualizador.buscarAhora()
-                                }
-                                AccionActualizacion.ACTUALIZAR -> {
-                                    cerrar()
-                                    actualizador.actualizar()
-                                }
+                                AccionActualizacion.BUSCAR -> actualizador.buscarAhora()
+                                AccionActualizacion.ACTUALIZAR -> actualizador.actualizar()
                                 AccionActualizacion.NINGUNA -> Unit
                             }
                         },
@@ -295,12 +294,18 @@ private fun PanelCuenta(
                         resaltada = actualizacion.resaltada,
                         enabled = actualizacion.accion != AccionActualizacion.NINGUNA,
                         onClick = { onActualizacion(actualizacion.accion) },
+                        progreso = actualizacion.progreso,
                     ) {
-                        Icon(
-                            if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = if (actualizacion.resaltada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        val tinte = if (actualizacion.resaltada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        if (actualizacion.trabajando) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tinte)
+                        } else {
+                            Icon(
+                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = tinte,
+                            )
+                        }
                     }
                 } else {
                     // Builds de prueba: sin actualizador, sólo la versión.
@@ -335,6 +340,8 @@ private fun OpcionMenu(
     color: Color = MaterialTheme.colorScheme.onSurface,
     resaltada: Boolean = false,
     enabled: Boolean = true,
+    // De 0 a 1: una barra bajo el texto (la descarga de una actualización).
+    progreso: Float? = null,
     icono: @Composable () -> Unit,
 ) {
     Row(
@@ -357,6 +364,14 @@ private fun OpcionMenu(
             )
             if (detalle != null) {
                 Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (progreso != null) {
+                // Avanza suave entre un porcentaje y el siguiente.
+                val avance by animateFloatAsState(progreso, label = "progresoActualizacion")
+                LinearProgressIndicator(
+                    progress = { avance },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(2.dp)),
+                )
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -515,14 +530,24 @@ internal data class OpcionActualizacion(
     val texto: String,
     val accion: AccionActualizacion,
     val resaltada: Boolean,
+    // Trabajando (buscando, descargando, instalando): la ruedita en vez del
+    // ícono. Con [progreso] (0 a 1, al descargar), además, la barra.
+    val trabajando: Boolean = false,
+    val progreso: Float? = null,
 )
 
 internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBusqueda): OpcionActualizacion =
     when (estado) {
         is EstadoActualizacion.Descargando ->
-            OpcionActualizacion("Descargando ${estado.porcentaje} %", AccionActualizacion.NINGUNA, resaltada = true)
+            OpcionActualizacion(
+                "Descargando ${estado.porcentaje} %",
+                AccionActualizacion.NINGUNA,
+                resaltada = true,
+                trabajando = true,
+                progreso = estado.porcentaje / 100f,
+            )
         is EstadoActualizacion.Instalando ->
-            OpcionActualizacion("Instalando…", AccionActualizacion.NINGUNA, resaltada = true)
+            OpcionActualizacion("Instalando…", AccionActualizacion.NINGUNA, resaltada = true, trabajando = true)
         is EstadoActualizacion.Fallo ->
             OpcionActualizacion(
                 "Reintentar ${estado.novedad.manifiesto.versionName}",
@@ -541,7 +566,7 @@ internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBu
         // (ver [avisoDeBusqueda]); el ítem sólo vuelve a ofrecer buscar.
         EstadoActualizacion.SinAviso ->
             if (busqueda == EstadoBusqueda.BUSCANDO) {
-                OpcionActualizacion("Buscando…", AccionActualizacion.NINGUNA, resaltada = false)
+                OpcionActualizacion("Buscando…", AccionActualizacion.NINGUNA, resaltada = false, trabajando = true)
             } else {
                 OpcionActualizacion("Buscar actualizaciones", AccionActualizacion.BUSCAR, resaltada = false)
             }
