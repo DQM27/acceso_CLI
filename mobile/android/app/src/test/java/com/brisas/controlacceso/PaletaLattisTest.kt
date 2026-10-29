@@ -48,6 +48,22 @@ class PaletaLattisTest {
     }
 
     @Test
+    fun laTarjetaDeAdentroSeLeeYSeDistingue() {
+        for ((tema, p) in paletas) {
+            exigir("$tema texto adentro", p.texto, p.adentroSuave, 4.5)
+            exigir("$tema secundario adentro", p.textoSecundario, p.adentroSuave, 4.5)
+            exigir("$tema error adentro", p.error, p.adentroSuave, 4.5)
+            exigir("$tema palabra ADENTRO", p.textoAdentro, p.adentroSuave, 4.5)
+            // La franja, contra el fondo de la propia tarjeta (elemento
+            // gráfico: 3:1).
+            exigir("$tema franja adentro", p.franjaAdentro, p.adentroSuave, 3.0)
+        }
+        // Que no se confunda con una tarjeta normal.
+        assertTrue(PaletaDia.adentroSuave != PaletaDia.tarjeta)
+        assertTrue(PaletaNoche.adentroSuave != PaletaNoche.tarjeta)
+    }
+
+    @Test
     fun enOscuroLaTarjetaSeSeparaDelFondo() {
         // Con Tokyo Night daba 1,05:1 y la lista parecía una sola mancha.
         exigir("tarjeta contra fondo", PaletaNoche.tarjeta, PaletaNoche.fondo, 1.15)

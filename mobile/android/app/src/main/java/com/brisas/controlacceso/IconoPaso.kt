@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -102,36 +103,50 @@ internal fun SenalAdvertencia(arriba: Boolean, modifier: Modifier = Modifier) {
                 scaleY = escala.value
             },
     ) {
-        val ancho = size.width
-        val alto = size.height
-        // Margen para que el trazo que redondea las puntas no se corte.
-        val margen = ancho * 0.07f
-        val triangulo = Path().apply {
-            moveTo(ancho / 2, margen)
-            lineTo(ancho - margen, alto - margen)
-            lineTo(margen, alto - margen)
-            close()
-        }
-        val puntas = Stroke(width = ancho * 0.1f, join = StrokeJoin.Round)
-        // Borde: el triángulo entero en negro; adentro, el mismo más chico
-        // (escalado desde su centro) en amarillo.
-        drawPath(triangulo, NegroSenal)
-        drawPath(triangulo, NegroSenal, style = puntas)
-        val centro = Offset(ancho / 2, (margen + 2 * (alto - margen)) / 3)
-        scale(0.76f, pivot = centro) {
-            drawPath(triangulo, AmarilloSenal)
-            drawPath(triangulo, AmarilloSenal, style = puntas)
-        }
-        // El "!": un trazo redondeado y un punto.
-        drawLine(
-            NegroSenal,
-            start = Offset(ancho / 2, alto * 0.38f),
-            end = Offset(ancho / 2, alto * 0.62f),
-            strokeWidth = ancho * 0.085f,
-            cap = StrokeCap.Round,
-        )
-        drawCircle(NegroSenal, radius = ancho * 0.05f, center = Offset(ancho / 2, alto * 0.76f))
+        dibujarSenal()
     }
+}
+
+/// La misma señal, chica y quieta, para marcar en una lista a quien ya está
+/// adentro: en una lista que se desplaza, el rebote se repetiría con cada fila.
+@Composable
+internal fun SenalAdentro(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(width = 26.dp, height = 23.dp)) {
+        dibujarSenal()
+    }
+}
+
+/// Triángulo amarillo con borde y "!" negros, del tamaño del lienzo.
+private fun DrawScope.dibujarSenal() {
+    val ancho = size.width
+    val alto = size.height
+    // Margen para que el trazo que redondea las puntas no se corte.
+    val margen = ancho * 0.07f
+    val triangulo = Path().apply {
+        moveTo(ancho / 2, margen)
+        lineTo(ancho - margen, alto - margen)
+        lineTo(margen, alto - margen)
+        close()
+    }
+    val puntas = Stroke(width = ancho * 0.1f, join = StrokeJoin.Round)
+    // Borde: el triángulo entero en negro; adentro, el mismo más chico
+    // (escalado desde su centro) en amarillo.
+    drawPath(triangulo, NegroSenal)
+    drawPath(triangulo, NegroSenal, style = puntas)
+    val centro = Offset(ancho / 2, (margen + 2 * (alto - margen)) / 3)
+    scale(0.76f, pivot = centro) {
+        drawPath(triangulo, AmarilloSenal)
+        drawPath(triangulo, AmarilloSenal, style = puntas)
+    }
+    // El "!": un trazo redondeado y un punto.
+    drawLine(
+        NegroSenal,
+        start = Offset(ancho / 2, alto * 0.38f),
+        end = Offset(ancho / 2, alto * 0.62f),
+        strokeWidth = ancho * 0.085f,
+        cap = StrokeCap.Round,
+    )
+    drawCircle(NegroSenal, radius = ancho * 0.05f, center = Offset(ancho / 2, alto * 0.76f))
 }
 
 /// El ícono redondo de las hojas de ingreso y de salida. La flecha entra

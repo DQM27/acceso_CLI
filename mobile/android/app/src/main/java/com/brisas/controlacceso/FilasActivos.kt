@@ -16,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -197,46 +199,79 @@ internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
     )
 }
 
+/// En la búsqueda salen juntos quienes pueden entrar y quienes ya están
+/// adentro: éstos van en ámbar, con franja y la señal de "ADENTRO", para
+/// distinguirlos sin leer (antes era sólo una línea de texto al final).
 @Composable
 internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
-    Column(
+    val adentro = contratista.tieneIngresoActivo
+    val paleta = paletaActual
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(if (adentro) paleta.adentroSuave else MaterialTheme.colorScheme.surface)
+            .then(
+                if (adentro) {
+                    Modifier.drawBehind {
+                        drawRect(paleta.franjaAdentro, size = Size(ANCHO_FRANJA_ADENTRO.toPx(), size.height))
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .clickable(onClick = onClick)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            textoResaltado(contratista.nombre),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            textoResaltado("${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}"),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
-        // su reloj: sólo se muestra, en negrita para que se lea con fuerza.
-        contratista.avisoAcceso?.let { aviso ->
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                aviso,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.Bold,
+                textoResaltado(contratista.nombre),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
             )
+            Text(
+                textoResaltado("${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
+            // su reloj: sólo se muestra, en negrita para que se lea con fuerza.
+            contratista.avisoAcceso?.let { aviso ->
+                Text(
+                    aviso,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (adentro) {
+                Text(
+                    "Toque para registrar su salida",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        if (contratista.tieneIngresoActivo) {
-            Text(
-                "Adentro · toque para registrar su salida",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        if (adentro) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                SenalAdentro()
+                Text(
+                    "ADENTRO",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = paleta.textoAdentro,
+                )
+            }
         }
     }
 }
+
+private val ANCHO_FRANJA_ADENTRO = 4.dp
 
 private fun etiquetaTipoIngreso(tipo: TipoIngreso): String =
     when (tipo) {

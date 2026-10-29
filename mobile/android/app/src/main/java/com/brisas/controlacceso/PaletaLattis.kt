@@ -72,6 +72,12 @@ internal class Paleta(
     /// Ámbar de íconos y puntos (sin red).
     val advertencia: Color,
     val textoAdvertencia: Color,
+    /// La tarjeta de quien ya está adentro en la búsqueda de contratistas:
+    /// fondo ámbar suave, franja a la izquierda y la palabra "ADENTRO". Ámbar
+    /// como la señal de [AmarilloSenal], que ya dice eso mismo.
+    val adentroSuave: Color,
+    val franjaAdentro: Color,
+    val textoAdentro: Color,
     val contratistas: TonoSeccion,
     val kof: TonoSeccion,
     val proveedores: TonoSeccion,
@@ -108,6 +114,10 @@ internal val PaletaDia = Paleta(
     advertencia = Color(0xFFE0A100),
     // #8C5F00 daba 4,3:1 sobre la tarjeta.
     textoAdvertencia = Color(0xFF7F5600),
+    adentroSuave = Color(0xFFFFF1C2),
+    // #E0A100 daba 2:1 sobre el crema.
+    franjaAdentro = Color(0xFFA87400),
+    textoAdentro = Color(0xFF7F5600),
     contratistas = TonoSeccion(acento = Color(0xFF00806A), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFC4161C), relleno = Color(0xFFC4161C)),
     proveedores = TonoSeccion(acento = Color(0xFFB85C00), relleno = Color(0xFFB85C00)),
@@ -143,6 +153,9 @@ internal val PaletaNoche = Paleta(
     rellenoError = Color(0xFFC53030),
     advertencia = Color(0xFFFBBF24),
     textoAdvertencia = Color(0xFFFBBF24),
+    adentroSuave = Color(0xFF2E2610),
+    franjaAdentro = Color(0xFFFBBF24),
+    textoAdentro = Color(0xFFFBBF24),
     contratistas = TonoSeccion(acento = Color(0xFF5CC8B2), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFFF6B5E), relleno = Color(0xFFD0312D)),
     proveedores = TonoSeccion(acento = Color(0xFFFFB547), relleno = Color(0xFFB85C00)),
