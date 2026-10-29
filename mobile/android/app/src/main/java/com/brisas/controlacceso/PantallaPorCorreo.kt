@@ -209,7 +209,7 @@ fun PantallaPorCorreo(
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
                     // Se busca con la píldora de abajo, como en todas las pestañas.
-                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                         viewModel.error?.let { mensaje ->
                             FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                         }

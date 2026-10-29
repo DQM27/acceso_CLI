@@ -182,7 +182,10 @@ fun PantallaActivos(
 
             // Arriba sólo los mensajes y la lista: se busca con la píldora de
             // abajo, igual en todas las pestañas, al alcance del pulgar.
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            // Sin relleno arriba: las tarjetas llegan hasta la línea de la
+            // barra de arriba al desplazar (pedido del usuario 2026-10-29); el
+            // aire de arriba lo da el `contentPadding` de la lista.
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 MensajesEstado(
                     error = viewModel.error,
                     mensaje = viewModel.mensaje,
@@ -190,15 +193,13 @@ fun PantallaActivos(
                     verificando = verificando,
                 )
 
-                Box(modifier = Modifier.padding(top = 4.dp)) {
-                    ContenidoListaActivos(
-                        activos = viewModel.activos,
-                        cargando = viewModel.cargando,
-                        onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
-                        sincronizando = sincronizando,
-                        onSincronizar = onSincronizar,
-                    )
-                }
+                ContenidoListaActivos(
+                    activos = viewModel.activos,
+                    cargando = viewModel.cargando,
+                    onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
+                    sincronizando = sincronizando,
+                    onSincronizar = onSincronizar,
+                )
             }
 
             AccionActivos(onEscanearCedula = { escanerAbierto = true })
