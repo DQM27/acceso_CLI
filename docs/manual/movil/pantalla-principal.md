@@ -11,15 +11,14 @@ Cualquier usuario con sesión abierta.
 
 ## Arriba
 
-- El **nombre de la sección** en grande (**Contratistas**,
-  **Proveedores**, **Correo** o **KOF**) y, debajo, la **unidad** (el sitio) y **cuántos hay
-  adentro** (en KOF, cuántos gafetes hay prestados).
-- Un **puntito de color** junto al nombre de la sección: el estado de la
-  conexión (ver [Trabajar sin internet](sin-internet-y-sincronizar.md)).
+- El **nombre de la sección** (**Contratistas**, **Proveedores**,
+  **Correo** o **KOF**). Cuántos hay adentro lo dice el globito de cada
+  sección en la barra de abajo.
 - **Persona con un +**: [Nuevo contratista](nuevo-contratista.md).
 - **Campanita**: [avisos de la administración](avisos-de-la-administracion.md).
   Un globito dice cuántos hay sin leer.
-- **Cuadrito con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md).
+- **Cuadrito con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md),
+  con su nombre y la **unidad** (el sitio) del teléfono.
 
 ## Abajo, al alcance del pulgar
 

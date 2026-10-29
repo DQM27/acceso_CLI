@@ -438,6 +438,11 @@ fun AvatarBrisas(inicial: String, modifier: Modifier = Modifier, tamano: Dp = 48
     }
 }
 
+/// Lado de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra de
+/// arriba ocupe menos (pedido del usuario 2026-10-29); sigue sobre el mínimo
+/// táctil con el aire alrededor.
+internal val TAMANO_BOTON_CUADRADO = 36.dp
+
 /** Botón de icono dentro de un cuadradito blanco redondeado -- reemplaza el
  * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. */
 @Composable
@@ -449,7 +454,7 @@ fun BotonIconoCuadradoBrisas(
 ) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(TAMANO_BOTON_CUADRADO)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .clickable(enabled = enabled, onClick = onClick),

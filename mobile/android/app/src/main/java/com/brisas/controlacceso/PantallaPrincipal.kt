@@ -62,6 +62,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -393,6 +395,8 @@ fun PantallaPrincipal(
     // la sección elegida; las dos se sincronizan dentro de las pestañas.
     val paginas = rememberPagerState(initialPage = pestana) { SECCIONES_VISIBLES.size }
     val hapticosSecciones = rememberHapticos()
+    // La lista a la vista está desplazada: línea fina bajo la barra de arriba.
+    val listaDesplazada = remember { mutableStateOf(false) }
     // La que está a la vista: cambia a mitad del deslizamiento, así el título,
     // el color y la barra acompañan al dedo.
     val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
@@ -409,33 +413,23 @@ fun PantallaPrincipal(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // El título grande es la sección a la vista (como el de cada
-            // pestaña de iOS) y, debajo, la unidad. Cuántos hay adentro lo
-            // dice el globito de la barra de abajo; repetirlo acá sobraba. El
-            // nombre de la app ya se ve en el login. Quién tiene la sesión
-            // vive en el menú de la cuenta.
-            Column(modifier = Modifier.weight(1f)) {
-                AnimatedContent(
-                    targetState = seccion,
-                    transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
-                    label = "tituloSeccion",
-                ) { seccionTitulo ->
-                    Text(
-                        seccionTitulo.etiqueta,
-                        style = MaterialTheme.typography.headlineMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (textoUnidad != null) {
-                    Text(
-                        textoUnidad,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            // El título es la sección a la vista (como el de cada pestaña de
+            // iOS), en una sola línea y no tan grande: la barra ocupaba
+            // mucho alto (pedido del usuario 2026-10-29). Cuántos hay adentro
+            // lo dice el globito de la barra de abajo; quién tiene la sesión
+            // y la unidad, el menú de la cuenta.
+            AnimatedContent(
+                targetState = seccion,
+                modifier = Modifier.weight(1f),
+                transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
+                label = "tituloSeccion",
+            ) { seccionTitulo ->
+                Text(
+                    seccionTitulo.etiqueta,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = {
@@ -460,6 +454,7 @@ fun PantallaPrincipal(
                     viewModel(factory = ActualizacionViewModel.factory(LocalContext.current))
                 MenuCuenta(
                     sesion = sesion,
+                    unidad = textoUnidad,
                     temaElegido = GestorTema.temaForzado,
                     onElegirTema = GestorTema::elegir,
                     onAyuda = {
@@ -472,6 +467,18 @@ fun PantallaPrincipal(
                 )
             }
         }
+        // Sin degradado: con la lista desplazada, una línea fina marca dónde
+        // pasan las tarjetas por debajo; arriba de todo no se ve (como iOS).
+        val alfaLinea by animateFloatAsState(
+            targetValue = if (listaDesplazada.value) 1f else 0f,
+            animationSpec = tween(MS_FUNDIDO_ENTRADA),
+            label = "lineaBarraSuperior",
+        )
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            modifier = Modifier.graphicsLayer { alpha = alfaLinea },
+        )
         }
 
         // Arriba de todo lo demás: una emergencia sin leer es lo primero que
@@ -651,8 +658,10 @@ fun PantallaPrincipal(
                             // que está a la vista pone su botón redondo y su
                             // búsqueda abajo (sin `AccionesInferiores`, las
                             // demás no registran nada).
+                            val aLaVista = pagina == paginas.currentPage
                             CompositionLocalProvider(
-                                LocalAccionesInferiores provides accionesInferiores.takeIf { pagina == paginas.currentPage },
+                                LocalAccionesInferiores provides accionesInferiores.takeIf { aLaVista },
+                                LocalListaDesplazada provides listaDesplazada.takeIf { aLaVista },
                             ) {
                             // `when` exhaustivo sobre el enum: agregar una sección sin
                             // su pantalla no compila (antes eran textos y un `else`

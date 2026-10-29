@@ -94,6 +94,8 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 @Composable
 fun MenuCuenta(
     sesion: UsuarioSesion,
+    // La unidad operativa del teléfono, bajo el nombre.
+    unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
@@ -170,6 +172,7 @@ fun MenuCuenta(
                 ) {
                     PanelCuenta(
                         sesion = sesion,
+                        unidad = unidad,
                         temaElegido = temaElegido,
                         onElegirTema = onElegirTema,
                         onAyuda = {
@@ -209,6 +212,7 @@ fun MenuCuenta(
 @Composable
 private fun PanelCuenta(
     sesion: UsuarioSesion,
+    unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
     onAyuda: () -> Unit,
@@ -244,13 +248,26 @@ private fun PanelCuenta(
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        sesion.nombre,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column {
+                        Text(
+                            sesion.nombre,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        // La unidad vivía bajo el título de la sección; acá
+                        // libera alto arriba (pedido del usuario 2026-10-29).
+                        if (unidad != null) {
+                            Text(
+                                unidad,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
             SeparadorFino()
@@ -445,7 +462,7 @@ internal fun IconoTema(tema: TemaApp) {
 }
 
 /// Alto de [BotonIconoCuadradoBrisas]: el panel se abre justo debajo.
-private val ALTO_BOTON_CUENTA = 40.dp
+private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO
 
 /// El panel crece desde la esquina superior derecha, donde está el botón.
 private val OrigenEsquina = TransformOrigin(1f, 0f)
