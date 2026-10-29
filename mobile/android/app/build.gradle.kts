@@ -71,7 +71,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 51
-        versionName = "1.9.0"
+        versionName = "1.8.6"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
