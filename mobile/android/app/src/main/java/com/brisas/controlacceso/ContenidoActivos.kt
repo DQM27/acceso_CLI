@@ -169,12 +169,12 @@ internal fun ResultadosGafete(
             contentPadding = PADDING_RESULTADOS,
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            // Sin `key`: el mismo número escrito dos veces ("2, 2") repetiría la clave.
-            items(coincidencias) { coincidencia ->
+            // El núcleo ya quitó los números repetidos: cada gafete es su clave.
+            items(coincidencias, key = { it.numero }) { coincidencia ->
                 val fila = coincidencia.fila
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     if (fila != null) {
-                        FilaActivo(fila, onClick = { onElegir(fila) }, tinte = tinte)
+                        FilaActivo(fila, onClick = { onElegir(fila) }, tinte = tinte, pista = PISTA_SALIDA)
                     } else {
                         FilaGafeteSinIngreso(coincidencia.numero, coincidencia.sinPortador)
                     }

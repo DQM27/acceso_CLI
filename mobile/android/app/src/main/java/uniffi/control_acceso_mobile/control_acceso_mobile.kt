@@ -10390,7 +10390,8 @@ sealed class BusquedaActivos {
     
     
     /**
-     * Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito.
+     * Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito
+     * y sin repetidos.
      */
     data class Gafetes(
         val `numeros`: List<kotlin.Int>) : BusquedaActivos()

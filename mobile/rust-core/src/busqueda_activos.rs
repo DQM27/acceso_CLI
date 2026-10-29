@@ -23,7 +23,8 @@ pub enum BusquedaActivos {
     Vacia,
     /// Nombre o cédula, contra el catálogo de contratistas.
     Personas,
-    /// Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito.
+    /// Uno o más gafetes separados por coma ("2, 25, 85"), en el orden escrito
+    /// y sin repetidos.
     Gafetes { numeros: Vec<i32> },
 }
 
@@ -48,12 +49,16 @@ pub fn interpretar_busqueda_activos(texto: String) -> BusquedaActivos {
     if !son_gafetes {
         return BusquedaActivos::Personas;
     }
-    BusquedaActivos::Gafetes {
-        numeros: partes
-            .iter()
-            .filter_map(|parte| parte.parse().ok())
-            .collect(),
+    // Cada gafete una vez: "2, 2" listaba dos veces a la misma persona y la
+    // salida en lote la contaba doble (pruebas del usuario 2026-10-29). "02"
+    // y "2" son el mismo.
+    let mut numeros: Vec<i32> = Vec::new();
+    for numero in partes.iter().filter_map(|parte| parte.parse().ok()) {
+        if !numeros.contains(&numero) {
+            numeros.push(numero);
+        }
     }
+    BusquedaActivos::Gafetes { numeros }
 }
 
 /// Por qué nadie adentro tiene un gafete escrito: "nadie adentro" a secas
@@ -186,8 +191,10 @@ mod tests {
     fn varios_gafetes_separados_por_coma_en_el_orden_escrito() {
         assert_eq!(interpretar("2, 25, 85"), gafetes(&[2, 25, 85]));
         assert_eq!(interpretar("85,2"), gafetes(&[85, 2]));
-        // El mismo número dos veces se deja: la lista muestra lo escrito.
-        assert_eq!(interpretar("2, 2"), gafetes(&[2, 2]));
+        // El mismo número dos veces cuenta una sola, en su primer lugar.
+        assert_eq!(interpretar("2, 2"), gafetes(&[2]));
+        assert_eq!(interpretar("2,2,2,2"), gafetes(&[2]));
+        assert_eq!(interpretar("5, 2, 5, 02"), gafetes(&[5, 2]));
         // Una coma de más mientras se escribe no cambia el sentido.
         assert_eq!(interpretar("2, 25,"), gafetes(&[2, 25]));
         assert_eq!(interpretar(",3"), gafetes(&[3]));

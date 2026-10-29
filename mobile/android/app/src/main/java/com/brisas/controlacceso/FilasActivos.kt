@@ -44,15 +44,15 @@ import uniffi.control_acceso_mobile.TipoIngreso
 // de la auditoría móvil: sólo se movió código).
 
 @Composable
-internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit, tinte: TinteTarjeta? = null) {
+internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit, tinte: TinteTarjeta? = null, pista: String? = null) {
     when (fila) {
-        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick, tinte)
-        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick, tinte)
+        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick, tinte, pista)
+        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick, tinte, pista)
     }
 }
 
 @Composable
-private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, tinte: TinteTarjeta?) {
+private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, tinte: TinteTarjeta?, pista: String?) {
     TarjetaActivo(
         nombre = activo.contratistaNombre,
         detalle = "${activo.cedula} · ${activo.empresaNombre}",
@@ -61,6 +61,7 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, t
         otroEquipo = false,
         onClick = onClick,
         tinte = tinte,
+        pista = pista,
     )
 }
 
@@ -69,7 +70,7 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit, t
 /// `ingresos_remotos`. Cédula, empresa y gafete sí viajan en la caché desde
 /// la migración 24, así que no hay motivo para mostrar menos acá.
 @Composable
-private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: TinteTarjeta?) {
+private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: TinteTarjeta?, pista: String?) {
     TarjetaActivo(
         nombre = remoto.contratistaNombre,
         detalle = "${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"}",
@@ -78,6 +79,7 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: 
         otroEquipo = true,
         onClick = onClick,
         tinte = tinte,
+        pista = pista,
     )
 }
 
@@ -93,7 +95,8 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit, tinte: 
 /// dio el ingreso quedó para el historial del escritorio y el panel.
 ///
 /// Con [tinte], fondo y franja propios (la búsqueda por gafete la pinta de
-/// azul de salida).
+/// azul de salida) y, con [pista], un tercer renglón chico que dice qué pasa
+/// al tocarla.
 @Composable
 internal fun TarjetaActivo(
     nombre: String,
@@ -103,6 +106,7 @@ internal fun TarjetaActivo(
     otroEquipo: Boolean,
     onClick: () -> Unit,
     tinte: TinteTarjeta? = null,
+    pista: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -144,6 +148,7 @@ internal fun TarjetaActivo(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (pista != null) TextoPista(pista)
         }
         Spacer(Modifier.width(12.dp))
         Column(
@@ -210,10 +215,27 @@ internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
 
 /// Cómo se marca una tarjeta de la búsqueda de contratistas, si hace falta
 /// (ver [marcaContratista]).
-internal enum class MarcaContratista(val palabra: String) {
-    ADENTRO("ADENTRO"),
-    DENEGADO("DENEGADO"),
-    VENCIDO("VENCIDO"),
+/// Con su [pista]: qué hacer con esa persona, en un renglón chico bajo la
+/// cédula, para no enredarse (pedido del usuario 2026-10-29).
+internal enum class MarcaContratista(val palabra: String, val pista: String) {
+    ADENTRO("ADENTRO", PISTA_SALIDA),
+    DENEGADO("DENEGADO", "No puede ingresar: lo habilita la administración"),
+    VENCIDO("VENCIDO", "No puede ingresar hasta renovar el PRAIND"),
+}
+
+/// La pista de quien está adentro, en la búsqueda por nombre o por gafete.
+internal const val PISTA_SALIDA = "Toque para registrar su salida"
+
+/// El renglón chico y gris de una pista.
+@Composable
+private fun TextoPista(pista: String) {
+    Text(
+        pista,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 /// Adentro gana: con esa persona lo que se hace es la salida, que siempre se
@@ -278,13 +300,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                     fontWeight = FontWeight.Bold,
                 )
             }
-            if (adentro) {
-                Text(
-                    "Toque para registrar su salida",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            if (marca != null) TextoPista(marca.pista)
         }
         if (marca != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

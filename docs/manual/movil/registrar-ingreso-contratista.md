@@ -48,12 +48,14 @@ esté en silencio.
 3. Complete el formulario y toque **Registrar ingreso**.
 
 Algunas tarjetas se distinguen por su color, con un ícono y una palabra a
-la derecha:
+la derecha, y un renglón chico que dice qué hacer:
 
 - **Ámbar, ADENTRO**: ya está adentro. Tocarla abre su salida, no un
-  ingreso.
-- **Roja, DENEGADO** (círculo con una raya): no tiene acceso autorizado.
-- **Roja, VENCIDO** (calendario con una X): su PRAIND está vencido.
+  ingreso (**"Toque para registrar su salida"**).
+- **Roja, DENEGADO** (círculo con una raya): no tiene acceso autorizado
+  (**"No puede ingresar: lo habilita la administración"**).
+- **Roja, VENCIDO** (calendario con una X): su PRAIND está vencido
+  (**"No puede ingresar hasta renovar el PRAIND"**).
 
 ## El formulario de ingreso
 

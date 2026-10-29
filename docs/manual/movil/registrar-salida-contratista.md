@@ -47,9 +47,11 @@ la persona ya está adentro.
 ## Pasos — por número de gafete
 
 1. Toque la búsqueda de abajo y escriba el número del gafete (de 1 a 3
-   dígitos), o varios separados por coma, por ejemplo **2, 25, 85**.
+   dígitos), o varios separados por coma, por ejemplo **2, 25, 85**. Un
+   número escrito dos veces cuenta una sola.
 2. Cada gafete aparece en una tarjeta **azul** con la persona que lo tiene,
-   su gafete y la hora en que entró. Tóquela y luego **Registrar salida**.
+   su gafete, la hora en que entró y **"Toque para registrar su salida"**.
+   Tóquela y luego **Registrar salida**.
 3. Con dos o más encontrados, abajo aparece **Registrar salida (N)**: salen
    todos de una vez.
 4. Si nadie lo tiene, se ve por qué: **"libre, nadie lo tiene"** (en gris),
