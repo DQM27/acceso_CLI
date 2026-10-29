@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Route
@@ -81,6 +84,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EstadoBandeja
@@ -386,7 +390,13 @@ fun PantallaPrincipal(
     // La acción del botón redondo y la búsqueda de la píldora las pone la
     // pantalla a la vista.
     val accionesInferiores = remember { AccionesInferiores() }
-    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+    // Las secciones son páginas que se pasan deslizando de lado (pedido del
+    // usuario 2026-10-28), además de tocando la barra. `pestana` sigue siendo
+    // la sección elegida; las dos se sincronizan dentro de las pestañas.
+    val paginas = rememberPagerState(initialPage = pestana) { SECCIONES_VISIBLES.size }
+    // La que está a la vista: cambia a mitad del deslizamiento, así el título,
+    // el color y la barra acompañan al dedo.
+    val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
     val externo = tipoExternoVisible(indiceExterno)
 
     CompositionLocalProvider(LocalAvisosBreves provides avisosBreves) {
@@ -605,30 +615,44 @@ fun PantallaPrincipal(
                     }
                 }
                 Box(modifier = Modifier.fillMaxSize().nestedScroll(replegarAlDesplazar)) {
-                    // `AnimatedContent` (que por dentro es un `Box`) le pasa a sus
-                    // hijos restricciones acotadas: un `LazyColumn` (como el de
-                    // `PantallaActivos`) revienta con `IllegalStateException` si lo
-                    // miden con altura infinita, como hace un `Column` sin peso.
-                    // Desliza y funde entre pestañas (ver `TransicionesPantalla.kt`).
+                    // Tocar la barra lleva a la página; deslizar hasta otra la
+                    // elige. `settledPage` y no `currentPage`: al tocar una
+                    // sección lejana el carrusel pasa por las del medio y no
+                    // debe quedarse en la primera que cruza.
+                    LaunchedEffect(pestana) {
+                        if (paginas.settledPage != pestana) paginas.animateScrollToPage(pestana)
+                    }
+                    // Sin el primer valor: al volver de otra pantalla que eligió
+                    // la sección (p. ej. "Nuevo contratista" deja Contratistas),
+                    // la página vieja la pisaría antes de que el carrusel llegue.
+                    LaunchedEffect(paginas) {
+                        snapshotFlow { paginas.settledPage }.drop(1).collect { pestana = it }
+                    }
                     CompositionLocalProvider(
                         LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
                         LocalPantallasCompletas provides pantallasCompletas,
-                        LocalAccionesInferiores provides accionesInferiores,
                     ) {
-                        AnimatedContent(
-                            targetState = seccion,
+                        // Con una cámara, un formulario o el buscador abiertos
+                        // (lo que esconde la barra) no se desliza: no se cambia
+                        // de sección por accidente a mitad de un ingreso.
+                        HorizontalPager(
+                            state = paginas,
                             modifier = Modifier.fillMaxSize(),
-                            transitionSpec = {
-                                transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
-                            },
-                            label = "seccion",
-                        ) { seccionMostrada ->
+                            userScrollEnabled = pantallasCompletas.cantidad == 0,
+                            key = { SECCIONES_VISIBLES[it] },
+                        ) { pagina ->
+                            val seccionMostrada = SECCIONES_VISIBLES[pagina]
+                            // Mientras se desliza conviven dos páginas: sólo la
+                            // que está a la vista pone su botón redondo y su
+                            // búsqueda abajo (sin `AccionesInferiores`, las
+                            // demás no registran nada).
+                            CompositionLocalProvider(
+                                LocalAccionesInferiores provides accionesInferiores.takeIf { pagina == paginas.currentPage },
+                            ) {
                             // `when` exhaustivo sobre el enum: agregar una sección sin
                             // su pantalla no compila (antes eran textos y un `else`
                             // que caía en Activos en silencio ante un error de tipeo).
-                            // Con `seccionMostrada` y no `seccion`: durante la
-                            // transición la pantalla que se va sigue con su propio
-                            // acento y no salta al de la nueva.
+                            // Cada página con su propio acento.
                             TemaSeccion(seccionMostrada, externo) {
                                 when (seccionMostrada) {
                                     SeccionPrincipal.ACTIVOS -> PantallaActivos(
@@ -659,6 +683,7 @@ fun PantallaPrincipal(
                                         onSincronizar = nubeViewModel::sincronizar,
                                     )
                                 }
+                            }
                             }
                         }
                     }
@@ -707,6 +732,7 @@ fun PantallaPrincipal(
                             ) {
                                 BarraSecciones(
                                     seleccionada = seccion,
+                                    posicion = { paginas.currentPage + paginas.currentPageOffsetFraction },
                                     externo = externo,
                                     adentro = adentro,
                                     onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
@@ -765,8 +791,9 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
 ///   Sin desenfoque a propósito (Haze, 2026-10-22): redibujar el contenido
 ///   desenfocado detrás de la barra en cada frame duplicó el render de
 ///   Activos (p90 de 5,5 a 10,1 ms) y subió los frames trabados.
-/// - La pestaña elegida: una píldora gris suave que se desliza hasta ella
-///   (como [FilaPildoras]); su ícono y su nombre van en el acento de la
+/// - La pestaña elegida: una píldora gris suave que acompaña al carrusel de
+///   secciones ([posicion], en páginas: se mueve con el dedo al deslizar y
+///   con la animación al tocar); su ícono y su nombre van en el acento de la
 ///   sección (ver `AcentoSeccion.kt`).
 /// - Cada sección lleva un globito con cuántos hay adentro.
 ///
@@ -777,6 +804,8 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
 @Composable
 private fun BarraSecciones(
     seleccionada: SeccionPrincipal,
+    // Se lee al dibujar: seguir al dedo no recompone la barra en cada frame.
+    posicion: () -> Float,
     externo: TipoExterno,
     adentro: Map<SeccionPrincipal, Int>,
     onSeleccionar: (SeccionPrincipal) -> Unit,
@@ -785,11 +814,6 @@ private fun BarraSecciones(
     val oscuro = temaActual().oscuro
     val superficie = MaterialTheme.colorScheme.surface
     val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
-    val posicion by animateFloatAsState(
-        targetValue = SECCIONES_VISIBLES.indexOf(seleccionada).toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-        label = "posicionSeccion",
-    )
     val forma = RoundedCornerShape(percent = 50)
     val hapticos = rememberHapticos()
     Row(
@@ -804,7 +828,7 @@ private fun BarraSecciones(
                 val ancho = size.width / cantidad
                 drawRoundRect(
                     color = colorPildora,
-                    topLeft = Offset(posicion * ancho, 0f),
+                    topLeft = Offset(posicion() * ancho, 0f),
                     size = Size(ancho, size.height),
                     cornerRadius = CornerRadius(size.height / 2),
                 )
