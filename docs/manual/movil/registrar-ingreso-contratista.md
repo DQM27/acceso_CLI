@@ -53,9 +53,9 @@ la derecha, y un renglón chico que dice qué hacer:
 - **Ámbar, ADENTRO**: ya está adentro. Tocarla abre su salida, no un
   ingreso (**"Toque para registrar su salida"**).
 - **Roja, DENEGADO** (círculo con una raya): no tiene acceso autorizado
-  (**"No puede ingresar: lo habilita la administración"**).
+  (**"Acceso denegado"**).
 - **Roja, VENCIDO** (calendario con una X): su PRAIND está vencido
-  (**"No puede ingresar hasta renovar el PRAIND"**).
+  (**"PRAIND vencido"**).
 
 ## El formulario de ingreso
 

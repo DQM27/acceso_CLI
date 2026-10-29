@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -323,6 +325,10 @@ internal fun DialogoRegistrarSalida(
         onDismissRequest = onDismiss,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
+        // Sin el lugar del teclado: no tiene campos, y al elegir desde el
+        // buscador el teclado todavía está bajando; con él, la hoja subía
+        // hasta media pantalla y se encogía (pruebas del usuario 2026-10-29).
+        contentWindowInsets = { WindowInsets.navigationBars },
     ) {
         Column(
             modifier = Modifier

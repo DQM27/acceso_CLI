@@ -219,8 +219,8 @@ internal fun IconoOtroEquipo(modifier: Modifier = Modifier.size(18.dp)) {
 /// cédula, para no enredarse (pedido del usuario 2026-10-29).
 internal enum class MarcaContratista(val palabra: String, val pista: String) {
     ADENTRO("ADENTRO", PISTA_SALIDA),
-    DENEGADO("DENEGADO", "No puede ingresar: lo habilita la administración"),
-    VENCIDO("VENCIDO", "No puede ingresar hasta renovar el PRAIND"),
+    DENEGADO("DENEGADO", "Acceso denegado"),
+    VENCIDO("VENCIDO", "PRAIND vencido"),
 }
 
 /// La pista de quien está adentro, en la búsqueda por nombre o por gafete.

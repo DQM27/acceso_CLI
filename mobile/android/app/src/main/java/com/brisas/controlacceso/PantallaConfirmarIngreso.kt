@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.union
@@ -171,12 +172,13 @@ internal fun HojaIngreso(
         onDismissRequest = onCancelar,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
+        // Mientras sube, sin el lugar del teclado: al elegir desde el buscador
+        // el teclado de la búsqueda todavía está bajando, y la hoja subía
+        // hasta media pantalla para encogerse después (pruebas del usuario
+        // 2026-10-29). El del gafete se abre cuando ya llegó arriba.
         contentWindowInsets = {
-            if (reservar) {
-                BottomSheetDefaults.windowInsets.union(WindowInsets(bottom = reservaTeclado))
-            } else {
-                BottomSheetDefaults.windowInsets
-            }
+            val base = if (arriba) BottomSheetDefaults.windowInsets else WindowInsets.navigationBars
+            if (reservar) base.union(WindowInsets(bottom = reservaTeclado)) else base
         },
     ) {
         // Acá adentro y no afuera: la hoja es su propia ventana, y el teclado
