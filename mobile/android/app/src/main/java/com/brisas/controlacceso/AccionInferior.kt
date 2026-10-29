@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -194,7 +195,14 @@ internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 /// rebote.
 @Composable
 internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
-    BotonRedondoVidrio(tamano = tamano, descripcion = accion.descripcion, onClick = accion::tocar, modifier = modifier) {
+    // La mitad derecha de la pieza que forma con la barra de secciones.
+    BotonRedondoVidrio(
+        tamano = tamano,
+        descripcion = accion.descripcion,
+        onClick = accion::tocar,
+        modifier = modifier,
+        forma = FormaPiezaFin,
+    ) {
         AnimatedContent(
             targetState = accion.icono,
             transitionSpec = {
@@ -213,22 +221,24 @@ internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Mo
 /// `BarraSecciones`).
 internal const val ALFA_VELO = 0.94f
 
-/// Círculo con el mismo velo que la barra de secciones ([ALFA_VELO]).
+/// Botón cuadrado con el mismo velo que la barra de secciones ([ALFA_VELO]);
+/// [forma] dice de qué lado va el corte cuando forma pieza con otra.
 @Composable
 internal fun BotonRedondoVidrio(
     tamano: Dp,
     descripcion: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    forma: Shape = FormaPiezaEntera,
     contenido: @Composable () -> Unit,
 ) {
     val superficie = MaterialTheme.colorScheme.surface
     Box(
         modifier = modifier
             .size(tamano)
-            .clip(CircleShape)
+            .clip(forma)
             .background(superficie.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, CircleShape)
+            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = descripcion
@@ -311,13 +321,15 @@ internal fun BuscadorInferior(
                 }
             }
             if (encabezado != null) {
-                Box(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
                     encabezado()
                 }
             }
+            // El campo y la X, una sola pieza con un corte, como la barra de
+            // secciones y su botón; con el margen de las tarjetas.
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(ESPACIO_CORTE),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CampoBusquedaBrisas(
@@ -329,8 +341,14 @@ internal fun BuscadorInferior(
                         .weight(1f)
                         .focusRequester(foco)
                         .onFocusChanged { campoEnfocado[0] = it.hasFocus },
+                    forma = FormaPiezaInicio,
                 )
-                BotonRedondoVidrio(tamano = AlturaBusquedaBrisas, descripcion = "Cerrar búsqueda", onClick = onCerrar) {
+                BotonRedondoVidrio(
+                    tamano = AlturaBusquedaBrisas,
+                    descripcion = "Cerrar búsqueda",
+                    onClick = onCerrar,
+                    forma = FormaPiezaFin,
+                ) {
                     Icon(Icons.Default.Close, contentDescription = null)
                 }
             }
