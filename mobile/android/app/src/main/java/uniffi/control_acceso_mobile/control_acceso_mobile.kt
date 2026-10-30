@@ -839,6 +839,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_bandeja_salida(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_correo_remoto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto(
@@ -1068,6 +1070,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_bandeja_salida(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_correo_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1602,6 +1606,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube() and 0xFFFF) != 17317) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_bandeja_salida() and 0xFFFF) != 8427) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_correo_remoto() and 0xFFFF) != 32071) {
@@ -3850,6 +3857,14 @@ public interface NucleoInterface {
     fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean
     
     /**
+     * `None` si no hay nada de este teléfono pendiente de subir (o lo
+     * pendiente está subiendo ahora mismo). Lectura local, sin red y sin
+     * el candado del núcleo. Mismo aviso que la barra de estado del
+     * escritorio (`aviso_bandeja_salida` en `comandos/nube.rs`).
+     */
+    fun `avisoBandejaSalida`(): AvisoBandejaSalida?
+    
+    /**
      * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], contra
      * `ingresos_correo`.
      */
@@ -4873,6 +4888,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`avisoJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `None` si no hay nada de este teléfono pendiente de subir (o lo
+     * pendiente está subiendo ahora mismo). Lectura local, sin red y sin
+     * el candado del núcleo. Mismo aviso que la barra de estado del
+     * escritorio (`aviso_bandeja_salida` en `comandos/nube.rs`).
+     */
+    @Throws(NucleoException::class)override fun `avisoBandejaSalida`(): AvisoBandejaSalida? {
+            return FfiConverterOptionalTypeAvisoBandejaSalida.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aviso_bandeja_salida(
+        it,
+        _status)
 }
     }
     )
@@ -6498,6 +6533,51 @@ public object FfiConverterTypeAvisoBandeja: FfiConverterRustBuffer<AvisoBandeja>
             FfiConverterBoolean.write(value.`emergente`, buf)
             FfiConverterBoolean.write(value.`leido`, buf)
             FfiConverterString.write(value.`momento`, buf)
+    }
+}
+
+
+
+/**
+ * Aviso de registros de este teléfono que no llegaron a la nube (ver
+ * `control_acceso::nube::aviso_bandeja`). Kotlin sólo lo dibuja.
+ */
+data class AvisoBandejaSalida (
+    var `texto`: kotlin.String
+    , 
+    /**
+     * `true`: ya no se reintenta solo (alguien tiene que mirarlo).
+     */
+    var `critico`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAvisoBandejaSalida: FfiConverterRustBuffer<AvisoBandejaSalida> {
+    override fun read(buf: ByteBuffer): AvisoBandejaSalida {
+        return AvisoBandejaSalida(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AvisoBandejaSalida) = (
+            FfiConverterString.allocationSize(value.`texto`) +
+            FfiConverterBoolean.allocationSize(value.`critico`)
+    )
+
+    override fun write(value: AvisoBandejaSalida, buf: ByteBuffer) {
+            FfiConverterString.write(value.`texto`, buf)
+            FfiConverterBoolean.write(value.`critico`, buf)
     }
 }
 
@@ -12336,6 +12416,38 @@ public object FfiConverterOptionalTypeAvisoBandeja: FfiConverterRustBuffer<Aviso
         } else {
             buf.put(1)
             FfiConverterTypeAvisoBandeja.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeAvisoBandejaSalida: FfiConverterRustBuffer<AvisoBandejaSalida?> {
+    override fun read(buf: ByteBuffer): AvisoBandejaSalida? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAvisoBandejaSalida.read(buf)
+    }
+
+    override fun allocationSize(value: AvisoBandejaSalida?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAvisoBandejaSalida.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AvisoBandejaSalida?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAvisoBandejaSalida.write(value, buf)
         }
     }
 }

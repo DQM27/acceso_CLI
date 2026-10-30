@@ -8,6 +8,7 @@
 
 pub mod alcance;
 pub mod auth_supabase;
+pub mod aviso_bandeja;
 pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
@@ -25,6 +26,7 @@ pub use auth_supabase::{
     AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar,
     verificar_token_offline,
 };
+pub use aviso_bandeja::{AvisoBandejaSalida, aviso_bandeja_salida};
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{
     DestinoReconexion, DetalleReconexion, MetadatosDispositivo, NubeError, TokenDispositivo,
@@ -40,16 +42,17 @@ pub use sesion_unidad::{
 pub use sincronizacion::{
     AdentroPorOtraViaEnLaNube, CierreRemotoRechazado, ConflictoGafeteActivo,
     ConflictoIngresoActivo, ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo,
-    ContextoSincronizacion, EntradaAVerificar, FalloCierresRemotos, IngresoActivoEnLaNube,
-    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MovimientoVisitaRemoto,
-    PrestamoGafeteProvisionalRemoto, ResultadoCierresRemotos, ResumenCatalogo,
-    ResumenCatalogoRutas, ResumenCierresRemotos, ResumenDrenado, SincronizacionError,
-    TipoMovimientoGafete, VerificacionEntradaEnLaNube, cerrar_ingreso_correo_remoto,
-    cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto, cerrar_ingresos_remotos,
-    cerrar_movimiento_visita_remoto, cerrar_prestamo_gafete_provisional_remoto,
-    contar_fallos_permanentes, contratista_con_ingreso_activo, contratistas_con_conflicto_activo,
-    correo_con_ingreso_activo, correos_con_conflicto_activo, drenar_cola,
-    encargado_con_prestamo_provisional_activo, gafete_de_correo_ocupado_en_otro_dispositivo,
+    ContextoSincronizacion, EntradaAVerificar, EstadoBandejaSalida, FalloCierresRemotos,
+    IngresoActivoEnLaNube, IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto,
+    MovimientoVisitaRemoto, PrestamoGafeteProvisionalRemoto, ResultadoCierresRemotos,
+    ResumenCatalogo, ResumenCatalogoRutas, ResumenCierresRemotos, ResumenDrenado,
+    SincronizacionError, TipoMovimientoGafete, VerificacionEntradaEnLaNube,
+    cerrar_ingreso_correo_remoto, cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto,
+    cerrar_ingresos_remotos, cerrar_movimiento_visita_remoto,
+    cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
+    contratista_con_ingreso_activo, contratistas_con_conflicto_activo, correo_con_ingreso_activo,
+    correos_con_conflicto_activo, drenar_cola, encargado_con_prestamo_provisional_activo,
+    estado_bandeja_salida, gafete_de_correo_ocupado_en_otro_dispositivo,
     gafete_de_proveedor_ocupado_en_otro_dispositivo, gafete_de_visita_ocupado_en_otro_dispositivo,
     gafete_ocupado_en_otro_dispositivo, gafete_provisional_ocupado_en_otro_dispositivo,
     persona_adentro_por_otra_via, proveedor_con_ingreso_activo, proveedores_con_conflicto_activo,

@@ -85,6 +85,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -254,6 +255,8 @@ fun PantallaPrincipal(
             nucleo = nucleo,
             scope = scope,
             onSincronizado = { resumen ->
+                // Lo pendiente pudo haber subido: el aviso se va enseguida.
+                nubeViewModel.revisarBandeja()
                 // Si a esta sesión la desactivaron en otro dispositivo, el
                 // pulso periódico (o Realtime, que dispara por el mismo
                 // camino) ya trajo la baja -- cerrar sesión acá, no sólo
@@ -266,6 +269,18 @@ fun PantallaPrincipal(
                 }
             },
         )
+    }
+
+    // El aviso de registros sin subir se revisa cada 15 s sólo con la app a
+    // la vista: con el teléfono bloqueado nadie lo lee.
+    LifecycleStartEffect(nubeViewModel) {
+        val revision = scope.launch {
+            while (true) {
+                nubeViewModel.revisarBandeja()
+                delay(NubeViewModel.INTERVALO_REVISION_BANDEJA_MS)
+            }
+        }
+        onStopOrDispose { revision.cancel() }
     }
 
     // Atado a ON_START/ON_STOP, no sólo a la composición: sin esto, el pulso
@@ -514,6 +529,18 @@ fun PantallaPrincipal(
                     mostrarAyuda = false
                     mostrarReconexion = true
                 },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+
+        // Algo registrado en este teléfono que no llegó a la nube (ver
+        // `NubeViewModel.avisoBandeja`): ámbar mientras se reintenta solo,
+        // rojo si ya no.
+        val avisoBandeja = nubeViewModel.avisoBandeja
+        if (avisoBandeja != null) {
+            FranjaEstado(
+                avisoBandeja.texto,
+                if (avisoBandeja.critico) TipoEstado.ERROR else TipoEstado.AVISO,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }

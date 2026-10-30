@@ -643,14 +643,30 @@ pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) -> bool {
     state.core().equipo_retirado()
 }
 
-/// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos
-/// (ver `INTENTOS_ANTES_DE_FALLO_PERMANENTE`) -- para avisar que algo
-/// necesita que alguien lo mire, en vez de fallar en silencio para siempre.
+/// Lo que la barra de estado muestra cuando algo registrado en este equipo
+/// no llegó a la nube (ver `nube::aviso_bandeja`). Lo decide el núcleo;
+/// la pantalla sólo lo dibuja.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AvisoBandejaSalida {
+    pub texto: String,
+    pub critico: bool,
+}
+
+/// `None` si no hay nada pendiente de subir (o lo pendiente está subiendo
+/// ahora mismo). Lectura local, sin red.
 #[tauri::command(async)]
-pub fn fallos_permanentes_nube(state: tauri::State<GuiState>) -> Result<i64, String> {
+pub fn aviso_bandeja_salida(
+    state: tauri::State<GuiState>,
+) -> Result<Option<AvisoBandejaSalida>, String> {
     state.sesion_activa()?;
     let conexion = state.conexion_secundaria()?;
-    nube::contar_fallos_permanentes(&conexion).map_err(mensaje_sincronizacion)
+    let estado = nube::estado_bandeja_salida(&conexion).map_err(mensaje_sincronizacion)?;
+    Ok(
+        nube::aviso_bandeja_salida(&estado, chrono::Utc::now()).map(|aviso| AvisoBandejaSalida {
+            texto: aviso.texto,
+            critico: aviso.critico,
+        }),
+    )
 }
 
 /// Lectura pura de la caché local `ingresos_remotos` -- ya la llenó la

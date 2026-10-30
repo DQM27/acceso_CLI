@@ -4,9 +4,9 @@ use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 
 use crate::firmante::{AlmacenClaveDispositivo, FirmanteMovil};
 use crate::{
-    FalloSincronizacion, IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, Nucleo,
-    NucleoError, PrestamoGafeteProvisionalRemoto, ResumenSincronizacion, SesionRealtimeNube,
-    convertir_fallo_sincronizacion, interno,
+    AvisoBandejaSalida, FalloSincronizacion, IngresoCorreoRemoto, IngresoProveedorRemoto,
+    IngresoRemoto, Nucleo, NucleoError, PrestamoGafeteProvisionalRemoto, ResumenSincronizacion,
+    SesionRealtimeNube, convertir_fallo_sincronizacion, interno,
 };
 
 #[uniffi::export]
@@ -335,6 +335,27 @@ impl Nucleo {
     /// cambio al terminar. El pulso periódico sigue siendo completo.
     pub fn enviar_cambios(&self) -> Result<ResumenSincronizacion, NucleoError> {
         self.sincronizar(control_acceso::nube::AlcanceSincronizacion::solo_envio())
+    }
+
+    /// `None` si no hay nada de este teléfono pendiente de subir (o lo
+    /// pendiente está subiendo ahora mismo). Lectura local, sin red y sin
+    /// el candado del núcleo. Mismo aviso que la barra de estado del
+    /// escritorio (`aviso_bandeja_salida` en `comandos/nube.rs`).
+    pub fn aviso_bandeja_salida(&self) -> Result<Option<AvisoBandejaSalida>, NucleoError> {
+        let conexion = self.conexion_secundaria()?;
+        let estado = control_acceso::nube::estado_bandeja_salida(&conexion).map_err(|error| {
+            NucleoError::Interno {
+                mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
+            }
+        })?;
+        Ok(
+            control_acceso::nube::aviso_bandeja_salida(&estado, chrono::Utc::now()).map(|aviso| {
+                AvisoBandejaSalida {
+                    texto: aviso.texto,
+                    critico: aviso.critico,
+                }
+            }),
+        )
     }
 
     /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio. El

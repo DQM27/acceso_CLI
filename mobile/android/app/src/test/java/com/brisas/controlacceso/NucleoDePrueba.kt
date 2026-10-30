@@ -58,6 +58,14 @@ object NucleoDePrueba {
         return Nucleo.abrir(ruta)
     }
 
+    /// Cambia la base de un `Nucleo` ya abierto, como si lo hubiera hecho
+    /// otra parte de la app (por ejemplo, la cola que terminó de subir).
+    fun ejecutar(archivoTemporal: File, sql: String) {
+        DriverManager.getConnection("jdbc:sqlite:${archivoTemporal.absolutePath}").use { conexion ->
+            conexion.createStatement().use { it.execute(sql) }
+        }
+    }
+
     /// Mismo criterio que `plegar_para_busqueda` en `src/texto.rs`:
     /// minúsculas + diacríticos plegados vía descomposición Unicode (NFD) y
     /// se descartan las marcas combinantes. Sólo hace falta que exista y

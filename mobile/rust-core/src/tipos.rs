@@ -445,6 +445,15 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
     }
 }
 
+/// Aviso de registros de este teléfono que no llegaron a la nube (ver
+/// `control_acceso::nube::aviso_bandeja`). Kotlin sólo lo dibuja.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AvisoBandejaSalida {
+    pub texto: String,
+    /// `true`: ya no se reintenta solo (alguien tiene que mirarlo).
+    pub critico: bool,
+}
+
 /// Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ResumenSincronizacion {

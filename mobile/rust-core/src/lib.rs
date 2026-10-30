@@ -70,15 +70,16 @@ pub use error::NucleoError;
 use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
-    AvisoAcceso, ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta,
-    EstadoReloj, IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto,
-    IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion,
-    MotivoResultadoIngreso, PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen,
-    PrestamoGafeteProvisionalRemoto, RegistroIngresoCorreoActivoResumen,
-    RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
-    ResultadoReconexion, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta,
-    ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
-    SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
+    AvisoAcceso, AvisoBandejaSalida, ContratistaResumen, DatosContratista, Empresa,
+    EmpresaProveedor, EncargadoRuta, EstadoReloj, IdentidadEquipo, IngresoActivoResumen,
+    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos,
+    MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
+    PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
+    RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
+    ResultadoIngresoRegistrado, ResultadoReconexion, ResultadoRegistroEntrada,
+    ResultadoRegistroSalidaRuta, ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta,
+    SalidaRutaActivaResumen, SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion,
+    VehiculoRuta,
 };
 pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 
