@@ -15,6 +15,7 @@ import type {
   GridReadyEvent,
   IDatasource,
   IGetRowsParams,
+  PaginationChangedEvent,
   RowClassParams,
   SortChangedEvent,
   TextMatcherParams,
@@ -142,7 +143,14 @@ export interface EstadoGuardado {
    * se toma como visible (comportamiento de siempre) para no ocultarle a
    * nadie los filtros sin que lo haya pedido. */
   filtrosVisibles?: boolean;
+  /** Filas por página elegidas en el selector (sólo grillas paginadas en el
+   * servidor); `undefined` = el tamaño por defecto de la pantalla. */
+  filasPorPagina?: number;
 }
+
+/** Opciones del selector de filas por página. Tope 500: Supabase entrega a
+ * lo sumo 1.000 filas por pedido, y cada página es un solo pedido. */
+const OPCIONES_FILAS_POR_PAGINA = [50, 100, 200, 500];
 
 // v2: el layout guardado incluye `pinned` por columna.
 function claveAlmacenamiento(id: string): string {
@@ -393,6 +401,12 @@ function TablaBase<T>(
     origenRef.current = origenServidor;
   });
   const tamanoPagina = origenServidor?.tamanoPagina;
+  // El tamaño elegido en el selector de la paginación, recordado por grilla.
+  // Cada página es un solo pedido al servidor (`cacheBlockSize` lo sigue).
+  const [filasPorPagina, setFilasPorPagina] = useState(() => {
+    const guardado = leerEstadoGuardado(idGrilla)?.filasPorPagina;
+    return guardado !== undefined && OPCIONES_FILAS_POR_PAGINA.includes(guardado) ? guardado : tamanoPagina;
+  });
   const datasource = useMemo<IDatasource | undefined>(() => {
     if (tamanoPagina === undefined) return undefined;
     return {
@@ -436,13 +450,18 @@ function TablaBase<T>(
    * cual lo tiene la grilla en este momento. `hide` se excluye del estado de
    * AG Grid a propósito: `ocultas` ya es la única fuente de verdad para
    * visibilidad. */
-  function guardarLayout(ocultasActual: Set<string>, filtrosVisiblesActual: boolean = filtrosVisibles) {
+  function guardarLayout(
+    ocultasActual: Set<string>,
+    filtrosVisiblesActual: boolean = filtrosVisibles,
+    filasPorPaginaActual: number | undefined = filasPorPagina,
+  ) {
     if (!idGrilla || !apiRef.current) return;
     const columnState = apiRef.current.getColumnState().map(({ hide: _hide, ...resto }) => resto);
     const estado: EstadoGuardado = {
       ocultas: Array.from(ocultasActual),
       columnas: columnState,
       filtrosVisibles: filtrosVisiblesActual,
+      filasPorPagina: enServidor ? filasPorPaginaActual : undefined,
     };
     try {
       localStorage.setItem(claveAlmacenamiento(idGrilla), JSON.stringify(estado));
@@ -618,11 +637,18 @@ function TablaBase<T>(
             ? {
                 rowModelType: "infinite" as const,
                 datasource,
-                cacheBlockSize: tamanoPagina,
+                cacheBlockSize: filasPorPagina,
                 pagination: true,
-                paginationPageSize: tamanoPagina,
-                paginationPageSizeSelector: false,
+                paginationPageSize: filasPorPagina,
+                paginationPageSizeSelector: OPCIONES_FILAS_POR_PAGINA,
                 maxConcurrentDatasourceRequests: 1,
+                onPaginationChanged: (evento: PaginationChangedEvent<T>) => {
+                  if (!evento.newPageSize) return;
+                  const elegido = evento.api.paginationGetPageSize();
+                  if (elegido === filasPorPagina) return;
+                  setFilasPorPagina(elegido);
+                  guardarLayout(ocultas, filtrosVisibles, elegido);
+                },
               }
             : {
                 rowData: filas ?? [],
