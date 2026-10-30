@@ -14,7 +14,8 @@ dependencias de `desktop/` instaladas para `tauri icon`):
 
 `generar` dibuja cada icono desde el SVG (nítido en cualquier tamaño), con
 la forma (esquinas redondeadas o círculo) y el encuadre del icono normal
-del mismo tamaño. `poner` y `quitar` también regeneran los iconos de
+del mismo tamaño. `poner` y `quitar` también cambian el logo grande de
+adentro de las apps (login, arranque y carga; ver LOGOS_INTERNOS) y regeneran los iconos de
 prueba (beta/diagnóstico) con `generar_iconos_beta.py`, para que lleven el
 mismo dibujo con su cinta.
 """
@@ -36,6 +37,15 @@ NORMAL = RAIZ / "assets" / "iconos" / "normal"
 NAVIDAD = RAIZ / "assets" / "iconos" / "navidad"
 SVG_NAVIDAD = RAIZ / "assets" / "lattis-navidad.svg"
 LOGO_NAVIDAD = RAIZ / "assets" / "iconoL-navidad.png"
+
+LOGO_NORMAL = RAIZ / "assets" / "iconoL.png"
+# El logo grande dentro de las apps: login y arranque del móvil, login y
+# pantalla de carga del escritorio. Todos son copias de iconoL.png.
+LOGOS_INTERNOS = (
+    RAIZ / "mobile" / "android" / "app" / "src" / "main" / "res" / "drawable" / "marca.png",
+    RAIZ / "desktop" / "src" / "assets" / "marca.png",
+    RAIZ / "desktop" / "public" / "lattis-splash.png",
+)
 
 ANDROID = ("ic_launcher.png", "ic_launcher_round.png")
 # Lo que `tauri icon` genera y está en git (el resto, android/ e ios/, no se usa).
@@ -103,6 +113,10 @@ def generar() -> None:
 
 
 def aplicar(origen: Path) -> None:
+    logo = LOGO_NAVIDAD if origen == NAVIDAD else LOGO_NORMAL
+    for destino in LOGOS_INTERNOS:
+        shutil.copyfile(logo, destino)
+
     for carpeta in sorted((origen / "android").glob("mipmap-*dpi")):
         for nombre in ANDROID:
             shutil.copyfile(carpeta / nombre, RES_ANDROID / carpeta.name / nombre)
