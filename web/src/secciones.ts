@@ -3,6 +3,7 @@ export type Seccion =
   | "historial"
   | "activos"
   | "contratistas"
+  | "proveedores"
   | "usuarios"
   | "sesiones"
   | "avisos"
