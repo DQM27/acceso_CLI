@@ -817,9 +817,11 @@ fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
             [],
         )
         .unwrap();
-    let base_url = servidor_de_una_respuesta(
-        "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    );
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        RESPUESTA_201,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-empresa-proveedor\",\"nombre\":\"MAIKA\"}]",
+    ]);
 
     let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
@@ -835,6 +837,122 @@ fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
         .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
         .unwrap();
     assert_eq!(estado, "enviado");
+    // El alta no pisa una empresa que ya esté en la nube con ese nombre
+    // (ignora el duplicado) y después confirma cuál quedó.
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2, "{pedidos:#?}");
+    assert!(
+        pedidos[0].starts_with("POST /rest/v1/empresas_proveedor?on_conflict=nombre"),
+        "{pedidos:#?}"
+    );
+    assert!(
+        pedidos[0]
+            .to_lowercase()
+            .contains("resolution=ignore-duplicates"),
+        "{pedidos:#?}"
+    );
+    assert!(
+        pedidos[1].starts_with("GET /rest/v1/empresas_proveedor?sitio_id=eq.sitio-1"),
+        "{pedidos:#?}"
+    );
+}
+
+/// Dos equipos dieron de alta la misma empresa (cada uno con su `uuid`). El
+/// segundo ya no le cambia el `id` a la de la nube -- eso dejaba colgados
+/// los ingresos del primero --: adopta el `uuid` de la nube, y sus ingresos
+/// (que apuntan a la empresa por el `id` local) viajan con ese `uuid`.
+#[test]
+fn si_el_nombre_ya_esta_en_la_nube_adopta_su_uuid_y_los_ingresos_lo_usan() {
+    let (connection, _) = conexion_con_ingreso_proveedor(None);
+    connection
+        .execute_batch(
+            "DELETE FROM cola_salida;
+             INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('empresa_proveedor', 'uuid-empresa-proveedor', 'crear',
+                     '2026-01-01T07:00:00Z', '2026-01-01T07:00:00Z'),
+                    ('ingreso_proveedor', 'uuid-ingreso-proveedor', 'crear',
+                     '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z');",
+        )
+        .unwrap();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        RESPUESTA_201,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-de-la-nube\",\"nombre\":\"MAIKA\"},{\"id\":\"otra\",\"nombre\":\"Otra\"}]",
+        RESPUESTA_201,
+    ]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!((resumen.enviados, resumen.fallidos), (2, 0));
+    let uuid_local: String = connection
+        .query_row(
+            "SELECT uuid FROM empresas_proveedor WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(uuid_local, "uuid-de-la-nube");
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 3, "{pedidos:#?}");
+    assert!(
+        pedidos[2].starts_with("POST /rest/v1/ingresos_proveedor"),
+        "{pedidos:#?}"
+    );
+    assert!(
+        pedidos[2].contains("\"empresa_id\":\"uuid-de-la-nube\""),
+        "{pedidos:#?}"
+    );
+}
+
+/// Incidente 2026-10-30: el alta de 8 empresas de proveedor había fallado
+/// para siempre y todo ingreso de esas empresas caía por la clave foránea
+/// (409), sin que nada volviera a mandarlas. Ahora, ante ese 409, la cola
+/// manda la empresa y reintenta el ingreso en la misma pasada.
+#[test]
+fn un_ingreso_de_proveedor_sin_su_empresa_en_la_nube_la_manda_y_se_reintenta() {
+    let (connection, _) = conexion_con_ingreso_proveedor(None);
+    connection
+        .execute(
+            "INSERT INTO cola_salida (
+                 entidad, entidad_uuid, operacion, estado, motivo_fallo, intentos,
+                 creado_en, actualizado_en, ultimo_error
+             ) VALUES ('empresa_proveedor', 'uuid-empresa-proveedor', 'crear', 'fallido', 'error', 20,
+                       '2026-01-01T07:00:00Z', '2026-01-01T07:00:00Z', 'El receptor respondió 403: {}')",
+            [],
+        )
+        .unwrap();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {\"code\":\"23503\",\"message\":\"insert or update on table \\\"ingresos_proveedor\\\" violates \
+         foreign key constraint \\\"ingresos_proveedor_empresa_id_fkey\\\"\"}",
+        RESPUESTA_201,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-empresa-proveedor\",\"nombre\":\"Maika\"}]",
+        RESPUESTA_201,
+    ]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!((resumen.enviados, resumen.fallidos), (1, 0));
+    let estados: Vec<(String, String)> = connection
+        .prepare("SELECT entidad, estado FROM cola_salida ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        estados,
+        vec![
+            ("ingreso_proveedor".to_string(), "enviado".to_string()),
+            ("empresa_proveedor".to_string(), "enviado".to_string()),
+        ]
+    );
+    assert_eq!(estado_bandeja_salida(&connection).unwrap().fallidos, 0);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 4, "{pedidos:#?}");
+    assert!(pedidos[1].starts_with("POST /rest/v1/empresas_proveedor"));
+    assert!(pedidos[3].starts_with("POST /rest/v1/ingresos_proveedor"));
 }
 
 /// `empresas_proveedor` es por unidad (`sitio_id NOT NULL` y política de alta
@@ -5500,6 +5618,8 @@ fn una_visita_propia_con_salida_en_el_otro_equipo_se_cierra_aca() {
 const RESPUESTA_401: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
      Connection: close\r\n\r\n{\"code\":\"PGRST301\",\"message\":\"JWT expired\"}";
 const RESPUESTA_204: &str = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
+const RESPUESTA_201: &str =
+    "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]";
 
 /// Dos ingresos ya cerrados en el teléfono, con sus aperturas ya en la nube
 /// y las dos salidas esperando en la cola, en orden: primero la de
