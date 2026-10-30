@@ -11,7 +11,7 @@ import {
 // (`poner` en el parche de fines de noviembre, `quitar` en el de
 // principios de enero), sin fechas en el código (pedido del usuario
 // 2026-10-29: un parche que se pone y se quita, nada más).
-export const NAVIDAD_ACTIVA = true;
+export const NAVIDAD_ACTIVA = false;
 
 // Nieve muy sutil que cae DETRÁS de la barra lateral y la grilla (pedido
 // del usuario 2026-10-29): un `canvas` fijo con `z-index: -1`, encima del

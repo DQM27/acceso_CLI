@@ -27,7 +27,7 @@ import kotlin.random.Random
 /// (`poner` en el parche de fines de noviembre, `quitar` en el de
 /// principios de enero), sin fechas en el código (pedido del usuario
 /// 2026-10-29: un parche que se pone y se quita, nada más).
-internal const val NAVIDAD_ACTIVA = true
+internal const val NAVIDAD_ACTIVA = false
 
 /// Nieve muy sutil sobre la barra de arriba (pedido del usuario
 /// 2026-10-29): los copos caen por la franja del título y los
