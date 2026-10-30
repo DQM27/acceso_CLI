@@ -381,7 +381,12 @@ pub(super) fn procesar_fila_individual(
                 fila.entidad,
                 fila.entidad_uuid,
             );
-            marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
+            marcar_fallida(
+                connection,
+                fila.id,
+                MotivoFallo::Conflicto,
+                &error.to_string(),
+            )?;
             resumen.fallidos += 1;
             resumen.conflictos_gafete.push(construir_conflicto_gafete(
                 connection,
@@ -397,11 +402,6 @@ pub(super) fn procesar_fila_individual(
             // `pendientes()` la vuelva a considerar más adelante, sujeta
             // al backoff según cuántas veces ya falló.
             let agota_reintentos = fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE;
-            let estado = if agota_reintentos {
-                "fallido"
-            } else {
-                "pendiente"
-            };
             // Antes esto sólo quedaba en `ultimo_error` (columna de la
             // propia fila) -- nadie se enteraba salvo que fuera a mirar la
             // cola a mano. Ver
@@ -425,7 +425,11 @@ pub(super) fn procesar_fila_individual(
                     INTENTOS_ANTES_DE_FALLO_PERMANENTE,
                 );
             }
-            marcar(connection, fila.id, estado, Some(&error.to_string()))?;
+            if agota_reintentos {
+                marcar_fallida(connection, fila.id, MotivoFallo::Error, &error.to_string())?;
+            } else {
+                marcar(connection, fila.id, "pendiente", Some(&error.to_string()))?;
+            }
             resumen.fallidos += 1;
         }
     }
@@ -492,9 +496,36 @@ pub(super) fn pendientes(
     Ok(filas)
 }
 
+/// Por qué una fila quedó fallida (columna `motivo_fallo`, `MIGRACION_60`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum MotivoFallo {
+    /// La nube la rechazó por una regla del negocio (gafete o persona ya
+    /// activos): se avisó al sincronizar como conflicto y no es una falla de
+    /// sincronización.
+    Conflicto,
+    /// No llegó y nadie lo va a reintentar solo: alguien tiene que mirarlo.
+    Error,
+}
+
+impl MotivoFallo {
+    fn columna(self) -> &'static str {
+        match self {
+            Self::Conflicto => "conflicto",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// Filtro SQL de los fallos que sí son errores. Una fila fallida sin motivo
+/// (no debería quedar ninguna después de `MIGRACION_60`) cuenta como error:
+/// ante la duda, avisar.
+const ES_ERROR_REAL: &str = "estado = 'fallido' AND COALESCE(motivo_fallo, 'error') = 'error'";
+
 /// Lo que la bandeja de salida tiene sin subir: cuántos registros esperan,
-/// desde cuándo el más viejo (`creado_en`, UTC) y cuántos ya agotaron los
-/// reintentos. Lo lee `nube::aviso_bandeja` para avisarle a quien opera.
+/// desde cuándo el más viejo (`creado_en`, UTC) y cuántos fallaron de verdad
+/// (no se reintentan más). Los rechazos por conflicto no cuentan: ya se
+/// avisaron al sincronizar. Lo lee `nube::aviso_bandeja` para avisarle a
+/// quien opera.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EstadoBandejaSalida {
     pub pendientes: i64,
@@ -506,11 +537,13 @@ pub fn estado_bandeja_salida(
     connection: &Connection,
 ) -> Result<EstadoBandejaSalida, SincronizacionError> {
     Ok(connection.query_row(
-        "SELECT
-             COUNT(*) FILTER (WHERE estado = 'pendiente'),
-             MIN(creado_en) FILTER (WHERE estado = 'pendiente'),
-             COUNT(*) FILTER (WHERE estado = 'fallido')
-         FROM cola_salida",
+        &format!(
+            "SELECT
+                 COUNT(*) FILTER (WHERE estado = 'pendiente'),
+                 MIN(creado_en) FILTER (WHERE estado = 'pendiente'),
+                 COUNT(*) FILTER (WHERE {ES_ERROR_REAL})
+             FROM cola_salida"
+        ),
         [],
         |row| {
             Ok(EstadoBandejaSalida {
@@ -522,15 +555,125 @@ pub fn estado_bandeja_salida(
     )?)
 }
 
-/// Cuántas filas ya agotaron los reintentos automáticos
-/// (`estado = 'fallido'`) -- para que la pantalla avise que algo necesita
-/// que alguien lo mire, en vez de fallar en silencio para siempre.
+/// Cuántas filas fallaron de verdad y ya no se reintentan solas (sin contar
+/// los rechazos por conflicto) -- para que la pantalla avise que algo
+/// necesita que alguien lo mire, en vez de fallar en silencio para siempre.
 pub fn contar_fallos_permanentes(connection: &Connection) -> Result<i64, SincronizacionError> {
     Ok(connection.query_row(
-        "SELECT COUNT(*) FROM cola_salida WHERE estado = 'fallido'",
+        &format!("SELECT COUNT(*) FROM cola_salida WHERE {ES_ERROR_REAL}"),
         [],
         |row| row.get(0),
     )?)
+}
+
+/// Una fila fallida de la cola, sólo con datos técnicos: sirve para estudiar
+/// desde la nube qué falló sin acceso al equipo. Nunca lleva el cuerpo de la
+/// respuesta (puede traer cédulas o nombres): de él sólo sale el código de
+/// Postgres y el nombre de la restricción que rechazó la fila.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FalloCola {
+    pub entidad: String,
+    pub operacion: String,
+    /// Identificador del registro: permite buscarlo en la nube.
+    pub entidad_uuid: String,
+    /// `"conflicto"` o `"error"`.
+    pub motivo: String,
+    pub intentos: i64,
+    pub creado_en: String,
+    pub actualizado_en: String,
+    /// Código HTTP con que la nube la rechazó; `None` si no hubo respuesta
+    /// (sin red, base local, etc.).
+    pub estado_http: Option<u16>,
+    /// Código de error de Postgres (`23505`, `42501`...), si vino.
+    pub codigo: Option<String>,
+    /// Restricción o índice que la rechazó, si vino.
+    pub restriccion: Option<String>,
+}
+
+/// Las filas fallidas de la cola, conflictos y errores, hasta `limite`:
+/// primero los errores (lo que de verdad no llegó) y dentro de cada grupo
+/// las más recientes, así un tope corto nunca deja afuera un error.
+pub fn detalle_fallidos_cola(
+    connection: &Connection,
+    limite: usize,
+) -> Result<Vec<FalloCola>, SincronizacionError> {
+    let mut sentencia = connection.prepare(
+        "SELECT entidad, operacion, entidad_uuid, COALESCE(motivo_fallo, 'error'), intentos,
+                creado_en, actualizado_en, COALESCE(ultimo_error, '')
+         FROM cola_salida
+         WHERE estado = 'fallido'
+         ORDER BY COALESCE(motivo_fallo, 'error') = 'error' DESC, actualizado_en DESC, id DESC
+         LIMIT ?1",
+    )?;
+    let filas = sentencia
+        .query_map(params![i64::try_from(limite).unwrap_or(i64::MAX)], |row| {
+            let ultimo_error: String = row.get(7)?;
+            Ok(FalloCola {
+                entidad: row.get(0)?,
+                operacion: row.get(1)?,
+                entidad_uuid: row.get(2)?,
+                motivo: row.get(3)?,
+                intentos: row.get(4)?,
+                creado_en: row.get(5)?,
+                actualizado_en: row.get(6)?,
+                estado_http: estado_http_del_error(&ultimo_error),
+                codigo: campo_json_del_error(&ultimo_error, "code"),
+                restriccion: restriccion_del_error(&ultimo_error),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(filas)
+}
+
+/// `"El receptor respondió 409: {...}"` (ver `SincronizacionError::RespuestaInesperada`) → `409`.
+fn estado_http_del_error(error: &str) -> Option<u16> {
+    let resto = error.strip_prefix("El receptor respondió ")?;
+    resto.split(':').next()?.trim().parse().ok()
+}
+
+/// Valor de un campo de texto del cuerpo JSON de la respuesta, sólo si es
+/// un identificador técnico (letras, números y `_`): nunca texto libre.
+fn campo_json_del_error(error: &str, campo: &str) -> Option<String> {
+    let inicio = error.find(&format!("\"{campo}\":\""))? + campo.len() + 4;
+    let valor: String = error[inicio..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    (!valor.is_empty()).then_some(valor)
+}
+
+/// Nombre de la restricción de un `... constraint \"nombre\"` de Postgres.
+fn restriccion_del_error(error: &str) -> Option<String> {
+    let inicio = error.find("constraint ")? + "constraint ".len();
+    let nombre: String = error[inicio..]
+        .chars()
+        .skip_while(|c| *c == '\\' || *c == '"')
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    (!nombre.is_empty()).then_some(nombre)
+}
+
+/// Marca una fila como fallida para siempre, con su motivo.
+pub(super) fn marcar_fallida(
+    connection: &Connection,
+    id: i64,
+    motivo: MotivoFallo,
+    error: &str,
+) -> Result<(), SincronizacionError> {
+    connection.execute(
+        "
+        UPDATE cola_salida
+        SET
+            estado = 'fallido',
+            motivo_fallo = ?1,
+            intentos = intentos + 1,
+            ultimo_error = ?2,
+            actualizado_en = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ?3
+        ",
+        params![motivo.columna(), error, id],
+    )?;
+    Ok(())
 }
 
 pub(super) fn marcar(
@@ -644,7 +787,12 @@ fn marcar_fallida_por_ingreso_activo(
         fila.entidad,
         fila.entidad_uuid,
     );
-    marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
+    marcar_fallida(
+        connection,
+        fila.id,
+        MotivoFallo::Conflicto,
+        &error.to_string(),
+    )?;
     resumen.fallidos += 1;
     Ok(())
 }

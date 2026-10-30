@@ -401,6 +401,69 @@ fn avisa_lo_que_lleva_mas_de_un_minuto_sin_subir_a_la_nube() {
     assert!(!aviso.critico);
 }
 
+/// Incidente 2026-10-30: un teléfono mostraba en rojo "28 registros no se
+/// pudieron subir a la nube" y eran choques de gafete o de persona ya
+/// adentro, avisados en su momento. Los conflictos no prenden el aviso; un
+/// error real sí. El detalle (para la telemetría) trae los dos.
+#[test]
+fn los_conflictos_viejos_no_prenden_el_aviso_rojo_pero_salen_en_el_detalle() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let nucleo = Nucleo::abrir(ruta.clone()).unwrap();
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    let insertar = |uuid: &str, motivo: &str, error: &str, actualizado: &str| {
+        conexion
+            .execute(
+                "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, estado, motivo_fallo,
+                                          intentos, creado_en, actualizado_en, ultimo_error)
+                 VALUES ('ingreso', ?1, 'crear', 'fallido', ?2, 1,
+                         '2026-10-20T10:00:00Z', ?4, ?3)",
+                rusqlite::params![uuid, motivo, error, actualizado],
+            )
+            .unwrap();
+    };
+    for numero in 0..28 {
+        insertar(
+            &format!("uuid-choque-{numero}"),
+            "conflicto",
+            r#"El receptor respondió 409: {"code":"23505","message":"duplicate key value violates unique constraint \"ingresos_gafete_activo_sitio_idx\""}"#,
+            "2026-10-29T10:00:00Z",
+        );
+    }
+
+    assert_eq!(nucleo.aviso_bandeja_salida().unwrap(), None);
+    assert_eq!(nucleo.detalle_fallidos_bandeja(40).unwrap().len(), 28);
+
+    insertar(
+        "uuid-perdido",
+        "error",
+        r#"El receptor respondió 400: {"code":"22P02","message":"invalid input syntax"}"#,
+        "2026-10-21T10:00:00Z",
+    );
+    let aviso = nucleo
+        .aviso_bandeja_salida()
+        .unwrap()
+        .expect("el error real se avisa");
+    assert_eq!(
+        aviso.texto,
+        "1 registro no se pudo subir a la nube: avise al administrador"
+    );
+    assert!(aviso.critico);
+    let detalle = nucleo.detalle_fallidos_bandeja(40).unwrap();
+    // El error va primero aunque los conflictos sean más recientes: así un
+    // tope corto de filas en la telemetría nunca lo deja afuera.
+    let perdido = &detalle[0];
+    assert_eq!(perdido.entidad_uuid, "uuid-perdido");
+    assert_eq!(
+        (
+            perdido.motivo.as_str(),
+            perdido.estado_http,
+            perdido.codigo.as_deref()
+        ),
+        ("error", Some(400), Some("22P02"))
+    );
+}
+
 /// Regresión: la lista se cortaba en 30 (el tope de `buscar_contratistas`),
 /// así que con 33 adentro el contador del teléfono decía 30 y los 3 ingresos
 /// más viejos no aparecían, mientras escritorio mostraba los 33.

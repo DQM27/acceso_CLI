@@ -71,9 +71,9 @@ use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, inter
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     AvisoAcceso, AvisoBandejaSalida, ContratistaResumen, DatosContratista, Empresa,
-    EmpresaProveedor, EncargadoRuta, EstadoReloj, IdentidadEquipo, IngresoActivoResumen,
-    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos,
-    MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
+    EmpresaProveedor, EncargadoRuta, EstadoReloj, FalloBandejaSalida, IdentidadEquipo,
+    IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
+    ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
     ResultadoIngresoRegistrado, ResultadoReconexion, ResultadoRegistroEntrada,
