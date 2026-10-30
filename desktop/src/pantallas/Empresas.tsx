@@ -8,7 +8,8 @@ import FormularioEmpresa from "./FormularioEmpresa";
 import FormularioEmpresaProveedor from "./FormularioEmpresaProveedor";
 import { buscarEmpresas } from "../api";
 import type { EmpresaResumen } from "../api";
-import { buscarEmpresasProveedor } from "../api/proveedores";
+import { listarEmpresasProveedor } from "../api/proveedores";
+import { coincideBusqueda } from "../busqueda";
 import type { EmpresaProveedor } from "../api/proveedores";
 
 type TipoEmpresa = "contratista" | "proveedor";
@@ -23,18 +24,38 @@ function columnaActiva<T extends FilaEmpresa>(): ColDef<T> {
     flex: 1,
     minWidth: 100,
     valueGetter: (p) => (p.data?.activo ? "Sí" : "No"),
-    cellStyle: (p) => (p.data && !p.data.activo ? { color: "var(--error)", fontWeight: 600 } : null),
+    cellStyle: (p) =>
+      p.data && !p.data.activo
+        ? { color: "var(--error)", fontWeight: 600 }
+        : null,
   };
 }
 
 const columnasContratista: ColDef<EmpresaResumen>[] = [
-  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
-  { field: "contratistas", headerName: "Contratistas", flex: 1.3, minWidth: 130 },
+  {
+    field: "nombre",
+    headerName: "Nombre",
+    flex: 1.6,
+    minWidth: 170,
+    cellStyle: { textAlign: "left" },
+  },
+  {
+    field: "contratistas",
+    headerName: "Contratistas",
+    flex: 1.3,
+    minWidth: 130,
+  },
   columnaActiva<EmpresaResumen>(),
 ];
 
 const columnasProveedor: ColDef<EmpresaProveedor>[] = [
-  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+  {
+    field: "nombre",
+    headerName: "Nombre",
+    flex: 1.6,
+    minWidth: 170,
+    cellStyle: { textAlign: "left" },
+  },
   columnaActiva<EmpresaProveedor>(),
 ];
 
@@ -52,14 +73,17 @@ const columnasProveedor: ColDef<EmpresaProveedor>[] = [
 export default function Empresas() {
   const [tipo, setTipo] = useState<TipoEmpresa>("contratista");
   const [texto, setTexto] = useState("");
-  const [filasContratista, setFilasContratista] = useState<EmpresaResumen[]>([]);
+  const [filasContratista, setFilasContratista] = useState<EmpresaResumen[]>(
+    [],
+  );
   const [filasProveedor, setFilasProveedor] = useState<EmpresaProveedor[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [formularioAbierto, setFormularioAbierto] = useState<"crear" | EmpresaResumen | null>(
-    null,
-  );
+  const [formularioAbierto, setFormularioAbierto] = useState<
+    "crear" | EmpresaResumen | null
+  >(null);
 
-  const filas: FilaEmpresa[] = tipo === "contratista" ? filasContratista : filasProveedor;
+  const filas: FilaEmpresa[] =
+    tipo === "contratista" ? filasContratista : filasProveedor;
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
   const recargar = useCallback(
@@ -70,8 +94,18 @@ export default function Empresas() {
           ? buscarEmpresas({ texto: texto || undefined }).then((datos) => {
               if (estaVigente()) setFilasContratista(datos);
             })
-          : buscarEmpresasProveedor(texto).then((datos) => {
-              if (estaVigente()) setFilasProveedor(datos);
+          : // La lista completa, filtrada acá: la búsqueda del núcleo corta en
+            // 20 (es para sugerir mientras se escribe) y esta grilla mostraba
+            // sólo las primeras 20 empresas de proveedor (2026-10-30).
+            listarEmpresasProveedor().then((datos) => {
+              if (!estaVigente()) return;
+              setFilasProveedor(
+                texto.trim()
+                  ? datos.filter((empresa) =>
+                      coincideBusqueda(texto, empresa.nombre),
+                    )
+                  : datos,
+              );
             });
       return promesa.finally(() => {
         if (estaVigente()) setCargando(false);
@@ -146,7 +180,9 @@ export default function Empresas() {
 
       {formularioAbierto && tipo === "contratista" && (
         <FormularioEmpresa
-          empresa={formularioAbierto === "crear" ? undefined : formularioAbierto}
+          empresa={
+            formularioAbierto === "crear" ? undefined : formularioAbierto
+          }
           onCerrar={() => setFormularioAbierto(null)}
           onGuardado={() => {
             setFormularioAbierto(null);
