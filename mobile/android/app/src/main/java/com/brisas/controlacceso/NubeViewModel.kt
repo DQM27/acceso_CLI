@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.AvisoBandejaSalida
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 
@@ -43,6 +44,27 @@ class NubeViewModel(
     var error by mutableStateOf<String?>(null)
         private set
 
+    /// Registros de este teléfono que no llegaron a la nube (lo decide el
+    /// núcleo, `aviso_bandeja_salida`); `null` si no hay nada trabado.
+    /// Incidente del 2026-10-29: una salida quedó 17 minutos sin subir y el
+    /// teléfono no lo decía.
+    var avisoBandeja by mutableStateOf<AvisoBandejaSalida?>(null)
+        private set
+
+    /// Relee la bandeja (lectura local, sin red). La pantalla principal la
+    /// llama cada [INTERVALO_REVISION_BANDEJA_MS] mientras está a la vista y
+    /// al terminar cada sincronización, así el aviso se va apenas sube.
+    fun revisarBandeja() {
+        viewModelScope.launch {
+            avisoBandeja = try {
+                withContext(dispatcherIO) { nucleo.avisoBandejaSalida() }
+            } catch (excepcion: Exception) {
+                // Base ocupada o cerrándose: sin nada confiable que mostrar.
+                null
+            }
+        }
+    }
+
     /// Autentica este dispositivo, drena la bandeja de salida pendiente y
     /// trae lo que el otro dispositivo del sitio tiene abierto ahora
     /// mismo. Es una llamada de red real (cientos de milisegundos o más,
@@ -68,11 +90,14 @@ class NubeViewModel(
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 sincronizando = false
+                revisarBandeja()
             }
         }
     }
 
     companion object {
+        const val INTERVALO_REVISION_BANDEJA_MS = 15_000L
+
         fun factory(
             nucleo: Nucleo,
             onSesionExpulsada: (enOtraUnidad: Boolean) -> Unit = {},

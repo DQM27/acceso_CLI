@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { avisos } from "../avisos/avisos";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, TriangleAlert } from "lucide-react";
+import { avisoBandejaSalida, type AvisoBandejaSalida } from "../api/nube";
 import { descripcion } from "./BarraNube.logica";
 import type { EstadoConexionNube } from "./BarraNube.logica";
 
@@ -35,6 +36,38 @@ function useEnLinea(): boolean {
   return enLinea;
 }
 
+/** Cada cuánto se revisa la bandeja de salida (lectura local, sin red). */
+const MS_REVISION_BANDEJA = 15_000;
+
+/** Aviso de registros de esta PC que no llegaron a la nube (lo decide el
+ * núcleo, ver `nube::aviso_bandeja`). Se revisa cada 15 s y al terminar
+ * cada sincronización, así se va apenas lo pendiente sube. Incidente del
+ * 2026-10-29: una salida quedó 17 min sin subir y ningún equipo lo avisó. */
+function useAvisoBandeja(sincronizando: boolean): AvisoBandejaSalida | null {
+  const [aviso, setAviso] = useState<AvisoBandejaSalida | null>(null);
+  useEffect(() => {
+    if (sincronizando) return;
+    let vigente = true;
+    const revisar = () => {
+      avisoBandejaSalida()
+        .then((nuevo) => {
+          if (vigente) setAviso(nuevo);
+        })
+        .catch(() => {
+          // Sin sesión o base ocupada: no hay nada confiable que mostrar.
+          if (vigente) setAviso(null);
+        });
+    };
+    revisar();
+    const intervalo = window.setInterval(revisar, MS_REVISION_BANDEJA);
+    return () => {
+      vigente = false;
+      window.clearInterval(intervalo);
+    };
+  }, [sincronizando]);
+  return aviso;
+}
+
 /**
  * Botón "Sincronizar" + indicador de conexión en vivo, en la barra de
  * estado — mismo lenguaje visual que `MenuUsuario` (`.barra-estado-boton`,
@@ -63,8 +96,26 @@ export default function BarraNube({
 }) {
   const enLinea = useEnLinea();
   const { texto, color, parpadea } = descripcion(estadoConexion, enLinea);
+  const avisoBandeja = useAvisoBandeja(sincronizando);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+      {avisoBandeja && (
+        <span
+          role="status"
+          title="Registros hechos en esta PC que todavía no llegaron a la nube. Se reintentan solos; pulse Sincronizar para forzarlo."
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            color: avisoBandeja.critico ? "var(--error)" : "var(--advertencia)",
+          }}
+        >
+          <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+          {avisoBandeja.texto}
+        </span>
+      )}
       <span
         title={`Avisos en vivo de la nube: ${texto}`}
         style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color }}

@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -42,6 +43,35 @@ class NubeViewModelTest {
         if (::nucleo.isInitialized) nucleo.close()
         archivoDb.delete()
         Dispatchers.resetMain()
+    }
+
+    /// Incidente del 2026-10-29: una salida quedó 17 minutos sin subir y el
+    /// teléfono no lo decía. Con algo pendiente hace más de un minuto, la
+    /// pantalla recibe el aviso; cuando sube, se va.
+    @Test
+    fun `avisa los registros que no llegaron a la nube y el aviso se va al subir`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivoDb,
+            """
+            INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+            VALUES ('ingreso', 'uuid-melania', 'cerrar',
+                    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 minutes'),
+                    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 minutes'));
+            """.trimIndent(),
+        )
+        val viewModel = NubeViewModel(nucleo, dispatcherIO = dispatcher)
+
+        viewModel.revisarBandeja()
+        advanceUntilIdle()
+
+        assertEquals("1 registro sin subir a la nube (hace 10 min)", viewModel.avisoBandeja?.texto)
+        assertFalse(viewModel.avisoBandeja!!.critico)
+
+        NucleoDePrueba.ejecutar(archivoDb, "UPDATE cola_salida SET estado = 'enviado';")
+        viewModel.revisarBandeja()
+        advanceUntilIdle()
+
+        assertNull(viewModel.avisoBandeja)
     }
 
     @Test

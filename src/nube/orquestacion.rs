@@ -546,6 +546,128 @@ mod tests {
         }
     }
 
+    /// Servidor falso que rechaza el PRIMER pedido con `401` (token vencido)
+    /// y contesta todo lo demás como `servidor_que_anota`.
+    fn servidor_401_y_despues_normal() -> (String, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+        let direccion = listener.local_addr().expect("dirección local");
+        let pedidos = Arc::new(Mutex::new(Vec::new()));
+        let anotados = Arc::clone(&pedidos);
+        thread::spawn(move || {
+            for (numero, conexion) in listener.incoming().enumerate() {
+                let Ok(mut conexion) = conexion else { return };
+                let mut lector = BufReader::new(conexion.try_clone().expect("clonar socket"));
+                let mut primera = String::new();
+                if lector.read_line(&mut primera).is_err() {
+                    continue;
+                }
+                let mut largo_cuerpo = 0;
+                loop {
+                    let mut linea = String::new();
+                    if lector.read_line(&mut linea).is_err() || linea == "\r\n" || linea.is_empty()
+                    {
+                        break;
+                    }
+                    if let Some((nombre, valor)) = linea.split_once(':')
+                        && nombre.eq_ignore_ascii_case("content-length")
+                    {
+                        largo_cuerpo = valor.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut cuerpo = vec![0; largo_cuerpo];
+                let _ = lector.read_exact(&mut cuerpo);
+                anotados.lock().unwrap().push(primera.trim().to_string());
+                let respuesta = if numero == 0 {
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
+                     Content-Length: 24\r\nConnection: close\r\n\r\n{\"message\":\"JWT expired\"}"
+                        .to_string()
+                } else {
+                    let vacio = if primera.contains("/rpc/") {
+                        "{}"
+                    } else {
+                        "[]"
+                    };
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                         Content-Length: 2\r\nConnection: close\r\n\r\n{vacio}"
+                    )
+                };
+                let _ = conexion.write_all(respuesta.as_bytes());
+            }
+        });
+        (format!("http://{direccion}"), pedidos)
+    }
+
+    /// De punta a punta, como lo hace cada app (`Nucleo::sincronizar` en el
+    /// móvil, `ejecutar_sincronizacion_con_alcance` en escritorio): el primer
+    /// intento choca con el token vencido y devuelve el error que la app
+    /// reconoce; la app renueva el token y reintenta EN EL ACTO, y el dato
+    /// sale en ese reintento, sin esperar ningún backoff (incidente del
+    /// 2026-10-29: antes esperaba 15 minutos).
+    #[test]
+    fn con_el_token_vencido_el_reintento_inmediato_de_la_app_sube_el_dato() {
+        let conexion = Connection::open_in_memory().unwrap();
+        initialize_database(&conexion).unwrap();
+        conexion
+            .execute(
+                "INSERT INTO empresas (nombre, activo, uuid) VALUES ('Empresa 1', 1, 'uuid-empresa-1')",
+                [],
+            )
+            .unwrap();
+        conexion
+            .execute(
+                "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+                 VALUES ('empresa', 'uuid-empresa-1', 'crear', '2026-10-30T04:00:38Z', '2026-10-30T04:00:38Z')",
+                [],
+            )
+            .unwrap();
+        let (base_url, pedidos) = servidor_401_y_despues_normal();
+        let contexto = ContextoSincronizacion {
+            base_url: &base_url,
+            apikey: "apikey",
+            token: "token",
+            dispositivo_id: "11111111-1111-1111-1111-111111111111",
+            sitio_id: "22222222-2222-2222-2222-222222222222",
+        };
+        let sincronizar_envio = || {
+            sincronizar(
+                &conexion,
+                &contexto,
+                AlcanceSincronizacion::solo_envio(),
+                PerfilDispositivo::Movil,
+            )
+        };
+
+        let estado_en_cola = || -> (String, i64) {
+            conexion
+                .query_row("SELECT estado, intentos FROM cola_salida", [], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })
+                .unwrap()
+        };
+
+        let primer_intento = sincronizar_envio().expect_err("el 401 llega a la app");
+        assert!(
+            primer_intento.token_dispositivo_vencido(),
+            "{primer_intento}"
+        );
+        assert_eq!(
+            estado_en_cola(),
+            ("pendiente".to_string(), 0),
+            "el 401 no suma intento: sin espera para el reintento"
+        );
+
+        let reintento = sincronizar_envio().expect("con el token renovado, sale");
+        assert_eq!(reintento.enviados, 1);
+        assert_eq!(estado_en_cola().0, "enviado");
+        let pedidos = pedidos.lock().unwrap().clone();
+        let envios = pedidos
+            .iter()
+            .filter(|pedido| pedido.starts_with("POST /rest/v1/empresas"))
+            .count();
+        assert_eq!(envios, 2, "uno rechazado y el del reintento: {pedidos:#?}");
+    }
+
     #[test]
     fn catalogo_y_rutas_suma_solo_las_rutas() {
         let (_, pedidos) = correr(

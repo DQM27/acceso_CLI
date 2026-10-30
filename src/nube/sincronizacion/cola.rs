@@ -29,7 +29,9 @@ pub(super) const INTENTOS_ANTES_DE_FALLO_PERMANENTE: i64 = 20;
 /// individual fallida -- eso queda registrado en la propia fila
 /// (`ultimo_error`, y `estado = 'fallido'` sólo tras
 /// [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`] intentos); sólo devuelve error si
-/// no se pudo ni siquiera leer/actualizar la cola local.
+/// no se pudo ni siquiera leer/actualizar la cola local, o si falló la
+/// conexión (ver [`es_fallo_de_la_conexion`]): ahí corta y lo pendiente queda
+/// intacto, en el mismo orden.
 pub fn drenar_cola(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -189,12 +191,18 @@ pub(super) fn drenar_grupo(
             &grupo[0].entidad,
             &grupo,
         );
-        if intento_lote.is_ok() {
-            for fila in &grupo {
-                marcar(connection, fila.id, "enviado", None)?;
+        match intento_lote {
+            Ok(()) => {
+                for fila in &grupo {
+                    marcar(connection, fila.id, "enviado", None)?;
+                }
+                resumen.enviados += u32::try_from(grupo.len()).unwrap_or(u32::MAX);
+                return Ok(());
             }
-            resumen.enviados += u32::try_from(grupo.len()).unwrap_or(u32::MAX);
-            return Ok(());
+            // Ver `es_fallo_de_la_conexion`: ninguna fila del grupo tiene la
+            // culpa, así que tampoco se prueban de a una.
+            Err(error) if es_fallo_de_la_conexion(&error) => return Err(error),
+            Err(_) => {}
         }
         // El lote entero falló -- se cae a fila por fila para aislar cuál
         // es la mala en vez de reintentar a todo el grupo junto (ver el
@@ -317,7 +325,8 @@ fn enviar_fila(
 /// queda registrado en la propia fila (`ultimo_error`, y
 /// `estado = 'fallido'` sólo tras [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`]
 /// intentos); sólo devuelve error si no se pudo ni siquiera
-/// leer/actualizar la cola local.
+/// leer/actualizar la cola local, o si falló la conexión (ver
+/// [`es_fallo_de_la_conexion`]).
 pub(super) fn procesar_fila_individual(
     cliente: &reqwest::blocking::Client,
     connection: &Connection,
@@ -344,6 +353,18 @@ pub(super) fn procesar_fila_individual(
         Ok(()) => {
             marcar(connection, fila.id, "enviado", None)?;
             resumen.enviados += 1;
+        }
+        Err(error) if es_fallo_de_la_conexion(&error) => {
+            // La fila queda tal cual (sin intento ni espera) y la pasada se
+            // corta: ver `es_fallo_de_la_conexion`.
+            log::warn!(
+                "cola_salida: fila {} ({} {} {}) no salió por la conexión, se reintenta sin espera: {error}",
+                fila.id,
+                fila.entidad,
+                fila.operacion,
+                fila.entidad_uuid,
+            );
+            return Err(error);
         }
         Err(error)
             if fila.operacion != "cerrar" && es_conflicto_gafete_activo(&fila.entidad, &error) =>
@@ -411,6 +432,30 @@ pub(super) fn procesar_fila_individual(
     Ok(())
 }
 
+/// Fallos que no dicen nada de la fila sino de la conexión: el token del
+/// equipo vencido (`401`) o la nube inalcanzable (sin red, sin respuesta a
+/// tiempo). La fila no suma intento ni espera, y la pasada se corta con el
+/// error para que quien sincroniza lo resuelva y la vuelva a mandar en el
+/// acto: con `401`, las dos apps renuevan el token y reintentan una vez (ver
+/// `ejecutar_sincronizacion_con_alcance` en escritorio y `Nucleo::sincronizar`
+/// en el móvil); sin red, la manda el pulso siguiente.
+///
+/// Incidente del 2026-10-29: la salida de un contratista recibió `401` (el
+/// token vencido mientras el teléfono dormía, ver `cache_token`), quedó
+/// castigada con la espera de 15 minutos, y las salidas que el operador dio
+/// después subieron primero con el token ya renovado. Durante 17 minutos el
+/// teléfono la tenía afuera y la nube y el escritorio, adentro.
+///
+/// Un `5xx` no entra: una fila que siempre lo provoca trabaría la cola entera
+/// si nunca sumara intentos; sigue el camino normal, con su espera.
+pub(super) fn es_fallo_de_la_conexion(error: &SincronizacionError) -> bool {
+    error.token_dispositivo_vencido()
+        || matches!(
+            error,
+            SincronizacionError::Red(error) if error.es_falta_de_conexion()
+        )
+}
+
 /// Filas listas para reintentarse ahora: nunca tocadas (`intentos = 0`), o
 /// que ya esperaron lo suficiente desde el último intento. La espera crece
 /// con cada fallo (15 min, 30 min, 45 min...), tope de un día -- para no
@@ -445,6 +490,36 @@ pub(super) fn pendientes(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(filas)
+}
+
+/// Lo que la bandeja de salida tiene sin subir: cuántos registros esperan,
+/// desde cuándo el más viejo (`creado_en`, UTC) y cuántos ya agotaron los
+/// reintentos. Lo lee `nube::aviso_bandeja` para avisarle a quien opera.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EstadoBandejaSalida {
+    pub pendientes: i64,
+    pub pendiente_mas_antiguo: Option<String>,
+    pub fallidos: i64,
+}
+
+pub fn estado_bandeja_salida(
+    connection: &Connection,
+) -> Result<EstadoBandejaSalida, SincronizacionError> {
+    Ok(connection.query_row(
+        "SELECT
+             COUNT(*) FILTER (WHERE estado = 'pendiente'),
+             MIN(creado_en) FILTER (WHERE estado = 'pendiente'),
+             COUNT(*) FILTER (WHERE estado = 'fallido')
+         FROM cola_salida",
+        [],
+        |row| {
+            Ok(EstadoBandejaSalida {
+                pendientes: row.get(0)?,
+                pendiente_mas_antiguo: row.get(1)?,
+                fallidos: row.get(2)?,
+            })
+        },
+    )?)
 }
 
 /// Cuántas filas ya agotaron los reintentos automáticos

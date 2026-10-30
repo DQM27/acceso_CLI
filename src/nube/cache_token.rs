@@ -21,7 +21,7 @@
 //! solución escrita una sola vez: quien lo use debe seguir sosteniéndolo
 //! como campo hermano de su `AppCore`, no envuelto por el mismo candado.
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 pub use super::cliente::{
     DestinoReconexion, DetalleReconexion, MetadatosDispositivo, NubeError, TokenDispositivo,
@@ -71,6 +71,23 @@ struct EntradaCache {
     dispositivo_id: String,
     token: TokenDispositivo,
     obtenido_en: Instant,
+    /// El mismo momento en el reloj de pared: ver [`transcurrido`].
+    obtenido_en_reloj: SystemTime,
+}
+
+/// Cuánto pasó desde que se obtuvo el token, para decidir si sigue vigente.
+///
+/// `Instant` solo no alcanza: en Android es el reloj monotónico, que se
+/// DETIENE mientras el teléfono duerme. Un teléfono que pasó horas con la
+/// pantalla apagada creía que su token tenía minutos y lo mandaba ya vencido
+/// (incidente del 2026-10-29: la salida de un contratista recibió `401`).
+/// El reloj de pared sí cuenta el sueño, pero puede saltar (hora cambiada a
+/// mano, ajuste de red). Se toma el MAYOR de los dos: si cualquiera dice que
+/// pasó el tiempo, el token se renueva. Un salto hacia adelante sólo
+/// adelanta una renovación (inofensivo); uno hacia atrás lo cubre el
+/// monotónico.
+fn transcurrido(desde_monotonico: Duration, desde_reloj: Option<Duration>) -> Duration {
+    desde_monotonico.max(desde_reloj.unwrap_or_default())
 }
 
 /// Caché de un único `TokenDispositivo` por instancia. Un `AppCore`, un
@@ -305,7 +322,13 @@ impl CacheTokenDispositivo {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(entrada) = cache.as_ref()
                 && entrada.dispositivo_id == dispositivo_id
-                && let Some(mut token) = reutilizable(&entrada.token, entrada.obtenido_en.elapsed())
+                && let Some(mut token) = reutilizable(
+                    &entrada.token,
+                    transcurrido(
+                        entrada.obtenido_en.elapsed(),
+                        entrada.obtenido_en_reloj.elapsed().ok(),
+                    ),
+                )
             {
                 token.desfase_reloj_ms = tomar(&self.desfase_pendiente);
                 return Ok(token);
@@ -344,6 +367,7 @@ impl CacheTokenDispositivo {
             dispositivo_id: token.dispositivo_id.clone(),
             token: token.clone(),
             obtenido_en: Instant::now(),
+            obtenido_en_reloj: SystemTime::now(),
         });
     }
 
@@ -419,7 +443,7 @@ mod tests {
 
     use std::sync::Mutex;
 
-    use super::{MARGEN_EXPIRACION, TokenDispositivo, reutilizable, tomar};
+    use super::{MARGEN_EXPIRACION, TokenDispositivo, reutilizable, tomar, transcurrido};
 
     fn token_de_12_horas() -> TokenDispositivo {
         TokenDispositivo {
@@ -467,6 +491,39 @@ mod tests {
                 Duration::from_secs(12 * 60 * 60 - 10 * 60)
             )
             .is_none()
+        );
+    }
+
+    /// Incidente del 2026-10-29: el teléfono durmió casi todo el turno; el
+    /// reloj monotónico (detenido durante el sueño) marcaba 40 minutos y el
+    /// de pared casi 12 horas. La caché entregaba el token como vigente y la
+    /// nube lo rechazaba con `401`.
+    #[test]
+    fn un_telefono_que_durmio_no_reusa_un_token_que_en_la_realidad_ya_vencio() {
+        let monotonico = Duration::from_secs(40 * 60);
+        let reloj = Duration::from_secs(11 * 60 * 60 + 55 * 60);
+
+        assert!(
+            reutilizable(&token_de_12_horas(), monotonico).is_some(),
+            "sólo con el monotónico, el token parecía vigente (el error)"
+        );
+        assert!(
+            reutilizable(&token_de_12_horas(), transcurrido(monotonico, Some(reloj))).is_none(),
+            "contando el sueño, se renueva antes de usarlo"
+        );
+    }
+
+    #[test]
+    fn un_reloj_atrasado_a_mano_no_alarga_la_vida_del_token() {
+        // El reloj de pared volvió atrás (hora cambiada a mano): `elapsed()`
+        // falla y no hay lectura; manda el monotónico.
+        let monotonico = Duration::from_secs(12 * 60 * 60);
+        assert_eq!(transcurrido(monotonico, None), monotonico);
+        assert!(reutilizable(&token_de_12_horas(), transcurrido(monotonico, None)).is_none());
+        // Y si el de pared marca menos que el monotónico, también manda el mayor.
+        assert_eq!(
+            transcurrido(monotonico, Some(Duration::from_secs(60))),
+            monotonico
         );
     }
 

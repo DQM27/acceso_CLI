@@ -397,23 +397,39 @@ fn si_el_lote_completo_falla_cae_a_mandar_cada_fila_por_separado() {
         "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
     ]);
 
-    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+    // El lote falló una vez (no cuenta como fallo por fila), y las filas
+    // se reintentaron de a una dentro de la misma llamada: dos con éxito.
+    // La tercera no tiene respuesta preparada: un error de red, que corta
+    // la pasada sin castigarla (ver `cola::es_fallo_de_la_conexion`).
+    let error = drenar_cola(&connection, &contexto(&base_url), 10)
+        .expect_err("la falta de red corta la pasada");
+    assert!(error.es_falta_de_conexion(), "{error}");
 
-    // El lote falló una vez (no cuenta como fallo por fila), y las tres
-    // filas individuales se reintentaron dentro de la misma llamada:
-    // dos con éxito. La tercera no tiene respuesta preparada -- se
-    // queda pendiente, igual que pasaría con un error de red real.
-    assert_eq!(resumen.enviados, 2);
-    let pendientes: i64 = connection
+    let contar = |estado: &str| -> i64 {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM cola_salida WHERE estado = ?1",
+                params![estado],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!(contar("enviado"), 2);
+    assert_eq!(
+        contar("pendiente"),
+        1,
+        "la tercera fila queda para reintentar, no perdida ni duplicada"
+    );
+    let intentos: i64 = connection
         .query_row(
-            "SELECT COUNT(*) FROM cola_salida WHERE estado = 'pendiente'",
+            "SELECT intentos FROM cola_salida WHERE estado = 'pendiente'",
             [],
             |row| row.get(0),
         )
         .unwrap();
     assert_eq!(
-        pendientes, 1,
-        "la tercera fila queda para reintentar, no perdida ni duplicada"
+        intentos, 0,
+        "sin intento ni espera: la red no es culpa de la fila"
     );
 }
 
@@ -5433,4 +5449,223 @@ fn una_visita_propia_con_salida_en_el_otro_equipo_se_cierra_aca() {
         .unwrap();
     assert_eq!(salida, "2026-08-01T10:00:00Z");
     assert_eq!(nombre, "Guardia PC");
+}
+
+// --- Incidente del 2026-10-29: una salida con el token vencido ----------
+//
+// La salida de un contratista recibió `401` (token del teléfono vencido),
+// quedó castigada con la espera de 15 minutos y las salidas siguientes
+// subieron primero. Ver `cola::es_fallo_de_la_conexion`.
+
+const RESPUESTA_401: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
+     Connection: close\r\n\r\n{\"code\":\"PGRST301\",\"message\":\"JWT expired\"}";
+const RESPUESTA_204: &str = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
+
+/// Dos ingresos ya cerrados en el teléfono, con sus aperturas ya en la nube
+/// y las dos salidas esperando en la cola, en orden: primero la de
+/// `uuid-melania` (id 10) y después la de `uuid-otro` (id 11).
+fn conexion_con_dos_salidas_en_cola() -> Connection {
+    let (connection, _) = conexion_con_contratista();
+    connection.execute("DELETE FROM cola_salida", []).unwrap();
+    connection
+        .execute("INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES ('1', 'Op', 'h', 'OPERADOR', 1)", [])
+        .unwrap();
+    for (uuid, salida) in [
+        ("uuid-melania", "2026-10-30T04:00:38Z"),
+        ("uuid-otro", "2026-10-30T04:04:13Z"),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos (
+                    contratista_id, empresa_id, fecha_hora_ingreso, fecha_hora_salida, medio_ingreso,
+                    tipo_ingreso, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+                    empresa_nombre, usuario_ingreso_nombre, usuario_salida_nombre, es_personal_ruta,
+                    tiene_acceso, resultado_acceso, reglas_version, uuid
+                ) VALUES (
+                    1, 1, '2026-10-29T18:58:37Z', ?2, 'CAMINANDO', 'SWAT', 1, '1-2345',
+                    'Persona de prueba', 'Brisas', 'Op', 'Op', 0, 1, 'PERMITIDO', 1, ?1
+                )",
+                params![uuid, salida],
+            )
+            .unwrap();
+    }
+    for (id, uuid, operacion, estado, creado) in [
+        (
+            1,
+            "uuid-melania",
+            "crear",
+            "enviado",
+            "2026-10-29T18:58:38Z",
+        ),
+        (2, "uuid-otro", "crear", "enviado", "2026-10-29T19:00:00Z"),
+        (
+            10,
+            "uuid-melania",
+            "cerrar",
+            "pendiente",
+            "2026-10-30T04:00:38Z",
+        ),
+        (
+            11,
+            "uuid-otro",
+            "cerrar",
+            "pendiente",
+            "2026-10-30T04:04:13Z",
+        ),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO cola_salida (id, entidad, entidad_uuid, operacion, estado,
+                     creado_en, actualizado_en)
+                 VALUES (?1, 'ingreso', ?2, ?3, ?4, ?5, ?5)",
+                params![id, uuid, operacion, estado, creado],
+            )
+            .unwrap();
+    }
+    connection
+}
+
+/// El incidente tal cual: con el token vencido, la salida NO se castiga ni
+/// se adelanta la siguiente. La pasada se corta con un error que las apps
+/// reconocen como "renovar el token y reintentar", y en ese reintento las
+/// dos salen enseguida y en orden.
+#[test]
+fn una_salida_con_el_token_vencido_no_se_castiga_y_sale_en_el_reintento() {
+    let connection = conexion_con_dos_salidas_en_cola();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![RESPUESTA_401]);
+
+    let error = drenar_cola(&connection, &contexto(&base_url), 10)
+        .expect_err("el 401 tiene que subir para que la app renueve el token");
+
+    assert!(error.token_dispositivo_vencido(), "{error}");
+    let pedidos_primera = pedidos.lock().unwrap().clone();
+    assert_eq!(
+        pedidos_primera.len(),
+        1,
+        "la siguiente salida no se adelanta"
+    );
+    assert!(pedidos_primera[0].starts_with("PATCH /rest/v1/ingresos?id=eq.uuid-melania"));
+    assert_eq!(
+        estado_e_intentos(&connection, 10),
+        ("pendiente".to_string(), 0),
+        "sin intento ni espera: lista para el reintento inmediato"
+    );
+    assert_eq!(
+        estado_e_intentos(&connection, 11),
+        ("pendiente".to_string(), 0)
+    );
+
+    // El reintento de la app, ya con el token renovado.
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![RESPUESTA_204, RESPUESTA_204]);
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 2);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert!(
+        pedidos[0].starts_with("PATCH /rest/v1/ingresos?id=eq.uuid-melania"),
+        "{pedidos:?}"
+    );
+    assert!(
+        pedidos[1].starts_with("PATCH /rest/v1/ingresos?id=eq.uuid-otro"),
+        "{pedidos:?}"
+    );
+    assert_eq!(estado_e_intentos(&connection, 10).0, "enviado");
+    assert_eq!(estado_e_intentos(&connection, 11).0, "enviado");
+}
+
+/// Sin red (la nube ni contesta): tampoco es culpa de la salida. Queda
+/// intacta para el pulso siguiente, en el mismo orden.
+#[test]
+fn una_salida_sin_red_no_se_castiga_y_conserva_el_orden() {
+    let connection = conexion_con_dos_salidas_en_cola();
+
+    let error = drenar_cola(&connection, &contexto("http://127.0.0.1:1"), 10)
+        .expect_err("sin red la pasada se corta");
+
+    assert!(error.es_falta_de_conexion(), "{error}");
+    assert_eq!(
+        estado_e_intentos(&connection, 10),
+        ("pendiente".to_string(), 0)
+    );
+    assert_eq!(
+        estado_e_intentos(&connection, 11),
+        ("pendiente".to_string(), 0)
+    );
+}
+
+/// Un rechazo de verdad de la nube (`400`: el dato no le sirve) sí sigue el
+/// camino de siempre: suma un intento, espera, y la siguiente sale igual.
+#[test]
+fn un_rechazo_del_dato_sigue_con_su_espera_y_no_frena_a_las_demas() {
+    let connection = conexion_con_dos_salidas_en_cola();
+    let (base_url, _) = servidor_que_anota_pedidos(vec![
+        "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {\"message\":\"dato invalido\"}",
+        RESPUESTA_204,
+    ]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!((resumen.enviados, resumen.fallidos), (1, 1));
+    assert_eq!(
+        estado_e_intentos(&connection, 10),
+        ("pendiente".to_string(), 1)
+    );
+    assert_eq!(estado_e_intentos(&connection, 11).0, "enviado");
+}
+
+/// Un lote que vuelve con `401` tampoco cae a probar fila por fila (todas
+/// fallarían igual, sumando intentos): se corta y queda intacto.
+#[test]
+fn un_lote_con_el_token_vencido_no_prueba_fila_por_fila() {
+    let connection = conexion_con_tres_empresas();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![RESPUESTA_401]);
+
+    let error =
+        drenar_cola(&connection, &contexto(&base_url), 10).expect_err("el 401 del lote sube");
+
+    assert!(error.token_dispositivo_vencido(), "{error}");
+    assert_eq!(pedidos.lock().unwrap().len(), 1, "un solo pedido: el lote");
+    let intentos: i64 = connection
+        .query_row("SELECT SUM(intentos) FROM cola_salida", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(intentos, 0);
+}
+
+/// Lo que lee el aviso "registros sin subir": cuenta lo pendiente, toma el
+/// más viejo y separa los fallos permanentes; lo enviado no cuenta.
+#[test]
+fn el_estado_de_la_bandeja_cuenta_pendientes_el_mas_viejo_y_los_fallidos() {
+    let connection = conexion_con_dos_salidas_en_cola();
+    assert_eq!(
+        estado_bandeja_salida(&connection).unwrap(),
+        EstadoBandejaSalida {
+            pendientes: 2,
+            pendiente_mas_antiguo: Some("2026-10-30T04:00:38Z".to_string()),
+            fallidos: 0,
+        }
+    );
+
+    connection
+        .execute(
+            "UPDATE cola_salida SET estado = 'fallido' WHERE id = 10",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        estado_bandeja_salida(&connection).unwrap(),
+        EstadoBandejaSalida {
+            pendientes: 1,
+            pendiente_mas_antiguo: Some("2026-10-30T04:04:13Z".to_string()),
+            fallidos: 1,
+        }
+    );
+
+    connection.execute("DELETE FROM cola_salida", []).unwrap();
+    assert_eq!(
+        estado_bandeja_salida(&connection).unwrap(),
+        EstadoBandejaSalida::default()
+    );
 }

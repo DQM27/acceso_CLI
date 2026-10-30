@@ -322,10 +322,16 @@ export async function cerrarIngresoCorreoRemoto(uuid: string): Promise<void> {
   solicitarSincronizacionNube();
 }
 
-/** Filas de la cola que ya agotaron los reintentos automáticos y quedaron
- * `fallido` de forma permanente -- necesitan que alguien las mire. */
-export function fallosPermanentesNube(): Promise<number> {
-  return invoke("fallos_permanentes_nube");
+/** Aviso cuando algo registrado en esta PC no llegó a la nube: lo decide el
+ * núcleo (`nube::aviso_bandeja`). `critico`: ya no se reintenta solo.
+ * `null` si no hay nada pendiente. */
+export interface AvisoBandejaSalida {
+  texto: string;
+  critico: boolean;
+}
+
+export function avisoBandejaSalida(): Promise<AvisoBandejaSalida | null> {
+  return invoke("aviso_bandeja_salida");
 }
 
 /** Último desfase medido entre el reloj de esta PC y el del servidor (ms,

@@ -371,6 +371,33 @@ fn listar_activos_y_registrar_salida() {
     assert_eq!(activos_tras_salida, Vec::new());
 }
 
+/// Incidente del 2026-10-29: una salida quedó 17 minutos sin subir y el
+/// teléfono no lo avisaba. Ahora, con algo pendiente hace más de un minuto,
+/// el núcleo entrega el aviso que Kotlin dibuja; sin nada, `None`.
+#[test]
+fn avisa_lo_que_lleva_mas_de_un_minuto_sin_subir_a_la_nube() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let nucleo = Nucleo::abrir(ruta.clone()).unwrap();
+
+    assert_eq!(nucleo.aviso_bandeja_salida().unwrap(), None);
+
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute(
+            "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('ingreso', 'uuid-melania', 'cerrar',
+                     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 minutes'),
+                     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 minutes'))",
+            [],
+        )
+        .unwrap();
+
+    let aviso = nucleo.aviso_bandeja_salida().unwrap().expect("hay algo trabado");
+    assert_eq!(aviso.texto, "1 registro sin subir a la nube (hace 10 min)");
+    assert!(!aviso.critico);
+}
+
 /// Regresión: la lista se cortaba en 30 (el tope de `buscar_contratistas`),
 /// así que con 33 adentro el contador del teléfono decía 30 y los 3 ingresos
 /// más viejos no aparecían, mientras escritorio mostraba los 33.

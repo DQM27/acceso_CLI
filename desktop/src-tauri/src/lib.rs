@@ -719,7 +719,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::cerrar_visita_remota,
         comandos::nube::listar_prestamos_gafete_provisional_remotos,
         comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
-        comandos::nube::fallos_permanentes_nube,
+        comandos::nube::aviso_bandeja_salida,
         comandos::nube::desfase_reloj_ms,
         comandos::nube::identidad_equipo,
         telemetria::telemetria_activa,
