@@ -50,9 +50,19 @@ LOGOS_INTERNOS = (
     RAIZ / "desktop" / "public" / "lattis-splash.png",
 )
 
-# La nieve del móvil: `poner` y `quitar` cambian sólo este valor.
-NIEVE_KT = RAIZ / "mobile" / "android" / "app" / "src" / "main" / "java" / "com" / "brisas" / "controlacceso" / "NieveNavidena.kt"
-INTERRUPTOR_NIEVE = re.compile(r"internal const val NAVIDAD_ACTIVA = (true|false)")
+# La nieve de cada app: `poner` y `quitar` cambian sólo este valor.
+INTERRUPTORES = (
+    (
+        RAIZ / "mobile" / "android" / "app" / "src" / "main" / "java" / "com" / "brisas" / "controlacceso" / "NieveNavidena.kt",
+        re.compile(r"internal const val NAVIDAD_ACTIVA = (true|false)"),
+        lambda activa: f"internal const val NAVIDAD_ACTIVA = {str(activa).lower()}",
+    ),
+    (
+        RAIZ / "desktop" / "src" / "componentes" / "NieveNavidena.tsx",
+        re.compile(r"export const NAVIDAD_ACTIVA = (true|false);"),
+        lambda activa: f"export const NAVIDAD_ACTIVA = {str(activa).lower()};",
+    ),
+)
 # Banda lateral y encabezado del instalador NSIS: el logo en un cuadro blanco.
 INSTALADOR = ("nsis-header.bmp", "nsis-sidebar.bmp")
 
@@ -144,11 +154,13 @@ def aplicar(origen: Path) -> None:
     for nombre in INSTALADOR:
         shutil.copyfile(origen / "escritorio" / nombre, ICONOS_ESCRITORIO / nombre)
 
-    codigo = NIEVE_KT.read_text(encoding="utf-8")
-    nuevo, cambios = INTERRUPTOR_NIEVE.subn(f"internal const val NAVIDAD_ACTIVA = {str(navidad).lower()}", codigo)
-    if cambios != 1:
-        sys.exit("no encontré NAVIDAD_ACTIVA en NieveNavidena.kt")
-    NIEVE_KT.write_text(nuevo, encoding="utf-8")
+    for archivo, patron, valor in INTERRUPTORES:
+        # En bytes: `write_text` en Windows pasaría los saltos de línea a CRLF.
+        codigo = archivo.read_bytes().decode("utf-8")
+        nuevo, cambios = patron.subn(valor(navidad), codigo)
+        if cambios != 1:
+            sys.exit(f"no encontré el interruptor de navidad en {archivo.name}")
+        archivo.write_bytes(nuevo.encode("utf-8"))
 
     for carpeta in sorted((origen / "android").glob("mipmap-*dpi")):
         for nombre in ANDROID:
