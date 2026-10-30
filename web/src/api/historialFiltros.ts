@@ -1,4 +1,7 @@
-import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
+import {
+  inicioDiaCostaRicaUtc,
+  inicioDiaSiguienteCostaRicaUtc,
+} from "../tiempo";
 
 /**
  * Traduce el modelo de filtros por columna de AG Grid (`api.getFilterModel()`,
@@ -33,7 +36,10 @@ export const COLUMNAS_FILTRABLES: Record<string, ColumnaFiltrable> = {
   contratista_cedula: { tipo: "texto", columna: "cedula_p" },
   contratista_nombre: { tipo: "texto", columna: "nombre_p" },
   empresa_nombre: { tipo: "texto", columna: "empresa_p" },
-  dispositivo_entrada_tipo: { tipo: "texto", columna: "dispositivo_entrada_tipo" },
+  dispositivo_entrada_tipo: {
+    tipo: "texto",
+    columna: "dispositivo_entrada_tipo",
+  },
   tipo_ingreso: { tipo: "texto", columna: "tipo_p" },
   medio_ingreso: { tipo: "texto", columna: "medio_p" },
   gafete_numero: { tipo: "numero", columna: "gafete_numero" },
@@ -62,7 +68,11 @@ function entreComillas(valor: string): string {
  * nombre nunca actúan como comodines). Un `*` del usuario se cambia por `_`
  * porque PostgREST usa `*` como comodín y no admite escaparlo. */
 function escaparLike(texto: string): string {
-  return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/\*/g, "_");
+  return texto
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/\*/g, "_");
 }
 
 function hoja(columna: string, operador: string, valor: string): string {
@@ -77,9 +87,14 @@ interface CondicionAg {
   dateTo?: string | null;
 }
 
-function condicionTexto(columna: string, { type, filter }: CondicionAg): string | null {
-  if (type === "blank") return `or(${columna}.is.null,${hoja(columna, "eq", "")})`;
-  if (type === "notBlank") return `and(${columna}.not.is.null,${hoja(columna, "neq", "")})`;
+function condicionTexto(
+  columna: string,
+  { type, filter }: CondicionAg,
+): string | null {
+  if (type === "blank")
+    return `or(${columna}.is.null,${hoja(columna, "eq", "")})`;
+  if (type === "notBlank")
+    return `and(${columna}.not.is.null,${hoja(columna, "neq", "")})`;
   if (filter == null || String(filter).trim() === "") return null;
   const texto = plegarTexto(String(filter));
   const like = escaparLike(texto);
@@ -97,15 +112,24 @@ function condicionTexto(columna: string, { type, filter }: CondicionAg): string 
     case "contains":
     default: {
       // Igual que en escritorio: "carlos sa" exige ambas palabras, en cualquier orden.
-      const palabras = texto.split(/\s+/).filter((palabra) => palabra.length > 0);
+      const palabras = texto
+        .split(/\s+/)
+        .filter((palabra) => palabra.length > 0);
       if (palabras.length === 0) return null;
-      const condiciones = palabras.map((palabra) => hoja(columna, "ilike", `*${escaparLike(palabra)}*`));
-      return condiciones.length === 1 ? condiciones[0] : `and(${condiciones.join(",")})`;
+      const condiciones = palabras.map((palabra) =>
+        hoja(columna, "ilike", `*${escaparLike(palabra)}*`),
+      );
+      return condiciones.length === 1
+        ? condiciones[0]
+        : `and(${condiciones.join(",")})`;
     }
   }
 }
 
-function condicionNumero(columna: string, { type, filter, filterTo }: CondicionAg): string | null {
+function condicionNumero(
+  columna: string,
+  { type, filter, filterTo }: CondicionAg,
+): string | null {
   if (type === "blank") return `${columna}.is.null`;
   if (type === "notBlank") return `${columna}.not.is.null`;
   const numero = filter == null || filter === "" ? NaN : Number(filter);
@@ -122,7 +146,8 @@ function condicionNumero(columna: string, { type, filter, filterTo }: CondicionA
     case "lessThanOrEqual":
       return `${columna}.lte.${numero}`;
     case "inRange": {
-      const hasta = filterTo == null || filterTo === "" ? NaN : Number(filterTo);
+      const hasta =
+        filterTo == null || filterTo === "" ? NaN : Number(filterTo);
       if (Number.isNaN(hasta)) return null;
       // Mismo criterio que AG Grid por defecto: los extremos no cuentan.
       return `and(${columna}.gt.${numero},${columna}.lt.${hasta})`;
@@ -142,7 +167,10 @@ function soloDia(valor: string | null | undefined): string | null {
 /** Fechas por día calendario de Costa Rica, con los mismos cortes que el
  * selector de rango (`inicioDiaCostaRicaUtc`): el día empieza a las 00:00 -06:00
  * y "hasta" es el inicio del día siguiente, exclusivo. */
-function condicionFecha(columna: string, { type, dateFrom, dateTo }: CondicionAg): string | null {
+function condicionFecha(
+  columna: string,
+  { type, dateFrom, dateTo }: CondicionAg,
+): string | null {
   if (type === "blank") return `${columna}.is.null`;
   if (type === "notBlank") return `${columna}.not.is.null`;
   const dia = soloDia(dateFrom);
@@ -168,7 +196,11 @@ function condicionFecha(columna: string, { type, dateFrom, dateTo }: CondicionAg
   }
 }
 
-function condicion(tipo: TipoFiltro, columna: string, datos: CondicionAg): string | null {
+function condicion(
+  tipo: TipoFiltro,
+  columna: string,
+  datos: CondicionAg,
+): string | null {
   if (tipo === "numero") return condicionNumero(columna, datos);
   if (tipo === "fecha") return condicionFecha(columna, datos);
   return condicionTexto(columna, datos);
@@ -194,7 +226,9 @@ export function expresionesDeFiltros(
     const config = columnas[colId];
     if (!config || typeof valor !== "object" || valor === null) continue;
     const filtro = valor as FiltroAg;
-    const condiciones = filtro.conditions ?? [filtro.condition1, filtro.condition2].filter((c) => c !== undefined);
+    const condiciones =
+      filtro.conditions ??
+      [filtro.condition1, filtro.condition2].filter((c) => c !== undefined);
     const expresionesColumna = (condiciones.length > 0 ? condiciones : [filtro])
       .map((datos) => condicion(config.tipo, config.columna, datos))
       .filter((expresion): expresion is string => expresion !== null);
@@ -208,6 +242,135 @@ export function expresionesDeFiltros(
   return expresiones;
 }
 
+/** Una condición con el formato de `panel_historial_contratistas` (migración
+ * `historial_panel_rendimiento`). El texto va tal cual: la función lo pliega
+ * (sin tildes ni mayúsculas) y lo escapa. Las fechas van ya como instantes,
+ * con el día calendario de Costa Rica. */
+export interface CondicionServidor {
+  op: string;
+  valor?: string | number;
+  valor2?: number;
+  desde?: string;
+  hasta?: string;
+}
+
+/** Un filtro de columna para `panel_historial_contratistas`. La función arma el
+ * SQL con una lista cerrada de columnas y operaciones, con los índices y sin
+ * RLS (bajo RLS, Postgres no usa índices para `like` y recorría todo el
+ * período). */
+export interface FiltroServidor {
+  columna: string;
+  union: "and" | "or";
+  condiciones: CondicionServidor[];
+}
+
+const OPERACION_TEXTO: Record<string, string> = {
+  equals: "igual",
+  notEqual: "distinto",
+  startsWith: "empieza",
+  endsWith: "termina",
+  notContains: "no_contiene",
+  contains: "contiene",
+};
+
+const OPERACION_NUMERO: Record<string, string> = {
+  equals: "igual",
+  notEqual: "distinto",
+  greaterThan: "mayor",
+  greaterThanOrEqual: "mayor_igual",
+  lessThan: "menor",
+  lessThanOrEqual: "menor_igual",
+};
+
+function numeroDe(valor: string | number | null | undefined): number | null {
+  if (valor == null || valor === "") return null;
+  const numero = Number(valor);
+  return Number.isNaN(numero) ? null : numero;
+}
+
+function condicionServidor(
+  tipo: TipoFiltro,
+  { type, filter, filterTo, dateFrom, dateTo }: CondicionAg,
+): CondicionServidor | null {
+  if (type === "blank") return { op: "vacio" };
+  if (type === "notBlank") return { op: "no_vacio" };
+  if (tipo === "texto") {
+    if (filter == null || String(filter).trim() === "") return null;
+    return {
+      op: OPERACION_TEXTO[type ?? ""] ?? "contiene",
+      valor: String(filter),
+    };
+  }
+  if (tipo === "numero") {
+    const numero = numeroDe(filter);
+    if (numero === null) return null;
+    if (type === "inRange") {
+      const hasta = numeroDe(filterTo);
+      return hasta === null
+        ? null
+        : { op: "entre", valor: numero, valor2: hasta };
+    }
+    return { op: OPERACION_NUMERO[type ?? ""] ?? "igual", valor: numero };
+  }
+  // Fecha: mismos cortes que `condicionFecha`.
+  const dia = soloDia(dateFrom);
+  if (!dia) return null;
+  const inicio = inicioDiaCostaRicaUtc(dia);
+  const siguiente = inicioDiaSiguienteCostaRicaUtc(dia);
+  switch (type) {
+    case "notEqual":
+      return { op: "fuera", desde: inicio, hasta: siguiente };
+    case "greaterThan":
+      return { op: "rango", desde: siguiente };
+    case "lessThan":
+      return { op: "rango", hasta: inicio };
+    case "inRange": {
+      const diaHasta = soloDia(dateTo);
+      return diaHasta
+        ? {
+            op: "rango",
+            desde: siguiente,
+            hasta: inicioDiaCostaRicaUtc(diaHasta),
+          }
+        : null;
+    }
+    case "equals":
+    default:
+      return { op: "rango", desde: inicio, hasta: siguiente };
+  }
+}
+
+/** Los filtros de la grilla (`api.getFilterModel()`) para
+ * `panel_historial_contratistas`: uno por columna conocida que tenga algún
+ * valor, con sus condiciones y si se unen con "y" u "o". */
+export function filtrosParaServidor(
+  modelo: ModeloFiltros | undefined,
+  columnas: Record<string, ColumnaFiltrable> = COLUMNAS_FILTRABLES,
+): FiltroServidor[] {
+  if (!modelo) return [];
+  const filtros: FiltroServidor[] = [];
+  for (const [colId, valor] of Object.entries(modelo)) {
+    const config = columnas[colId];
+    if (!config || typeof valor !== "object" || valor === null) continue;
+    const filtro = valor as FiltroAg;
+    const condiciones =
+      filtro.conditions ??
+      [filtro.condition1, filtro.condition2].filter((c) => c !== undefined);
+    const delServidor = (condiciones.length > 0 ? condiciones : [filtro])
+      .map((datos) => condicionServidor(config.tipo, datos))
+      .filter(
+        (condicion): condicion is CondicionServidor => condicion !== null,
+      );
+    if (delServidor.length === 0) continue;
+    filtros.push({
+      columna: config.columna,
+      union: filtro.operator === "OR" ? "or" : "and",
+      condiciones: delServidor,
+    });
+  }
+  return filtros;
+}
+
 /** El buscador de las clases que no tienen función de búsqueda propia
  * (proveedores, correo y KOF, ver la migración
  * `historial_panel_proveedores_correo_kof`): la cédula (o el código de
@@ -215,16 +378,26 @@ export function expresionesDeFiltros(
  * guarda la cédula --, o el nombre tiene todas las palabras, en cualquier
  * orden. Sin tildes ni mayúsculas, contra las columnas `*_p`. Una expresión
  * para `.or(...)`; `null` si no hay nada escrito. */
-export function expresionBusqueda(texto: string, columnaIdentificacion: string, columnaNombre: string): string | null {
+export function expresionBusqueda(
+  texto: string,
+  columnaIdentificacion: string,
+  columnaNombre: string,
+): string | null {
   const plegado = plegarTexto(texto.trim());
   if (!plegado) return null;
-  const opciones = [hoja(columnaIdentificacion, "ilike", `*${escaparLike(plegado)}*`)];
+  const opciones = [
+    hoja(columnaIdentificacion, "ilike", `*${escaparLike(plegado)}*`),
+  ];
   const compacto = plegado.replace(/[\s-]/g, "");
   if (compacto && compacto !== plegado) {
-    opciones.push(hoja(columnaIdentificacion, "ilike", `*${escaparLike(compacto)}*`));
+    opciones.push(
+      hoja(columnaIdentificacion, "ilike", `*${escaparLike(compacto)}*`),
+    );
   }
   const palabras = plegado.split(/\s+/).filter((palabra) => palabra.length > 0);
-  const nombre = palabras.map((palabra) => hoja(columnaNombre, "ilike", `*${escaparLike(palabra)}*`));
+  const nombre = palabras.map((palabra) =>
+    hoja(columnaNombre, "ilike", `*${escaparLike(palabra)}*`),
+  );
   opciones.push(nombre.length === 1 ? nombre[0] : `and(${nombre.join(",")})`);
   return `or(${opciones.join(",")})`;
 }

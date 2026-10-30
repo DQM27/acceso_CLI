@@ -1,7 +1,10 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
-import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
-import { expresionesDeFiltros } from "./historialFiltros";
+import {
+  inicioDiaCostaRicaUtc,
+  inicioDiaSiguienteCostaRicaUtc,
+} from "../tiempo";
+import { filtrosParaServidor } from "./historialFiltros";
 import type { ModeloFiltros } from "./historialFiltros";
 
 export { plegarTexto } from "./historialFiltros";
@@ -55,7 +58,10 @@ const filaSitioEsquema = z.object({ id: z.string(), nombre: z.string() });
  * `ingresos` mismo), para que uno recién creado aparezca en el filtro desde
  * el día uno. */
 export async function listarUnidadesOperativas(): Promise<UnidadOperativa[]> {
-  const { data, error } = await supabase.from("sitios").select("id, nombre").order("nombre");
+  const { data, error } = await supabase
+    .from("sitios")
+    .select("id, nombre")
+    .order("nombre");
   if (error) throw new Error(error.message);
   return z.array(filaSitioEsquema).parse(data);
 }
@@ -135,64 +141,98 @@ const movimientoEsquema = z.object({
   medio_texto: z.string(),
 });
 
-/** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
- * orden de `consulta`. Lo comparten la página en pantalla y la exportación. */
+/** La última fila de un tramo con el orden por hora de entrada: el tramo
+ * siguiente se pide "después de esta fila" y el servidor no lee las
+ * anteriores (con saltos, la página 1.000 leía y descartaba 99.900 filas). */
+interface Cursor {
+  hora: string;
+  id: string;
+}
+
+function ordenaPorHora(
+  consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
+): boolean {
+  return (consulta.orden?.campo ?? "hora_entrada") === "hora_entrada";
+}
+
+function cursorDe(filas: MovimientoHistorial[]): Cursor | undefined {
+  const ultima = filas.at(-1);
+  return ultima ? { hora: ultima.hora_entrada, id: ultima.id } : undefined;
+}
+
+/** Un tramo de filas con el filtro y el orden de `consulta`: desde el cursor
+ * si lo hay, o saltando `primera` filas. Lo comparten la página en pantalla y
+ * la exportación.
+ *
+ * Todo va a `panel_historial_contratistas` (migración
+ * `historial_panel_rendimiento`), que valida que quien consulta sea
+ * administrador y arma la consulta completa con los índices: bajo RLS,
+ * Postgres no usa índices para los filtros de texto y recorría el período
+ * entero. */
 async function pedirTramo(
   consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
   primera: number,
   cantidad: number,
+  cursor?: Cursor,
 ): Promise<MovimientoHistorial[]> {
   const { desde, hasta, sitioIds, filtros, orden } = consulta;
   const busqueda = consulta.busqueda?.trim() ?? "";
-  const desdeUtc = desde ? inicioDiaCostaRicaUtc(desde) : undefined;
-  const hastaUtc = hasta ? inicioDiaSiguienteCostaRicaUtc(hasta) : undefined;
-
-  // Con búsqueda (cédula o nombre) se usa `panel_buscar_movimientos`: bajo
-  // RLS, Postgres no puede usar índices para `like` sobre la vista y
-  // recorrería todo el período; la función sí los usa y valida ella misma
-  // que quien consulta sea administrador. Devuelve filas con la forma de la
-  // vista, así que el orden, los filtros de columna y el tramo se aplican
-  // igual en los dos casos. Fechas y unidades van adentro de la función.
-  const base = busqueda
-    ? supabase.rpc("panel_buscar_movimientos", {
-        p_busqueda: busqueda,
-        p_desde: desdeUtc ?? null,
-        p_hasta: hastaUtc ?? null,
-        p_sitio_ids: sitioIds ?? null,
-      })
-    : supabase.from("panel_movimientos");
-
-  let peticion = base
-    .select(COLUMNAS_MOVIMIENTO)
-    .order(orden?.campo ?? "hora_entrada", {
-      ascending: !(orden?.descendente ?? true),
-      nullsFirst: false,
+  const { data, error } = await supabase
+    .rpc("panel_historial_contratistas", {
+      // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
+      p_desde: desde ? inicioDiaCostaRicaUtc(desde) : null,
+      p_hasta: hasta ? inicioDiaSiguienteCostaRicaUtc(hasta) : null,
+      p_sitio_ids: sitioIds ?? null,
+      p_busqueda: busqueda || null,
+      p_filtros: filtrosParaServidor(filtros),
+      p_orden: orden?.campo ?? "hora_entrada",
+      p_descendente: orden?.descendente ?? true,
+      p_limite: cantidad,
+      p_desplazamiento: cursor ? 0 : primera,
+      p_cursor_hora: cursor?.hora ?? null,
+      p_cursor_id: cursor?.id ?? null,
     })
-    // Desempate estable: sin él, dos filas con el mismo valor pueden repetirse
-    // o saltarse entre una página y la siguiente.
-    .order("id")
-    .range(primera, primera + cantidad - 1);
-
-  // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
-  if (!busqueda) {
-    if (desdeUtc) peticion = peticion.gte("hora_entrada", desdeUtc);
-    if (hastaUtc) peticion = peticion.lt("hora_entrada", hastaUtc);
-    if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
-  }
-  // Un `.or()` por columna filtrada: el AND entre columnas sale de aplicarlos todos.
-  for (const expresion of expresionesDeFiltros(filtros)) {
-    peticion = peticion.or(expresion);
-  }
-
-  const { data, error } = await peticion;
+    .select(COLUMNAS_MOVIMIENTO);
   if (error) throw new Error(error.message);
   return z.array(movimientoEsquema).parse(data);
 }
 
-export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
+/** Cursor de la última fila de cada página ya pedida, por consulta (sin la
+ * página). La grilla pide la página siguiente casi siempre, así que esa sale
+ * por cursor; saltar a una página nunca vista, o un orden que no sea por
+ * hora, sigue saltando filas. Acotado a las últimas consultas. */
+const cursoresPorConsulta = new Map<string, Map<number, Cursor>>();
+const MAXIMO_CONSULTAS_RECORDADAS = 20;
+
+function cursoresDe(consulta: ConsultaMovimientos): Map<number, Cursor> {
+  const clave = JSON.stringify({ ...consulta, pagina: undefined });
+  let cursores = cursoresPorConsulta.get(clave);
+  if (!cursores) {
+    if (cursoresPorConsulta.size >= MAXIMO_CONSULTAS_RECORDADAS) {
+      const masVieja = cursoresPorConsulta.keys().next().value;
+      if (masVieja !== undefined) cursoresPorConsulta.delete(masVieja);
+    }
+    cursores = new Map();
+    cursoresPorConsulta.set(clave, cursores);
+  }
+  return cursores;
+}
+
+export async function listarMovimientosPagina(
+  consulta: ConsultaMovimientos,
+): Promise<PaginaMovimientos> {
   const primera = consulta.pagina * consulta.tamano;
-  const filas = await pedirTramo(consulta, primera, consulta.tamano);
-  return { filas, total: filas.length < consulta.tamano ? primera + filas.length : undefined };
+  const porHora = ordenaPorHora(consulta);
+  const cursores = porHora ? cursoresDe(consulta) : undefined;
+  const cursor =
+    consulta.pagina > 0 ? cursores?.get(consulta.pagina - 1) : undefined;
+  const filas = await pedirTramo(consulta, primera, consulta.tamano, cursor);
+  const ultima = cursorDe(filas);
+  if (cursores && ultima) cursores.set(consulta.pagina, ultima);
+  return {
+    filas,
+    total: filas.length < consulta.tamano ? primera + filas.length : undefined,
+  };
 }
 
 // Supabase entrega como máximo 1.000 filas por petición.
@@ -214,13 +254,26 @@ export async function listarMovimientosParaExportar(
   maximo: number = MAXIMO_EXPORTACION,
 ): Promise<ResultadoExportacion> {
   const filas: MovimientoHistorial[] = [];
+  // Con el orden por hora, cada tramo sigue al anterior por cursor: el costo
+  // de un tramo no crece con lo ya exportado.
+  const porHora = ordenaPorHora(consulta);
   while (filas.length < maximo) {
     const cantidad = Math.min(TRAMO_EXPORTACION, maximo - filas.length);
-    const tramo = await pedirTramo(consulta, filas.length, cantidad);
+    const tramo = await pedirTramo(
+      consulta,
+      filas.length,
+      cantidad,
+      porHora ? cursorDe(filas) : undefined,
+    );
     filas.push(...tramo);
     if (tramo.length < cantidad) return { filas, truncado: false };
   }
   // Se llegó al máximo: una fila más dice si quedó algo afuera, sin contar todo.
-  const siguiente = await pedirTramo(consulta, maximo, 1);
+  const siguiente = await pedirTramo(
+    consulta,
+    maximo,
+    1,
+    porHora ? cursorDe(filas) : undefined,
+  );
   return { filas, truncado: siguiente.length > 0 };
 }
