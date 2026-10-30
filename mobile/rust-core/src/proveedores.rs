@@ -29,6 +29,24 @@ impl Nucleo {
             .collect())
     }
 
+    /// Las empresas que se parecen al nombre que se está por dar de alta
+    /// ("FUDDY FACTORY" → "FOODIE FACTORY"): si hay alguna, Kotlin pregunta
+    /// "¿es alguna de estas?" antes de `crear_empresa_proveedor`.
+    pub fn empresas_proveedor_parecidas(
+        &self,
+        nombre: String,
+    ) -> Result<Vec<EmpresaProveedor>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .empresas_proveedor_parecidas(nombre.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: interno(origen),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Alta inline de empresa proveedora desde el mismo selector -- espejo
     /// de `AppCore::crear_empresa_proveedor`.
     pub fn crear_empresa_proveedor(&self, nombre: String) -> Result<i64, NucleoError> {

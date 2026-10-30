@@ -842,7 +842,7 @@ fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
     let pedidos = pedidos.lock().unwrap().clone();
     assert_eq!(pedidos.len(), 2, "{pedidos:#?}");
     assert!(
-        pedidos[0].starts_with("POST /rest/v1/empresas_proveedor?on_conflict=nombre"),
+        pedidos[0].starts_with("POST /rest/v1/empresas_proveedor?on_conflict=sitio_id,nombre"),
         "{pedidos:#?}"
     );
     assert!(
@@ -4243,6 +4243,48 @@ fn recibe_empresas_proveedor_del_sitio_dentro_del_catalogo_general() {
     assert_eq!(nombre, "MayCorp");
     assert_eq!(activo, 1);
     assert_eq!(uuid, "uuid-empresa-proveedor-remota");
+}
+
+/// Una fusión hecha en el panel ("FUDDY FACTORY" en "FOODIE FACTORY") llega
+/// con el catálogo: la fusionada queda marcada y la portería ya no la ofrece.
+#[test]
+fn recibe_la_fusion_de_una_empresa_proveedor_y_deja_de_ofrecerla() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO empresas_proveedor (nombre, uuid) VALUES ('FUDDY FACTORY', 'uuid-fuddy')",
+            [],
+        )
+        .unwrap();
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas_proveedor":[
+            {"id":"uuid-foodie","nombre":"FOODIE FACTORY","activa":true,"updated_at":"2026-10-31T00:00:00Z","fusionada_en":null},
+            {"id":"uuid-fuddy","nombre":"FUDDY FACTORY","activa":false,"updated_at":"2026-10-31T00:00:01Z","fusionada_en":"uuid-foodie"}]}"#,
+    )]);
+
+    recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+    let fusionada: Option<String> = connection
+        .query_row(
+            "SELECT fusionada_en FROM empresas_proveedor WHERE uuid = 'uuid-fuddy'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(fusionada.as_deref(), Some("uuid-foodie"));
+    let repositorio = crate::database::repositories::empresa_proveedor_repository::SqliteEmpresaProveedorRepository::new(&connection);
+    let ofrecidas =
+        crate::services::empresa_proveedor_service::EmpresaProveedorService::new(&repositorio)
+            .buscar_seleccionables("FUDDY")
+            .unwrap();
+    assert_eq!(
+        ofrecidas
+            .iter()
+            .map(|e| e.nombre.as_str())
+            .collect::<Vec<_>>(),
+        vec!["FOODIE FACTORY"]
+    );
 }
 
 /// Mismo criterio que `recibir_catalogo_fusiona_con_una_fila_local_existente_sin_duplicarla`,

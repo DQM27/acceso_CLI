@@ -70,6 +70,16 @@ impl AppCore {
         EmpresaProveedorService::new(&repositorio).buscar_seleccionables(texto)
     }
 
+    /// Las empresas vigentes que se parecen a `nombre`: si hay alguna, la app
+    /// pregunta "¿es alguna de estas?" antes de `crear_empresa_proveedor`.
+    pub fn empresas_proveedor_parecidas(
+        &self,
+        nombre: &str,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
+        EmpresaProveedorService::new(&repositorio).parecidas(nombre)
+    }
+
     pub fn crear_empresa_proveedor(
         &self,
         actor: &UsuarioSesion,

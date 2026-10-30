@@ -663,6 +663,8 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::proveedores::listar_empresas_proveedor,
         comandos::proveedores::listar_empresas_proveedor_seleccionables,
         comandos::proveedores::buscar_empresas_proveedor,
+        comandos::proveedores::buscar_empresas_proveedor_seleccionables,
+        comandos::proveedores::empresas_proveedor_parecidas,
         comandos::proveedores::crear_empresa_proveedor,
         comandos::proveedores::registrar_ingreso_proveedor,
         comandos::proveedores::registrar_salida_proveedor,

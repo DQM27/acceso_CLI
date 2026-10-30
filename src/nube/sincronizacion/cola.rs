@@ -92,7 +92,7 @@ pub(super) fn destino_lote(
         ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
         ("encargado_ruta", _) => Some(("encargados_ruta", Some("codigo_empleado"))),
         ("salida_ruta", _) => Some(("salidas_ruta", None)),
-        ("empresa_proveedor", _) => Some(("empresas_proveedor", Some("nombre"))),
+        ("empresa_proveedor", _) => Some(("empresas_proveedor", Some("sitio_id,nombre"))),
         _ => None,
     }
 }
@@ -1535,9 +1535,10 @@ pub(super) fn enviar_cierre_prestamo_gafete_provisional(
 }
 
 /// Empresas proveedoras (`docs/features-futuras/plan-control-proveedores.md`,
-/// espejo): mismo criterio de `upsert` que `enviar_empresa` -- catálogo
-/// separado a propósito, `on_conflict=nombre` por el mismo motivo (sin
-/// constraint de unicidad remota más que el `id`).
+/// espejo): mismo criterio de `upsert` que `enviar_empresa`, pero el nombre
+/// es único POR UNIDAD (`on_conflict=sitio_id,nombre`, migración
+/// `20261031120000_empresas_proveedor_revision_y_fusion`): cada unidad tiene
+/// su propio directorio de proveedores.
 pub(super) fn construir_cuerpo_empresa_proveedor(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -1572,7 +1573,7 @@ pub(super) fn enviar_empresa_proveedor(
 
     let respuesta = cliente
         .post(format!(
-            "{}/rest/v1/empresas_proveedor?on_conflict=nombre",
+            "{}/rest/v1/empresas_proveedor?on_conflict=sitio_id,nombre",
             contexto.base_url
         ))
         .header("apikey", contexto.apikey)
@@ -1616,7 +1617,7 @@ pub(super) fn crear_empresa_proveedor(
 
     let respuesta = cliente
         .post(format!(
-            "{}/rest/v1/empresas_proveedor?on_conflict=nombre",
+            "{}/rest/v1/empresas_proveedor?on_conflict=sitio_id,nombre",
             contexto.base_url
         ))
         .header("apikey", contexto.apikey)
