@@ -454,6 +454,25 @@ pub struct AvisoBandejaSalida {
     pub critico: bool,
 }
 
+/// Una fila fallida de la bandeja de salida, sólo con datos técnicos (ver
+/// `control_acceso::nube::FalloCola`): la telemetría la manda para estudiar
+/// desde la nube qué falló, sin acceso al teléfono. Nunca lleva cédulas ni
+/// nombres.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FalloBandejaSalida {
+    pub entidad: String,
+    pub operacion: String,
+    pub entidad_uuid: String,
+    /// `"conflicto"` (regla del negocio, ya avisada) o `"error"`.
+    pub motivo: String,
+    pub intentos: i64,
+    pub creado_en: String,
+    pub actualizado_en: String,
+    pub estado_http: Option<u16>,
+    pub codigo: Option<String>,
+    pub restriccion: Option<String>,
+}
+
 /// Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ResumenSincronizacion {

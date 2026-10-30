@@ -1930,3 +1930,91 @@ fn check_de_placa_rechaza_caminando_con_placa_y_acepta_el_resto() {
         "VEHICULO sin placa (dato viejo pre-migración) sigue siendo válido"
     );
 }
+
+/// Un equipo que ya tenía filas fallidas en la cola (versión 59) las ve
+/// clasificadas al actualizar: sólo los 409 de los índices de "gafete
+/// activo" o "persona activa" son conflictos del negocio; todo lo demás,
+/// incluido un 409 de otra restricción, sigue siendo un error a revisar.
+/// Incidente 2026-10-30: el aviso mostraba 28 "registros sin subir" que eran
+/// casi todos choques ya avisados.
+#[test]
+fn migracion_60_separa_los_conflictos_de_los_errores_en_la_cola() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE cola_salida DROP COLUMN motivo_fallo;
+             PRAGMA user_version = 59;",
+        )
+        .unwrap();
+    let filas = [
+        (
+            1,
+            "fallido",
+            r#"El receptor respondió 409: {"code":"23505","message":"duplicate key value violates unique constraint \"ingresos_gafete_activo_sitio_idx\""}"#,
+        ),
+        (
+            2,
+            "fallido",
+            r#"El receptor respondió 409: {"code":"23505","message":"duplicate key value violates unique constraint \"ingresos_contratista_activo_idx\""}"#,
+        ),
+        (
+            3,
+            "fallido",
+            r#"El receptor respondió 409: {"code":"23505","message":"duplicate key value violates unique constraint \"ingresos_correo_cedula_activa_idx\""}"#,
+        ),
+        (
+            4,
+            "fallido",
+            r#"El receptor respondió 409: {"code":"23505","message":"duplicate key value violates unique constraint \"contratistas_pkey\""}"#,
+        ),
+        (
+            5,
+            "fallido",
+            r#"El receptor respondió 500: {"error":"boom"}"#,
+        ),
+        (6, "fallido", "error de red: tiempo agotado"),
+        (
+            7,
+            "pendiente",
+            r#"El receptor respondió 409: {"message":"\"ingresos_gafete_activo_sitio_idx\""}"#,
+        ),
+    ];
+    for (id, estado, error) in filas {
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                     id, entidad, entidad_uuid, operacion, estado, intentos,
+                     creado_en, actualizado_en, ultimo_error
+                 ) VALUES (?1, 'ingreso', ?2, 'crear', ?3, 1,
+                           '2026-10-29T00:00:00Z', '2026-10-29T00:00:00Z', ?4)",
+                rusqlite::params![id, format!("uuid-{id}"), estado, error],
+            )
+            .unwrap();
+    }
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let motivos: Vec<(i64, Option<String>)> = connection
+        .prepare("SELECT id, motivo_fallo FROM cola_salida ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let conflicto = Some("conflicto".to_string());
+    let error = Some("error".to_string());
+    assert_eq!(
+        motivos,
+        vec![
+            (1, conflicto.clone()),
+            (2, conflicto.clone()),
+            (3, conflicto),
+            (4, error.clone()),
+            (5, error.clone()),
+            (6, error),
+            (7, None),
+        ]
+    );
+}

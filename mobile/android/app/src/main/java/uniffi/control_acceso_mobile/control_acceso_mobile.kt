@@ -853,6 +853,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_detalle_fallidos_bandeja(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_dispositivo_vinculado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios(
@@ -1083,6 +1085,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_descartar_token_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_detalle_fallidos_bandeja(`ptr`: Long,`limite`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_dispositivo_vinculado(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1629,6 +1633,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_detalle_fallidos_bandeja() and 0xFFFF) != 14264) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_dispositivo_vinculado() and 0xFFFF) != 29308) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2054,6 +2061,33 @@ public object FfiConverterUByte: FfiConverter<UByte, Byte> {
 
     override fun write(value: UByte, buf: ByteBuffer) {
         buf.put(value.toByte())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUShort: FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort {
+        return value.toUShort()
+    }
+
+    fun lift(value: Int): UShort {
+        return value.toUShort()
+    }
+
+    override fun read(buf: ByteBuffer): UShort {
+        return lift(buf.getShort())
+    }
+
+    override fun lower(value: UShort): Short {
+        return value.toShort()
+    }
+
+    override fun allocationSize(value: UShort) = 2UL
+
+    override fun write(value: UShort, buf: ByteBuffer) {
+        buf.putShort(value.toShort())
     }
 }
 
@@ -3916,6 +3950,13 @@ public interface NucleoInterface {
     fun `desfaseRelojMs`(): kotlin.Long?
     
     /**
+     * Las filas fallidas de la bandeja de salida (las más recientes
+     * primero, hasta `limite`), sólo con datos técnicos. Lectura local, sin
+     * red. La telemetría las manda al sandbox para estudiar qué falló.
+     */
+    fun `detalleFallidosBandeja`(`limite`: kotlin.UInt): List<FalloBandejaSalida>
+    
+    /**
      * `dispositivo_id` al que está vinculada la clave de este teléfono, o
      * `None` si nunca se vinculó.
      */
@@ -5028,6 +5069,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Las filas fallidas de la bandeja de salida (las más recientes
+     * primero, hasta `limite`), sólo con datos técnicos. Lectura local, sin
+     * red. La telemetría las manda al sandbox para estudiar qué falló.
+     */
+    @Throws(NucleoException::class)override fun `detalleFallidosBandeja`(`limite`: kotlin.UInt): List<FalloBandejaSalida> {
+            return FfiConverterSequenceTypeFalloBandejaSalida.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_detalle_fallidos_bandeja(
+        it,
+        
+        FfiConverterUInt.lower(`limite`),_status)
 }
     }
     )
@@ -7591,6 +7652,93 @@ public object FfiConverterTypeEstadoReloj: FfiConverterRustBuffer<EstadoReloj> {
             FfiConverterOptionalULong.write(value.`margenMs`, buf)
             FfiConverterLong.write(value.`diferenciaEquipoMs`, buf)
             FfiConverterOptionalULong.write(value.`anclaHaceMs`, buf)
+    }
+}
+
+
+
+/**
+ * Una fila fallida de la bandeja de salida, sólo con datos técnicos (ver
+ * `control_acceso::nube::FalloCola`): la telemetría la manda para estudiar
+ * desde la nube qué falló, sin acceso al teléfono. Nunca lleva cédulas ni
+ * nombres.
+ */
+data class FalloBandejaSalida (
+    var `entidad`: kotlin.String
+    , 
+    var `operacion`: kotlin.String
+    , 
+    var `entidadUuid`: kotlin.String
+    , 
+    /**
+     * `"conflicto"` (regla del negocio, ya avisada) o `"error"`.
+     */
+    var `motivo`: kotlin.String
+    , 
+    var `intentos`: kotlin.Long
+    , 
+    var `creadoEn`: kotlin.String
+    , 
+    var `actualizadoEn`: kotlin.String
+    , 
+    var `estadoHttp`: kotlin.UShort?
+    , 
+    var `codigo`: kotlin.String?
+    , 
+    var `restriccion`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFalloBandejaSalida: FfiConverterRustBuffer<FalloBandejaSalida> {
+    override fun read(buf: ByteBuffer): FalloBandejaSalida {
+        return FalloBandejaSalida(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalUShort.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FalloBandejaSalida) = (
+            FfiConverterString.allocationSize(value.`entidad`) +
+            FfiConverterString.allocationSize(value.`operacion`) +
+            FfiConverterString.allocationSize(value.`entidadUuid`) +
+            FfiConverterString.allocationSize(value.`motivo`) +
+            FfiConverterLong.allocationSize(value.`intentos`) +
+            FfiConverterString.allocationSize(value.`creadoEn`) +
+            FfiConverterString.allocationSize(value.`actualizadoEn`) +
+            FfiConverterOptionalUShort.allocationSize(value.`estadoHttp`) +
+            FfiConverterOptionalString.allocationSize(value.`codigo`) +
+            FfiConverterOptionalString.allocationSize(value.`restriccion`)
+    )
+
+    override fun write(value: FalloBandejaSalida, buf: ByteBuffer) {
+            FfiConverterString.write(value.`entidad`, buf)
+            FfiConverterString.write(value.`operacion`, buf)
+            FfiConverterString.write(value.`entidadUuid`, buf)
+            FfiConverterString.write(value.`motivo`, buf)
+            FfiConverterLong.write(value.`intentos`, buf)
+            FfiConverterString.write(value.`creadoEn`, buf)
+            FfiConverterString.write(value.`actualizadoEn`, buf)
+            FfiConverterOptionalUShort.write(value.`estadoHttp`, buf)
+            FfiConverterOptionalString.write(value.`codigo`, buf)
+            FfiConverterOptionalString.write(value.`restriccion`, buf)
     }
 }
 
@@ -12234,6 +12382,38 @@ public object FfiConverterTypeViaIngreso: FfiConverterRustBuffer<ViaIngreso> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalUShort: FfiConverterRustBuffer<kotlin.UShort?> {
+    override fun read(buf: ByteBuffer): kotlin.UShort? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUShort.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.UShort?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterUShort.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.UShort?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUShort.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
     override fun read(buf: ByteBuffer): kotlin.ULong? {
         if (buf.get().toInt() == 0) {
@@ -13332,6 +13512,34 @@ public object FfiConverterSequenceTypeEncargadoRuta: FfiConverterRustBuffer<List
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeEncargadoRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeFalloBandejaSalida: FfiConverterRustBuffer<List<FalloBandejaSalida>> {
+    override fun read(buf: ByteBuffer): List<FalloBandejaSalida> {
+        val len = buf.getInt()
+        return List<FalloBandejaSalida>(len) {
+            FfiConverterTypeFalloBandejaSalida.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FalloBandejaSalida>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFalloBandejaSalida.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FalloBandejaSalida>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFalloBandejaSalida.write(it, buf)
         }
     }
 }

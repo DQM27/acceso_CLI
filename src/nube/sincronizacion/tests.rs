@@ -531,6 +531,13 @@ fn tras_agotar_los_reintentos_la_fila_queda_fallida_de_forma_permanente() {
         .unwrap();
     assert_eq!(estado, "fallido");
     assert_eq!(contar_fallos_permanentes(&connection).unwrap(), 1);
+    // Agotar los reintentos sí es un error real: prende el aviso rojo.
+    assert_eq!(estado_bandeja_salida(&connection).unwrap().fallidos, 1);
+    let detalle = detalle_fallidos_cola(&connection, 40).unwrap();
+    assert_eq!(
+        (detalle[0].motivo.as_str(), detalle[0].intentos),
+        ("error", INTENTOS_ANTES_DE_FALLO_PERMANENTE)
+    );
 }
 
 /// Cita + visitante + movimiento de visita completo (con snapshot),
@@ -1350,6 +1357,39 @@ fn apertura_de_ingreso_de_contratista_ya_adentro_queda_fallida_de_inmediato() {
         .unwrap();
     assert_eq!(estado, "fallido");
     assert_eq!(intentos, 1);
+
+    // Es un conflicto del negocio, ya avisado: no prende el aviso rojo de
+    // "no se pudo subir" (incidente 2026-10-30, 28 conflictos viejos
+    // mostrados como registros perdidos).
+    assert_eq!(estado_bandeja_salida(&connection).unwrap().fallidos, 0);
+    assert_eq!(contar_fallos_permanentes(&connection).unwrap(), 0);
+
+    // El detalle para estudiarlo desde la nube trae sólo datos técnicos: ni
+    // la cédula ni el nombre que venían en el cuerpo de la respuesta.
+    let detalle = detalle_fallidos_cola(&connection, 40).unwrap();
+    assert_eq!(detalle.len(), 1);
+    let fallo = &detalle[0];
+    assert_eq!(
+        (
+            fallo.entidad.as_str(),
+            fallo.operacion.as_str(),
+            fallo.entidad_uuid.as_str(),
+            fallo.motivo.as_str(),
+            fallo.estado_http,
+            fallo.codigo.as_deref(),
+            fallo.restriccion.as_deref(),
+        ),
+        (
+            "ingreso",
+            "crear",
+            "uuid-ingreso",
+            "conflicto",
+            Some(409),
+            Some("23505"),
+            Some("ingresos_contratista_activo_idx"),
+        )
+    );
+    assert!(!format!("{fallo:?}").contains("1-2345"), "{fallo:?}");
 }
 
 /// Espejo del test anterior, pero con un `409` que NO nombra este

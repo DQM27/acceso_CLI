@@ -4,9 +4,9 @@ use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 
 use crate::firmante::{AlmacenClaveDispositivo, FirmanteMovil};
 use crate::{
-    AvisoBandejaSalida, FalloSincronizacion, IngresoCorreoRemoto, IngresoProveedorRemoto,
-    IngresoRemoto, Nucleo, NucleoError, PrestamoGafeteProvisionalRemoto, ResumenSincronizacion,
-    SesionRealtimeNube, convertir_fallo_sincronizacion, interno,
+    AvisoBandejaSalida, FalloBandejaSalida, FalloSincronizacion, IngresoCorreoRemoto,
+    IngresoProveedorRemoto, IngresoRemoto, Nucleo, NucleoError, PrestamoGafeteProvisionalRemoto,
+    ResumenSincronizacion, SesionRealtimeNube, convertir_fallo_sincronizacion, interno,
 };
 
 #[uniffi::export]
@@ -356,6 +356,35 @@ impl Nucleo {
                 }
             }),
         )
+    }
+
+    /// Las filas fallidas de la bandeja de salida (las más recientes
+    /// primero, hasta `limite`), sólo con datos técnicos. Lectura local, sin
+    /// red. La telemetría las manda al sandbox para estudiar qué falló.
+    pub fn detalle_fallidos_bandeja(
+        &self,
+        limite: u32,
+    ) -> Result<Vec<FalloBandejaSalida>, NucleoError> {
+        let conexion = self.conexion_secundaria()?;
+        let fallos = control_acceso::nube::detalle_fallidos_cola(&conexion, limite as usize)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
+            })?;
+        Ok(fallos
+            .into_iter()
+            .map(|fallo| FalloBandejaSalida {
+                entidad: fallo.entidad,
+                operacion: fallo.operacion,
+                entidad_uuid: fallo.entidad_uuid,
+                motivo: fallo.motivo,
+                intentos: fallo.intentos,
+                creado_en: fallo.creado_en,
+                actualizado_en: fallo.actualizado_en,
+                estado_http: fallo.estado_http,
+                codigo: fallo.codigo,
+                restriccion: fallo.restriccion,
+            })
+            .collect())
     }
 
     /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio. El
