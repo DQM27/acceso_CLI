@@ -96,6 +96,11 @@ pub(super) struct FilaEmpresaProveedorRemota {
     pub(super) nombre: String,
     pub(super) activa: bool,
     pub(super) updated_at: String,
+    /// La empresa en que el administrador la fusionó desde el panel (migración
+    /// `20261031120000_empresas_proveedor_revision_y_fusion`). Ausente en una
+    /// nube anterior a esa migración.
+    #[serde(default)]
+    pub(super) fusionada_en: Option<String>,
 }
 
 /// Respuesta de `catalogo_del_sitio` (migración
@@ -197,19 +202,28 @@ pub(super) fn guardar_empresas_proveedor(
     for empresa in empresas {
         transaction.execute(
             "
-            INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            INSERT INTO empresas_proveedor (nombre, activo, uuid, fusionada_en)
+            VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT(uuid) DO UPDATE SET
                 nombre = excluded.nombre,
-                activo = excluded.activo
+                activo = excluded.activo,
+                fusionada_en = excluded.fusionada_en
             ON CONFLICT(nombre) DO UPDATE SET
                 activo = excluded.activo,
-                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
+                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid),
+                fusionada_en = excluded.fusionada_en
             ON CONFLICT(PLEGAR(nombre)) DO UPDATE SET
                 nombre = excluded.nombre,
                 activo = excluded.activo,
-                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
+                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid),
+                fusionada_en = excluded.fusionada_en
             ",
-            params![empresa.nombre, empresa.activa, empresa.id],
+            params![
+                empresa.nombre,
+                empresa.activa,
+                empresa.id,
+                empresa.fusionada_en
+            ],
         )?;
         recibidas += 1;
     }
@@ -757,7 +771,7 @@ fn recibir_catalogo_propio_del_sitio(
         cliente,
         contexto,
         &format!(
-            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
+            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at,fusionada_en{filtro_incremental}",
             contexto.base_url, contexto.sitio_id
         ),
         primeras

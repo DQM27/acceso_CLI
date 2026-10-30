@@ -1,8 +1,14 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster } from "sonner";
 import {
   BellRing,
+  Building2,
   History,
   LifeBuoy,
   LogIn,
@@ -28,6 +34,7 @@ import { rutaSeccion, type Seccion } from "./secciones";
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
+const EmpresasProveedor = lazy(() => import("./pantallas/EmpresasProveedor"));
 const Activos = lazy(() => import("./pantallas/Activos"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
@@ -58,6 +65,9 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   // "Activos" como en escritorio (antes "Adentro ahora"), mismo ícono.
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  // El catálogo de empresas de proveedor: revisar lo creado en la portería y
+  // fusionar los nombres mal escritos.
+  { id: "proveedores", etiqueta: "Proveedores", Icono: Building2 },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
@@ -93,7 +103,9 @@ const CLAVE_SIDEBAR_ORDEN = "web:sidebar:orden";
 const CLAVE_SIDEBAR_OCULTAS = "web:sidebar:ocultas";
 
 function seccionValida(id: unknown): id is Seccion {
-  return typeof id === "string" && SECCIONES.some((seccion) => seccion.id === id);
+  return (
+    typeof id === "string" && SECCIONES.some((seccion) => seccion.id === id)
+  );
 }
 
 /** Lista de secciones guardada; `null` si no hay nada o el JSON está roto. Los
@@ -103,11 +115,13 @@ function leerListaSecciones(clave: string): Seccion[] | null {
   try {
     const guardado = localStorage.getItem(clave);
     if (!guardado) return null;
-    return (JSON.parse(guardado) as unknown[])
-      // "Adentro ahora" pasó a ser "Activos" (2026-10-26): conserva su lugar
-      // en el orden (y si estaba oculta) que este navegador ya había guardado.
-      .map((id) => (id === "adentro" ? "activos" : id))
-      .filter(seccionValida);
+    return (
+      (JSON.parse(guardado) as unknown[])
+        // "Adentro ahora" pasó a ser "Activos" (2026-10-26): conserva su lugar
+        // en el orden (y si estaba oculta) que este navegador ya había guardado.
+        .map((id) => (id === "adentro" ? "activos" : id))
+        .filter(seccionValida)
+    );
   } catch {
     return null;
   }
@@ -151,7 +165,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
   const { tema, alternarTema } = useTema();
   const location = useLocation();
-  const seccionActual = SECCIONES.find((s) => rutaSeccion(s.id) === location.pathname)?.id;
+  const seccionActual = SECCIONES.find(
+    (s) => rutaSeccion(s.id) === location.pathname,
+  )?.id;
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
   // desmontarse al navegar a otra -- antes, con <Routes>/<Route>, salir de
   // una pestaña la desmontaba del todo, así que volver a ella disparaba
@@ -163,11 +179,15 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // `useAutoRefresh` (canal Realtime + poll) corriendo de fondo aunque no
   // se esté viendo -- aceptable para un panel con un puñado de personas
   // usándolo a la vez, no para miles.
-  const [visitadas, setVisitadas] = useState<Seccion[]>(() => (seccionActual ? [seccionActual] : []));
+  const [visitadas, setVisitadas] = useState<Seccion[]>(() =>
+    seccionActual ? [seccionActual] : [],
+  );
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   const navigate = useNavigate();
   const [ordenSidebar, setOrdenSidebar] = useState<Seccion[]>(
-    () => leerListaSecciones(CLAVE_SIDEBAR_ORDEN) ?? SECCIONES.map((seccion) => seccion.id),
+    () =>
+      leerListaSecciones(CLAVE_SIDEBAR_ORDEN) ??
+      SECCIONES.map((seccion) => seccion.id),
   );
   const [seccionesOcultas, setSeccionesOcultas] = useState<Seccion[]>(
     () => leerListaSecciones(CLAVE_SIDEBAR_OCULTAS) ?? [],
@@ -177,14 +197,21 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
     const ordenadas = ordenSidebar
       .map((id) => porId.get(id))
-      .filter((seccion): seccion is (typeof SECCIONES)[number] => seccion !== undefined);
+      .filter(
+        (seccion): seccion is (typeof SECCIONES)[number] =>
+          seccion !== undefined,
+      );
     // Cubre secciones nuevas agregadas al código después de que este navegador
     // ya guardó un orden: aparecen al final en vez de desaparecer del menú.
-    const faltantes = SECCIONES.filter((seccion) => !ordenSidebar.includes(seccion.id));
+    const faltantes = SECCIONES.filter(
+      (seccion) => !ordenSidebar.includes(seccion.id),
+    );
     return [...ordenadas, ...faltantes];
   }, [ordenSidebar]);
 
-  const primeraVisible = seccionesOrdenadas.find((seccion) => !seccionesOcultas.includes(seccion.id));
+  const primeraVisible = seccionesOrdenadas.find(
+    (seccion) => !seccionesOcultas.includes(seccion.id),
+  );
 
   function reordenarSidebar(orden: Seccion[]) {
     setOrdenSidebar(orden);
@@ -193,7 +220,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
 
   function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
     setSeccionesOcultas((actual) => {
-      const siguiente = visible ? actual.filter((x) => x !== id) : [...actual, id];
+      const siguiente = visible
+        ? actual.filter((x) => x !== id)
+        : [...actual, id];
       // Nunca ocultar la última sección visible: dejaría el menú vacío y sin
       // forma de deshacerlo desde la interfaz.
       if (siguiente.length >= SECCIONES.length) return actual;
@@ -213,7 +242,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // Si la sección activa se ocultó, hay que salir de ella: de lo contrario la
   // persona queda viendo una pantalla que ya no tiene entrada en el menú.
   useEffect(() => {
-    if (seccionActual && seccionesOcultas.includes(seccionActual) && primeraVisible) {
+    if (
+      seccionActual &&
+      seccionesOcultas.includes(seccionActual) &&
+      primeraVisible
+    ) {
       navigate(rutaSeccion(primeraVisible.id), { replace: true });
     }
   }, [seccionActual, seccionesOcultas, primeraVisible, navigate]);
@@ -229,13 +262,17 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     // -- evita que `react-hooks/set-state-in-effect` marque esta
     // actualización como síncrona dentro del efecto.
     Promise.resolve().then(() => {
-      setVisitadas((actual) => (actual.includes(seccionActual) ? actual : [...actual, seccionActual]));
+      setVisitadas((actual) =>
+        actual.includes(seccionActual) ? actual : [...actual, seccionActual],
+      );
     });
   }, [seccionActual]);
 
   useEffect(() => {
     const etiqueta = SECCIONES.find((s) => s.id === seccionActual)?.etiqueta;
-    document.title = etiqueta ? `${etiqueta} — Panel de Acceso` : "Panel de Acceso";
+    document.title = etiqueta
+      ? `${etiqueta} — Panel de Acceso`
+      : "Panel de Acceso";
   }, [seccionActual]);
 
   function alternarColapsado() {
@@ -251,7 +288,10 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
       <div className="flex h-full flex-col">
         <div className="flex flex-1 min-h-0">
           {menuMovilAbierto && (
-            <div className="shell-sidebar-velo" onClick={() => setMenuMovilAbierto(false)} />
+            <div
+              className="shell-sidebar-velo"
+              onClick={() => setMenuMovilAbierto(false)}
+            />
           )}
 
           <Sidebar
@@ -288,7 +328,12 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             </button>
             {/* Ruta desconocida (incluida "/") -- mismo default de siempre:
                 caer en Historial en vez de una pantalla en blanco. */}
-            {!seccionActual && <Navigate to={rutaSeccion(primeraVisible?.id ?? "historial")} replace />}
+            {!seccionActual && (
+              <Navigate
+                to={rutaSeccion(primeraVisible?.id ?? "historial")}
+                replace
+              />
+            )}
             {visitadas.map((id) => (
               <div
                 key={id}
@@ -298,13 +343,21 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     primera visita a una sección NUEVA (bajando su chunk)
                     no vuelve a tapar con "Cargando pantalla…" las que ya
                     están montadas y visibles detrás. */}
-                <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
+                <Suspense
+                  fallback={
+                    <div className="pantalla-cuerpo" role="status">
+                      Cargando pantalla…
+                    </div>
+                  }
+                >
                   {id === "historial" ? (
                     <Historial />
                   ) : id === "activos" ? (
                     <Activos />
                   ) : id === "contratistas" ? (
                     <Contratistas />
+                  ) : id === "proveedores" ? (
+                    <EmpresasProveedor />
                   ) : id === "usuarios" ? (
                     <Usuarios />
                   ) : id === "sesiones" ? (

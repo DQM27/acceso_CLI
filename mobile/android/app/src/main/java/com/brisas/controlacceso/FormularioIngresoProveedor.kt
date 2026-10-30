@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -156,15 +157,18 @@ internal fun FormularioNuevoIngresoProveedor(
     ) {
         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
             val texto = viewModel.textoEmpresa.trim()
-            // Con una empresa ya elegida la lista queda vacía: no se ofrece
-            // crearla de nuevo (bug de 2026-09-17, creaba duplicados).
-            val ofrecerCrear = texto.isNotEmpty() && viewModel.resultadosEmpresa.isEmpty() &&
+            val resultados = viewModel.resultadosEmpresa
+            // Con una empresa ya elegida, o si la búsqueda ya trae ese mismo
+            // nombre, no se ofrece crearla de nuevo (bug de 2026-09-17,
+            // creaba duplicados).
+            val ofrecerCrear = texto.isNotEmpty() &&
+                resultados.none { it.nombre == texto.uppercase() } &&
                 viewModel.empresaSeleccionada?.nombre != texto.uppercase()
             if (texto.isEmpty()) {
                 EstadoVacio("Busque la empresa", "Escriba el nombre; si no existe, la puede crear aquí.", Icons.Default.Business)
             } else {
                 LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (ofrecerCrear) {
+                    if (ofrecerCrear && resultados.isEmpty()) {
                         item(key = "crear") {
                             FilaCrear(texto.uppercase()) {
                                 viewModel.crearEmpresa(texto)
@@ -172,10 +176,32 @@ internal fun FormularioNuevoIngresoProveedor(
                             }
                         }
                     }
-                    items(viewModel.resultadosEmpresa, key = { it.id }) { empresa ->
+                    // La búsqueda trae también las parecidas aunque esté mal
+                    // escrito ("FUDDY FACTORY" → "FOODIE FACTORY"): se ofrecen
+                    // primero, y crear queda abajo como "es otra empresa"
+                    // (incidente 2026-10-30, 5 duplicados mal escritos).
+                    if (ofrecerCrear && resultados.isNotEmpty()) {
+                        item(key = "pregunta") {
+                            Text(
+                                "¿Es alguna de estas?",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                            )
+                        }
+                    }
+                    items(resultados, key = { it.id }) { empresa ->
                         FilaResultado(empresa.nombre) {
                             viewModel.elegirEmpresa(empresa)
                             buscandoEmpresa = false
+                        }
+                    }
+                    if (ofrecerCrear && resultados.isNotEmpty()) {
+                        item(key = "crear") {
+                            FilaCrear(texto.uppercase(), etiqueta = "Es otra empresa: crear «${texto.uppercase()}»") {
+                                viewModel.crearEmpresa(texto)
+                                buscandoEmpresa = false
+                            }
                         }
                     }
                 }

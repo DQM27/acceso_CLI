@@ -2,9 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { UserPlus } from "lucide-react";
 import Modal from "../componentes/Modal";
-import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
-import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import {
+  FilaListaFlotante,
+  ListaFlotante,
+  SinResultados,
+} from "../componentes/ListaFlotante";
+import {
+  useListaFlotante,
+  useNavegacionFlechas,
+} from "../componentes/ListaFlotante.logica";
+import {
+  buscarEmpresasProveedorSeleccionables,
   listarEmpresasProveedorSeleccionables,
   listarHistorialIngresosProveedorSitio,
   listarTodosLosProveedoresActivos,
@@ -12,15 +20,24 @@ import {
 } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
 import { precalentarNube } from "../api/nube";
-import { coincideBusqueda, plegar, textoGafete, validarNumeroGafete } from "../busqueda";
-import { proveedoresConocidos, datosNuevoDesdeBusqueda } from "./IngresoProveedorModal.logica";
+import {
+  coincideBusqueda,
+  plegar,
+  textoGafete,
+  validarNumeroGafete,
+} from "../busqueda";
+import {
+  proveedoresConocidos,
+  datosNuevoDesdeBusqueda,
+} from "./IngresoProveedorModal.logica";
 import type { ProveedorConocido } from "./IngresoProveedorModal.logica";
 import { nombreMientrasSeEscribe } from "../nombres";
 
 const MAX_CONOCIDOS = 4;
 const MAX_EMPRESAS = 5;
 
-type Opcion = { tipo: "conocido"; proveedor: ProveedorConocido } | { tipo: "nuevo" };
+type Opcion =
+  { tipo: "conocido"; proveedor: ProveedorConocido } | { tipo: "nuevo" };
 
 type Seleccion =
   | { tipo: "ninguna" }
@@ -48,7 +65,9 @@ export default function IngresoProveedorModal({
   onCerrar: () => void;
 }) {
   const [conocidos, setConocidos] = useState<ProveedorConocido[]>([]);
-  const [gafetesAdentro, setGafetesAdentro] = useState<Map<string, number>>(new Map());
+  const [gafetesAdentro, setGafetesAdentro] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [empresas, setEmpresas] = useState<EmpresaProveedor[]>([]);
 
   const [filtro, setFiltro] = useState("");
@@ -85,7 +104,11 @@ export default function IngresoProveedorModal({
       .catch(() => {});
     listarTodosLosProveedoresActivos()
       .then((activos) =>
-        setGafetesAdentro(new Map(activos.map((fila) => [fila.cedula.trim(), fila.gafete_numero]))),
+        setGafetesAdentro(
+          new Map(
+            activos.map((fila) => [fila.cedula.trim(), fila.gafete_numero]),
+          ),
+        ),
       )
       .catch(() => {});
   }, []);
@@ -94,7 +117,9 @@ export default function IngresoProveedorModal({
   const opciones = useMemo<Opcion[]>(() => {
     if (!filtro.trim()) return [];
     const encontrados = conocidos
-      .filter((proveedor) => coincideBusqueda(filtro, `${proveedor.cedula} ${proveedor.nombre}`))
+      .filter((proveedor) =>
+        coincideBusqueda(filtro, `${proveedor.cedula} ${proveedor.nombre}`),
+      )
       .slice(0, MAX_CONOCIDOS)
       .map((proveedor): Opcion => ({ tipo: "conocido", proveedor }));
     return [...encontrados, { tipo: "nuevo" }];
@@ -105,12 +130,56 @@ export default function IngresoProveedorModal({
   const navegacion = useNavegacionFlechas(opciones, listaVisible, elegirOpcion);
 
   // ---- Buscador de empresa ----
+  // El buscador del núcleo, igual que el del móvil: primero las que contienen
+  // lo escrito y después las parecidas aunque esté mal escrito ("FUDDY
+  // FACTORY" trae "FOODIE FACTORY"). Si el núcleo no responde, la búsqueda
+  // exacta sobre el catálogo ya cargado.
+  // El resultado se guarda con el texto que lo pidió: sólo se muestra si
+  // sigue siendo lo escrito (y nada con el campo vacío).
+  const [resultadoEmpresas, setResultadoEmpresas] = useState<{
+    texto: string;
+    filas: EmpresaProveedor[];
+  }>({ texto: "", filas: [] });
+  useEffect(() => {
+    const texto = empresaTexto.trim();
+    if (!texto) return;
+    let vigente = true;
+    const temporizador = window.setTimeout(() => {
+      buscarEmpresasProveedorSeleccionables(texto)
+        .then((datos) => {
+          if (vigente)
+            setResultadoEmpresas({
+              texto,
+              filas: datos.slice(0, MAX_EMPRESAS),
+            });
+        })
+        .catch(() => {
+          if (vigente) {
+            setResultadoEmpresas({
+              texto,
+              filas: empresas
+                .filter((e) => coincideBusqueda(texto, e.nombre))
+                .slice(0, MAX_EMPRESAS),
+            });
+          }
+        });
+    }, 120);
+    return () => {
+      vigente = false;
+      window.clearTimeout(temporizador);
+    };
+  }, [empresas, empresaTexto]);
   const empresasFiltradas = useMemo(
-    () => empresas.filter((e) => coincideBusqueda(empresaTexto, e.nombre)).slice(0, MAX_EMPRESAS),
-    [empresas, empresaTexto],
+    () =>
+      resultadoEmpresas.texto === empresaTexto.trim()
+        ? resultadoEmpresas.filas
+        : [],
+    [resultadoEmpresas, empresaTexto],
   );
   const listaEmpresasVisible =
-    seleccion.tipo !== "ninguna" && empresa === null && empresaTexto.trim().length > 0;
+    seleccion.tipo !== "ninguna" &&
+    empresa === null &&
+    empresaTexto.trim().length > 0;
   const { campoRef: campoEmpresaRef, posicion: posicionEmpresas } =
     useListaFlotante(listaEmpresasVisible);
   const navegacionEmpresas = useNavegacionFlechas(
@@ -135,7 +204,9 @@ export default function IngresoProveedorModal({
       setNombre(proveedor.nombre);
       // Su última empresa, si sigue activa en el catálogo.
       const ultima = proveedor.empresa_nombre
-        ? (empresas.find((e) => plegar(e.nombre) === plegar(proveedor.empresa_nombre ?? "")) ?? null)
+        ? (empresas.find(
+            (e) => plegar(e.nombre) === plegar(proveedor.empresa_nombre ?? ""),
+          ) ?? null)
         : null;
       setEmpresa(ultima);
       setEmpresaTexto(ultima?.nombre ?? "");
@@ -231,7 +302,9 @@ export default function IngresoProveedorModal({
                 >
                   <span>
                     {opcion.proveedor.nombre}{" "}
-                    <span style={{ color: "var(--muted)" }}>· {opcion.proveedor.cedula}</span>
+                    <span style={{ color: "var(--muted)" }}>
+                      · {opcion.proveedor.cedula}
+                    </span>
                   </span>
                   {gafetesAdentro.has(opcion.proveedor.cedula) && (
                     <span
@@ -243,7 +316,10 @@ export default function IngresoProveedorModal({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      Adentro {textoGafete(gafetesAdentro.get(opcion.proveedor.cedula) ?? 0)}
+                      Adentro{" "}
+                      {textoGafete(
+                        gafetesAdentro.get(opcion.proveedor.cedula) ?? 0,
+                      )}
                     </span>
                   )}
                 </FilaListaFlotante>
@@ -255,7 +331,12 @@ export default function IngresoProveedorModal({
                   onMouseEnter={() => navegacion.setResaltado(indice)}
                 >
                   <span
-                    style={{ display: "flex", alignItems: "center", gap: "0.45rem", color: "var(--acento)" }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      color: "var(--acento)",
+                    }}
                   >
                     <UserPlus size={15} strokeWidth={2} aria-hidden="true" />
                     Nuevo proveedor
@@ -290,22 +371,66 @@ export default function IngresoProveedorModal({
             }}
           >
             {seleccion.tipo === "conocido" ? (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>{nombre}</p>
-                  <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: 600,
+                      color: "var(--texto)",
+                    }}
+                  >
+                    {nombre}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.15rem 0 0",
+                      color: "var(--muted)",
+                      fontSize: "0.85rem",
+                    }}
+                  >
                     {cedula}
                   </p>
                 </div>
-                <button type="button" className="boton" style={{ fontSize: "0.8rem" }} onClick={cambiarProveedor}>
+                <button
+                  type="button"
+                  className="boton"
+                  style={{ fontSize: "0.8rem" }}
+                  onClick={cambiarProveedor}
+                >
                   Cambiar
                 </button>
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>Nuevo proveedor</p>
-                  <button type="button" className="boton" style={{ fontSize: "0.8rem" }} onClick={cambiarProveedor}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: 600,
+                      color: "var(--texto)",
+                    }}
+                  >
+                    Nuevo proveedor
+                  </p>
+                  <button
+                    type="button"
+                    className="boton"
+                    style={{ fontSize: "0.8rem" }}
+                    onClick={cambiarProveedor}
+                  >
                     Cambiar
                   </button>
                 </div>
@@ -324,7 +449,9 @@ export default function IngresoProveedorModal({
                     <input
                       ref={nombreRef}
                       value={nombre}
-                      onChange={(evento) => setNombre(nombreMientrasSeEscribe(evento.target.value))}
+                      onChange={(evento) =>
+                        setNombre(nombreMientrasSeEscribe(evento.target.value))
+                      }
                       autoComplete="off"
                     />
                   </label>
@@ -333,7 +460,13 @@ export default function IngresoProveedorModal({
             )}
 
             {gafeteAdentro !== undefined && (
-              <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--advertencia)",
+                  fontSize: "0.85rem",
+                }}
+              >
                 ⚠ Ya está adentro con el gafete {textoGafete(gafeteAdentro)}
               </p>
             )}
@@ -344,7 +477,9 @@ export default function IngresoProveedorModal({
                 <input
                   ref={empresaRef}
                   value={empresaTexto}
-                  onChange={(evento) => cambiarEmpresaTexto(evento.target.value)}
+                  onChange={(evento) =>
+                    cambiarEmpresaTexto(evento.target.value)
+                  }
                   onKeyDown={navegacionEmpresas.manejarTecla}
                   autoComplete="off"
                   placeholder="Buscar en el catálogo…"
@@ -373,7 +508,9 @@ export default function IngresoProveedorModal({
                 Placa (opcional)
                 <input
                   value={placa}
-                  onChange={(evento) => setPlaca(evento.target.value.toUpperCase())}
+                  onChange={(evento) =>
+                    setPlaca(evento.target.value.toUpperCase())
+                  }
                   autoComplete="off"
                   placeholder="Vacía = caminando"
                 />
@@ -383,7 +520,9 @@ export default function IngresoProveedorModal({
                 <input
                   ref={gafeteRef}
                   value={gafeteTexto}
-                  onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
+                  onChange={(evento) =>
+                    setGafeteTexto(evento.target.value.replace(/\D/g, ""))
+                  }
                   inputMode="numeric"
                   autoComplete="off"
                   placeholder="Número de gafete"
@@ -398,7 +537,11 @@ export default function IngresoProveedorModal({
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="submit" className="boton boton-primario" disabled={enviando}>
+              <button
+                type="submit"
+                className="boton boton-primario"
+                disabled={enviando}
+              >
                 {enviando ? "Registrando…" : "Registrar ingreso"}
               </button>
             </div>

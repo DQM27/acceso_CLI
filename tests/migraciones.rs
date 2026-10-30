@@ -1944,6 +1944,7 @@ fn migracion_60_separa_los_conflictos_de_los_errores_en_la_cola() {
     connection
         .execute_batch(
             "ALTER TABLE cola_salida DROP COLUMN motivo_fallo;
+             ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
              PRAGMA user_version = 59;",
         )
         .unwrap();
@@ -2028,7 +2029,10 @@ fn migracion_61_recupera_empresas_de_proveedor_y_descarta_sus_ingresos() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     connection
-        .execute_batch("PRAGMA user_version = 60;")
+        .execute_batch(
+            "ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
+             PRAGMA user_version = 60;",
+        )
         .unwrap();
     let filas = [
         (
@@ -2093,4 +2097,32 @@ fn migracion_61_recupera_empresas_de_proveedor_y_descarta_sus_ingresos() {
             (5, "enviado".to_string(), 20),
         ]
     );
+}
+
+/// Un equipo en la versión 61 recibe la columna de empresa de proveedor
+/// fusionada (la fusión se hace en el panel y llega con el catálogo); sus
+/// empresas quedan vigentes.
+#[test]
+fn migracion_62_agrega_la_marca_de_empresa_fusionada() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
+             PRAGMA user_version = 61;
+             INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES ('FOODIE FACTORY', 1, 'uuid-foodie');",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let fusionada: Option<String> = connection
+        .query_row(
+            "SELECT fusionada_en FROM empresas_proveedor WHERE uuid = 'uuid-foodie'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(fusionada, None);
 }

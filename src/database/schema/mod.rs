@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 61;
+pub const SCHEMA_VERSION: i64 = 62;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -463,6 +463,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 60 {
         aplicar_migracion_61(connection)?;
         *version = 61;
+    }
+
+    if *version == 61 {
+        aplicar_migracion_62(connection)?;
+        *version = 62;
     }
 
     Ok(())
@@ -1060,6 +1065,16 @@ fn aplicar_migracion_61(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_61)?;
     transaction.execute_batch("PRAGMA user_version = 61")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Marca local de empresa de proveedor fusionada en otra (la fusión se hace
+/// en el panel y llega con el catálogo).
+fn aplicar_migracion_62(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_62)?;
+    transaction.execute_batch("PRAGMA user_version = 62")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1743,3 +1758,4 @@ const MIGRACION_58: &str = include_str!("migraciones/migracion_58.sql");
 const MIGRACION_59: &str = include_str!("migraciones/migracion_59.sql");
 const MIGRACION_60: &str = include_str!("migraciones/migracion_60.sql");
 const MIGRACION_61: &str = include_str!("migraciones/migracion_61.sql");
+const MIGRACION_62: &str = include_str!("migraciones/migracion_62.sql");

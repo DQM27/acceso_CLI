@@ -1,6 +1,9 @@
 import { invoke } from "./invocar";
 import { solicitarSincronizacionNube } from "../eventosNube";
-import { cerrarIngresoProveedorRemoto, listarIngresosProveedorRemotos } from "./nube";
+import {
+  cerrarIngresoProveedorRemoto,
+  listarIngresosProveedorRemotos,
+} from "./nube";
 import type { IngresoProveedorRemoto } from "./nube";
 
 // Espejo de comandos/proveedores.rs y dto/proveedores.rs — ver también
@@ -46,12 +49,32 @@ export function listarEmpresasProveedor(): Promise<EmpresaProveedor[]> {
   return invoke("listar_empresas_proveedor");
 }
 
-export function listarEmpresasProveedorSeleccionables(): Promise<EmpresaProveedor[]> {
+export function listarEmpresasProveedorSeleccionables(): Promise<
+  EmpresaProveedor[]
+> {
   return invoke("listar_empresas_proveedor_seleccionables");
 }
 
-export function buscarEmpresasProveedor(texto: string): Promise<EmpresaProveedor[]> {
+export function buscarEmpresasProveedor(
+  texto: string,
+): Promise<EmpresaProveedor[]> {
   return invoke("buscar_empresas_proveedor", { texto });
+}
+
+/** El buscador de empresa del ingreso de proveedor: tolera nombres mal
+ * escritos (lo decide el núcleo). */
+export function buscarEmpresasProveedorSeleccionables(
+  texto: string,
+): Promise<EmpresaProveedor[]> {
+  return invoke("buscar_empresas_proveedor_seleccionables", { texto });
+}
+
+/** Las empresas que se parecen a `nombre`, para preguntar "¿es alguna de
+ * estas?" antes de crear una nueva. */
+export function empresasProveedorParecidas(
+  nombre: string,
+): Promise<EmpresaProveedor[]> {
+  return invoke("empresas_proveedor_parecidas", { nombre });
 }
 
 export async function crearEmpresaProveedor(nombre: string): Promise<number> {
@@ -105,11 +128,15 @@ export interface FilaProveedorRemota {
 
 export type FilaProveedorActiva = FilaProveedorLocal | FilaProveedorRemota;
 
-function filaProveedorDesdeLocal(item: ProveedorActivoResumen): FilaProveedorActiva {
+function filaProveedorDesdeLocal(
+  item: ProveedorActivoResumen,
+): FilaProveedorActiva {
   return { ...item, origen: "local" };
 }
 
-function filaProveedorDesdeRemoto(remoto: IngresoProveedorRemoto): FilaProveedorActiva {
+function filaProveedorDesdeRemoto(
+  remoto: IngresoProveedorRemoto,
+): FilaProveedorActiva {
   return {
     origen: "remoto",
     uuid_remoto: remoto.uuid,
@@ -127,22 +154,31 @@ function filaProveedorDesdeRemoto(remoto: IngresoProveedorRemoto): FilaProveedor
 /** Clave estable para listas de React (`key`) y grillas -- `id` es `null`
  * en una remota, así que no alcanza solo. */
 export function claveFilaProveedorActiva(fila: FilaProveedorActiva): string {
-  return fila.origen === "local" ? `local-${fila.id}` : `remoto-${fila.uuid_remoto}`;
+  return fila.origen === "local"
+    ? `local-${fila.id}`
+    : `remoto-${fila.uuid_remoto}`;
 }
 
-export async function listarTodosLosProveedoresActivos(): Promise<FilaProveedorActiva[]> {
+export async function listarTodosLosProveedoresActivos(): Promise<
+  FilaProveedorActiva[]
+> {
   const [locales, remotos] = await Promise.all([
     listarProveedoresActivos(),
     listarIngresosProveedorRemotos(),
   ]);
-  return [...locales.map(filaProveedorDesdeLocal), ...remotos.map(filaProveedorDesdeRemoto)];
+  return [
+    ...locales.map(filaProveedorDesdeLocal),
+    ...remotos.map(filaProveedorDesdeRemoto),
+  ];
 }
 
 /** Local: cierra en `registro_ingresos_proveedor` (este dispositivo).
  * Remota: cierra directo contra la nube (`cerrarIngresoProveedorRemoto`) --
  * nunca toca el historial local, esa fila no es -- ni fue -- de este
  * dispositivo. */
-export async function cerrarFilaProveedorActiva(fila: FilaProveedorActiva): Promise<void> {
+export async function cerrarFilaProveedorActiva(
+  fila: FilaProveedorActiva,
+): Promise<void> {
   if (fila.origen === "local") {
     await registrarSalidaProveedor(fila.id);
   } else {

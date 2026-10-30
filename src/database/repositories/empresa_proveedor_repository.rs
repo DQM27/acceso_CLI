@@ -42,6 +42,10 @@ pub trait EmpresaProveedorRepository {
         texto: &str,
         solo_activos: bool,
     ) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
+
+    /// Si `nombre` (sin mayúsculas ni tildes) es el de una empresa que el
+    /// administrador fusionó en otra, el `id` local de esa otra.
+    fn destino_de_fusionada(&self, nombre: &str) -> Result<Option<i64>, DatabaseError>;
 }
 
 pub struct SqliteEmpresaProveedorRepository<'a> {
@@ -127,9 +131,11 @@ impl EmpresaProveedorRepository for SqliteEmpresaProveedorRepository<'_> {
     }
 
     fn listar(&self, solo_activos: bool) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
+        // Las fusionadas en otra (`MIGRACION_62`) no se listan nunca: son
+        // otro nombre de la que quedó.
+        let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
         let mut statement = self.connection.prepare(&format!(
-            "{SELECT_EMPRESA_PROVEEDOR} {filtro_activo} ORDER BY nombre"
+            "{SELECT_EMPRESA_PROVEEDOR} WHERE fusionada_en IS NULL {filtro_activo} ORDER BY nombre"
         ))?;
         let empresas = statement
             .query_map([], convertir_fila)?
@@ -146,6 +152,7 @@ impl EmpresaProveedorRepository for SqliteEmpresaProveedorRepository<'_> {
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_EMPRESA_PROVEEDOR}
              WHERE PLEGAR(nombre) LIKE '%' || PLEGAR(?1) || '%'
+               AND fusionada_en IS NULL
              {filtro_activo}
              ORDER BY nombre
              LIMIT {LIMITE_BUSQUEDA}"
@@ -154,6 +161,21 @@ impl EmpresaProveedorRepository for SqliteEmpresaProveedorRepository<'_> {
             .query_map(params![texto], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(empresas)
+    }
+
+    fn destino_de_fusionada(&self, nombre: &str) -> Result<Option<i64>, DatabaseError> {
+        let mut statement = self.connection.prepare(
+            "SELECT destino.id
+             FROM empresas_proveedor fusionada
+             JOIN empresas_proveedor destino ON destino.uuid = fusionada.fusionada_en
+             WHERE PLEGAR(fusionada.nombre) = PLEGAR(?1)
+               AND destino.fusionada_en IS NULL",
+        )?;
+        match statement.query_row(params![nombre], |row| row.get(0)) {
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(DatabaseError::from(error)),
+        }
     }
 }
 

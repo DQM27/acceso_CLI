@@ -50,6 +50,35 @@ pub fn buscar_empresas_proveedor(
         .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
 }
 
+/// El buscador de empresa del ingreso de proveedor: activas y vigentes,
+/// primero las que contienen lo escrito y después las parecidas aunque esté
+/// mal escrito (decide el núcleo, igual que en el móvil).
+#[tauri::command(async)]
+pub fn buscar_empresas_proveedor_seleccionables(
+    texto: String,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<EmpresaProveedor>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .buscar_empresas_proveedor_seleccionables(texto.trim())
+        .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
+}
+
+/// Las empresas que se parecen al nombre que se está por dar de alta: si hay
+/// alguna, el formulario pregunta "¿es alguna de estas?" antes de crear.
+#[tauri::command(async)]
+pub fn empresas_proveedor_parecidas(
+    nombre: String,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<EmpresaProveedor>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .empresas_proveedor_parecidas(nombre.trim())
+        .map_err(|_| "No se pudo revisar si la empresa ya existe".to_string())
+}
+
 #[tauri::command(async)]
 pub fn crear_empresa_proveedor(
     nombre: String,
