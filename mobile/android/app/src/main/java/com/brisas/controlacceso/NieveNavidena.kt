@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +36,12 @@ import kotlin.random.Random
 ///   `pointerInput` deja pasar el dedo a lo de abajo).
 /// - El tiempo se lee sólo al dibujar: cada frame repinta este `Canvas` y
 ///   nada más, sin recomponer la barra ni la lista.
+///
+/// Sin [altoBarra] cubre la pantalla entera, detrás del contenido (el login:
+/// se pasa rápido y no tiene nada que tapar), con más copos y bajando un
+/// poco más rápido para que la caída larga no se vea vacía.
 @Composable
-internal fun NieveNavidena(altoBarra: Dp, modifier: Modifier = Modifier) {
+internal fun NieveNavidena(altoBarra: Dp? = null, modifier: Modifier = Modifier) {
     val contexto = LocalContext.current
     val animacionesApagadas = remember(contexto) {
         Settings.Global.getFloat(contexto.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -48,7 +53,11 @@ internal fun NieveNavidena(altoBarra: Dp, modifier: Modifier = Modifier) {
     // En claro la nieve blanca no se ve: gris azulado tenue.
     val color = if (oscuro) Color.White else Color(0xFF8FA3BF)
     val alfaMaxima = if (oscuro) 0.55f else 0.6f
-    val copos = remember { crearCopos() }
+    val pantallaCompleta = altoBarra == null
+    val copos = remember(pantallaCompleta) {
+        if (pantallaCompleta) crearCopos(cantidad = 45, segundosMin = 22f, segundosMax = 40f)
+        else crearCopos(cantidad = 22, segundosMin = 9f, segundosMax = 18f)
+    }
     val segundos = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val inicio = withFrameNanos { it }
@@ -58,10 +67,13 @@ internal fun NieveNavidena(altoBarra: Dp, modifier: Modifier = Modifier) {
         }
     }
 
-    Canvas(modifier = modifier.fillMaxWidth().height(altoBarra + DESBORDE_NIEVE)) {
+    val tamano = if (altoBarra == null) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(altoBarra + DESBORDE_NIEVE)
+    Canvas(modifier = modifier.then(tamano)) {
         val t = segundos.floatValue
-        val finBarra = altoBarra.toPx()
-        val desborde = DESBORDE_NIEVE.toPx()
+        // En pantalla completa se apaga en el último 15 %, sobre el teclado
+        // o el botón de entrar, en vez de cortarse contra el borde.
+        val finBarra = altoBarra?.toPx() ?: (size.height * 0.85f)
+        val desborde = if (altoBarra == null) size.height - finBarra else DESBORDE_NIEVE.toPx()
         val recorrido = size.height + 8.dp.toPx()
         for (copo in copos) {
             // Arranca un poco por encima del borde para no aparecer de golpe.
@@ -91,7 +103,7 @@ internal fun desvanecer(y: Float, finBarra: Float, desborde: Float): Float = whe
 private class Copo(
     val x: Float,
     val fase: Float,
-    /// Recorridos completos por segundo: entre 9 y 18 s para bajar.
+    /// Recorridos completos por segundo.
     val velocidad: Float,
     val radio: Float,
     val alfa: Float,
@@ -100,13 +112,13 @@ private class Copo(
 )
 
 /// Semilla fija: los mismos copos cada vez, sin saltos al volver a la pantalla.
-private fun crearCopos(): List<Copo> {
+private fun crearCopos(cantidad: Int, segundosMin: Float, segundosMax: Float): List<Copo> {
     val azar = Random(1225)
-    return List(CANTIDAD_COPOS) {
+    return List(cantidad) {
         Copo(
             x = azar.nextFloat(),
             fase = azar.nextFloat(),
-            velocidad = 1f / (9f + azar.nextFloat() * 9f),
+            velocidad = 1f / (segundosMin + azar.nextFloat() * (segundosMax - segundosMin)),
             radio = 1f + azar.nextFloat() * 1.6f,
             alfa = 0.35f + azar.nextFloat() * 0.65f,
             vaivenAncho = 0.005f + azar.nextFloat() * 0.015f,
@@ -115,7 +127,6 @@ private fun crearCopos(): List<Copo> {
     }
 }
 
-private const val CANTIDAD_COPOS = 22
 private const val ENTRADA_PX = 12f
 
 /// Cuánto baja la nieve por debajo de la barra: apenas el borde de arriba de
