@@ -393,7 +393,10 @@ fn avisa_lo_que_lleva_mas_de_un_minuto_sin_subir_a_la_nube() {
         )
         .unwrap();
 
-    let aviso = nucleo.aviso_bandeja_salida().unwrap().expect("hay algo trabado");
+    let aviso = nucleo
+        .aviso_bandeja_salida()
+        .unwrap()
+        .expect("hay algo trabado");
     assert_eq!(aviso.texto, "1 registro sin subir a la nube (hace 10 min)");
     assert!(!aviso.critico);
 }
