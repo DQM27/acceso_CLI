@@ -1,4 +1,4 @@
-# Adentro ahora
+# Activos
 
 ## Para qué sirve
 
@@ -13,7 +13,19 @@ Administradores del panel. Es sólo de consulta.
 
 ## Dónde
 
-**Adentro ahora**, en el menú lateral.
+**Activos**, en el menú lateral.
+
+## Filtros
+
+Arriba de la lista, como en el escritorio:
+
+- **Clase**: **Todas**, **Contratistas**, **Proveedores**, **Por correo** o
+  **KOF**. Cada opción muestra **cuántos hay adentro** de esa clase.
+- **Gafete** (sólo con **Contratistas** elegido): **todos**, **con gafete**
+  o **sin gafete (S/G)**, cada uno con su cantidad. Sólo los contratistas
+  pueden entrar sin gafete.
+
+Además, el buscador ("Cédula, nombre, gafete…") y los filtros por columna.
 
 ## Qué se ve
 
@@ -29,11 +41,13 @@ Administradores del panel. Es sólo de consulta.
 | Tiempo adentro | Cuánto lleva (por ejemplo, "3 h 20 min") |
 | Dio ingreso | Quién registró la entrada |
 
-Quien lleva **más de 12 horas adentro** aparece **en rojo**: probablemente
-salió sin que le registraran la salida. Avise a esa unidad.
+Quien lleva mucho tiempo adentro se marca, igual que en el escritorio:
 
-Use el buscador ("Cédula, nombre, gafete…") o los filtros por columna para
-acotar. La lista se actualiza sola.
+- **Más de 12 horas**: fila en **ámbar**.
+- **Más de 14 horas**: fila en **rojo**.
+
+Casi siempre es alguien que salió sin que le registraran la salida. Avise a
+esa unidad. La lista se actualiza sola.
 
 Las salidas se registran en el puesto de control (escritorio o teléfono),
 no desde aquí.

@@ -784,7 +784,67 @@ input {
   outline-offset: -2px;
 }
 
-/* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
+/* Variante para elegir UNA opción (`SegmentadoOpciones.tsx`, la misma de
+   escritorio): todas las opciones miden lo mismo (grilla de columnas iguales)
+   y el relleno de acento es un indicador aparte que se desliza a la elegida en
+   vez de saltar. `--cantidad`/`--indice` los pone el componente. */
+.segmentado-deslizante {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.segmentado-indicador {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / var(--cantidad));
+  transform: translateX(calc(100% * var(--indice)));
+  background: var(--acento-relleno);
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+  pointer-events: none;
+}
+
+.segmentado-deslizante button {
+  position: relative;
+  z-index: 1;
+  gap: 0.4rem;
+}
+
+/* Número de la opción (ej. cuántas personas hay en el filtro): cifras de ancho
+   fijo para que no baile al cambiar. */
+.segmentado-cantidad {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El fondo lo pone el indicador; acá sólo el color del ícono. */
+.segmentado-deslizante button[aria-pressed="true"] {
+  background: transparent;
+  transition: color 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmentado-indicador {
+    transition: none;
+  }
+}
+
+/* Larga permanencia (Activos, `claseFilaActivo`), igual que en escritorio.
+   Aviso (más de 12 h): fondo suave de advertencia y marca a la izquierda.
+   Crítico (más de 14 h): lo mismo en rojo. */
+.ag-row.fila-permanencia-aviso {
+  background: var(--advertencia-suave);
+  box-shadow: inset 3px 0 0 var(--advertencia);
+}
+
+.ag-row.fila-permanencia-critico {
+  background: var(--error-suave);
+  box-shadow: inset 3px 0 0 var(--error);
+}
 
 /* Botones dentro de una celda de la grilla (Dispositivos, Usuarios). Van en CSS
    propio y no en clases de Tailwind porque `.boton` no esta en una capa y gana

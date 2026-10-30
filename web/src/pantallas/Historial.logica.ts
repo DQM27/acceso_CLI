@@ -4,8 +4,20 @@ import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { generarCsv, generarHtmlTabla } from "../exportacion";
 import type { DefinicionColumnaExport as DefinicionColumnaExportGenerica } from "../exportacion";
 
-// Lo que no es componente de `Historial.tsx` (columnas, exportación, orden): vive aparte
-// para que el archivo de la pantalla sólo exporte componentes (fast refresh).
+// Lo que no es componente de `Historial.tsx`/`HistorialContratistas.tsx` (columnas,
+// exportación, orden): vive aparte para que el archivo de la pantalla sólo exporte
+// componentes (fast refresh).
+
+/** Las clases del historial, como en escritorio: cada una con su grilla. */
+export type ClaseHistorial = "contratistas" | "proveedores" | "correo" | "kof";
+
+/** Lo que comparten todas las clases del historial: el rango de fechas y las
+ * unidades operativas. `sitioIds` en `undefined` es "todas". */
+export interface FiltroHistorial {
+  desde?: string;
+  hasta?: string;
+  sitioIds?: string[];
+}
 
 /** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
  * columna "Dispositivo" -- tanto en pantalla como en Excel/PDF (mismo

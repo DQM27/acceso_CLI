@@ -3,13 +3,13 @@ import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-
 import { Toaster } from "sonner";
 import {
   BellRing,
-  DoorOpen,
   History,
   LifeBuoy,
   LogIn,
   Menu,
   MonitorSmartphone,
   Sparkles,
+  UserCheck,
   UserCog,
   Users,
 } from "lucide-react";
@@ -28,7 +28,7 @@ import { rutaSeccion, type Seccion } from "./secciones";
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
-const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
+const Activos = lazy(() => import("./pantallas/Activos"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
@@ -55,7 +55,8 @@ const Ayuda = lazy(() => import("./pantallas/Ayuda"));
 // se llame igual en las dos apps.
 const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
-  { id: "adentro", etiqueta: "Adentro ahora", Icono: DoorOpen },
+  // "Activos" como en escritorio (antes "Adentro ahora"), mismo ícono.
+  { id: "activos", etiqueta: "Activos", Icono: UserCheck },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
@@ -102,7 +103,11 @@ function leerListaSecciones(clave: string): Seccion[] | null {
   try {
     const guardado = localStorage.getItem(clave);
     if (!guardado) return null;
-    return (JSON.parse(guardado) as unknown[]).filter(seccionValida);
+    return (JSON.parse(guardado) as unknown[])
+      // "Adentro ahora" pasó a ser "Activos" (2026-10-26): conserva su lugar
+      // en el orden (y si estaba oculta) que este navegador ya había guardado.
+      .map((id) => (id === "adentro" ? "activos" : id))
+      .filter(seccionValida);
   } catch {
     return null;
   }
@@ -296,8 +301,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                 <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
                   {id === "historial" ? (
                     <Historial />
-                  ) : id === "adentro" ? (
-                    <AdentroAhora />
+                  ) : id === "activos" ? (
+                    <Activos />
                   ) : id === "contratistas" ? (
                     <Contratistas />
                   ) : id === "usuarios" ? (

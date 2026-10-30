@@ -202,7 +202,7 @@ escritorio.
 navegador, con una cuenta de Google autorizada.
 
 - ✅ [Entrar al panel y moverse por él](panel/entrar-al-panel.md)
-- ✅ [Adentro ahora (todas las unidades)](panel/adentro-ahora.md)
+- ✅ [Activos (todas las unidades)](panel/activos.md)
 - ✅ [Historial de ingresos y exportar](panel/historial.md)
 - ✅ [Contratistas: alta, edición y acceso](panel/contratistas.md)
 - ✅ [Usuarios del puesto de control (alta, contraseña temporal, baja)](panel/usuarios.md)

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { COLUMNAS_FILTRABLES, expresionesDeFiltros, plegarTexto } from "./historialFiltros";
+import {
+  COLUMNAS_FILTRABLES,
+  expresionesDeFiltros,
+  filtrosParaServidor,
+  plegarTexto,
+} from "./historialFiltros";
 
 describe("plegarTexto", () => {
   it("quita tildes, pasa a minúsculas y trata la ñ como n (igual que unaccent en la base)", () => {
@@ -8,33 +13,53 @@ describe("plegarTexto", () => {
 });
 
 describe("expresionesDeFiltros -- texto", () => {
-  const filtro = (type: string, filter?: string) => ({ usuario_entrada_nombre: { filterType: "text", type, filter } });
+  const filtro = (type: string, filter?: string) => ({
+    usuario_entrada_nombre: { filterType: "text", type, filter },
+  });
 
   it("contiene: cada palabra debe aparecer, sin tildes ni mayúsculas", () => {
     expect(expresionesDeFiltros(filtro("contains", "Carlos Sá"))).toEqual([
       'and(usuario_entrada_p.ilike."*carlos*",usuario_entrada_p.ilike."*sa*")',
     ]);
-    expect(expresionesDeFiltros(filtro("contains", "Pérez"))).toEqual(['usuario_entrada_p.ilike."*perez*"']);
+    expect(expresionesDeFiltros(filtro("contains", "Pérez"))).toEqual([
+      'usuario_entrada_p.ilike."*perez*"',
+    ]);
   });
 
   it("igual, distinto, empieza con, termina con y no contiene", () => {
-    expect(expresionesDeFiltros(filtro("equals", "Ana"))).toEqual(['usuario_entrada_p.eq."ana"']);
-    expect(expresionesDeFiltros(filtro("notEqual", "Ana"))).toEqual(['or(usuario_entrada_p.is.null,usuario_entrada_p.neq."ana")']);
-    expect(expresionesDeFiltros(filtro("startsWith", "An"))).toEqual(['usuario_entrada_p.ilike."an*"']);
-    expect(expresionesDeFiltros(filtro("endsWith", "na"))).toEqual(['usuario_entrada_p.ilike."*na"']);
+    expect(expresionesDeFiltros(filtro("equals", "Ana"))).toEqual([
+      'usuario_entrada_p.eq."ana"',
+    ]);
+    expect(expresionesDeFiltros(filtro("notEqual", "Ana"))).toEqual([
+      'or(usuario_entrada_p.is.null,usuario_entrada_p.neq."ana")',
+    ]);
+    expect(expresionesDeFiltros(filtro("startsWith", "An"))).toEqual([
+      'usuario_entrada_p.ilike."an*"',
+    ]);
+    expect(expresionesDeFiltros(filtro("endsWith", "na"))).toEqual([
+      'usuario_entrada_p.ilike."*na"',
+    ]);
     expect(expresionesDeFiltros(filtro("notContains", "an"))).toEqual([
       'or(usuario_entrada_p.is.null,usuario_entrada_p.not.ilike."*an*")',
     ]);
   });
 
   it("vacío y no vacío", () => {
-    expect(expresionesDeFiltros(filtro("blank"))).toEqual(['or(usuario_entrada_p.is.null,usuario_entrada_p.eq."")']);
-    expect(expresionesDeFiltros(filtro("notBlank"))).toEqual(['and(usuario_entrada_p.not.is.null,usuario_entrada_p.neq."")']);
+    expect(expresionesDeFiltros(filtro("blank"))).toEqual([
+      'or(usuario_entrada_p.is.null,usuario_entrada_p.eq."")',
+    ]);
+    expect(expresionesDeFiltros(filtro("notBlank"))).toEqual([
+      'and(usuario_entrada_p.not.is.null,usuario_entrada_p.neq."")',
+    ]);
   });
 
   it("escapa % _ \\ y * para like, y comillas para la sintaxis de PostgREST", () => {
-    expect(expresionesDeFiltros(filtro("contains", "100%_x"))).toEqual(['usuario_entrada_p.ilike."*100\\\\%\\\\_x*"']);
-    expect(expresionesDeFiltros(filtro("equals", 'a,"b")'))).toEqual(['usuario_entrada_p.eq."a,\\"b\\")"']);
+    expect(expresionesDeFiltros(filtro("contains", "100%_x"))).toEqual([
+      'usuario_entrada_p.ilike."*100\\\\%\\\\_x*"',
+    ]);
+    expect(expresionesDeFiltros(filtro("equals", 'a,"b")'))).toEqual([
+      'usuario_entrada_p.eq."a,\\"b\\")"',
+    ]);
   });
 
   it("un filtro sin texto no genera condición", () => {
@@ -57,18 +82,36 @@ describe("expresionesDeFiltros -- número", () => {
   });
 
   it("comparaciones simples", () => {
-    expect(expresionesDeFiltros(filtro("equals", 12))).toEqual(["gafete_numero.eq.12"]);
-    expect(expresionesDeFiltros(filtro("greaterThan", 12))).toEqual(["gafete_numero.gt.12"]);
-    expect(expresionesDeFiltros(filtro("greaterThanOrEqual", 12))).toEqual(["gafete_numero.gte.12"]);
-    expect(expresionesDeFiltros(filtro("lessThan", 12))).toEqual(["gafete_numero.lt.12"]);
-    expect(expresionesDeFiltros(filtro("lessThanOrEqual", 12))).toEqual(["gafete_numero.lte.12"]);
-    expect(expresionesDeFiltros(filtro("notEqual", 12))).toEqual(["or(gafete_numero.is.null,gafete_numero.neq.12)"]);
+    expect(expresionesDeFiltros(filtro("equals", 12))).toEqual([
+      "gafete_numero.eq.12",
+    ]);
+    expect(expresionesDeFiltros(filtro("greaterThan", 12))).toEqual([
+      "gafete_numero.gt.12",
+    ]);
+    expect(expresionesDeFiltros(filtro("greaterThanOrEqual", 12))).toEqual([
+      "gafete_numero.gte.12",
+    ]);
+    expect(expresionesDeFiltros(filtro("lessThan", 12))).toEqual([
+      "gafete_numero.lt.12",
+    ]);
+    expect(expresionesDeFiltros(filtro("lessThanOrEqual", 12))).toEqual([
+      "gafete_numero.lte.12",
+    ]);
+    expect(expresionesDeFiltros(filtro("notEqual", 12))).toEqual([
+      "or(gafete_numero.is.null,gafete_numero.neq.12)",
+    ]);
   });
 
   it("entre (extremos excluidos como AG Grid), vacío y no vacío", () => {
-    expect(expresionesDeFiltros(filtro("inRange", 5, 9))).toEqual(["and(gafete_numero.gt.5,gafete_numero.lt.9)"]);
-    expect(expresionesDeFiltros(filtro("blank"))).toEqual(["gafete_numero.is.null"]);
-    expect(expresionesDeFiltros(filtro("notBlank"))).toEqual(["gafete_numero.not.is.null"]);
+    expect(expresionesDeFiltros(filtro("inRange", 5, 9))).toEqual([
+      "and(gafete_numero.gt.5,gafete_numero.lt.9)",
+    ]);
+    expect(expresionesDeFiltros(filtro("blank"))).toEqual([
+      "gafete_numero.is.null",
+    ]);
+    expect(expresionesDeFiltros(filtro("notBlank"))).toEqual([
+      "gafete_numero.not.is.null",
+    ]);
   });
 
   it("sin número válido no genera condición", () => {
@@ -83,36 +126,48 @@ describe("expresionesDeFiltros -- fecha (día calendario de Costa Rica)", () => 
   });
 
   it("igual: todo ese día en hora de Costa Rica", () => {
-    expect(expresionesDeFiltros(filtro("equals", "2026-09-09 00:00:00"))).toEqual([
+    expect(
+      expresionesDeFiltros(filtro("equals", "2026-09-09 00:00:00")),
+    ).toEqual([
       'and(hora_entrada.gte."2026-09-09T00:00:00-06:00",hora_entrada.lt."2026-09-10T00:00:00-06:00")',
     ]);
   });
 
   it("antes, después y distinto", () => {
-    expect(expresionesDeFiltros(filtro("lessThan", "2026-09-30 00:00:00"))).toEqual([
-      'hora_entrada.lt."2026-09-30T00:00:00-06:00"',
-    ]);
-    expect(expresionesDeFiltros(filtro("greaterThan", "2026-09-30 00:00:00"))).toEqual([
-      'hora_entrada.gte."2026-10-01T00:00:00-06:00"',
-    ]);
-    expect(expresionesDeFiltros(filtro("notEqual", "2026-09-09 00:00:00"))).toEqual([
+    expect(
+      expresionesDeFiltros(filtro("lessThan", "2026-09-30 00:00:00")),
+    ).toEqual(['hora_entrada.lt."2026-09-30T00:00:00-06:00"']);
+    expect(
+      expresionesDeFiltros(filtro("greaterThan", "2026-09-30 00:00:00")),
+    ).toEqual(['hora_entrada.gte."2026-10-01T00:00:00-06:00"']);
+    expect(
+      expresionesDeFiltros(filtro("notEqual", "2026-09-09 00:00:00")),
+    ).toEqual([
       'or(hora_entrada.lt."2026-09-09T00:00:00-06:00",hora_entrada.gte."2026-09-10T00:00:00-06:00")',
     ]);
   });
 
   it("entre: después del primer día y antes del último", () => {
-    expect(expresionesDeFiltros(filtro("inRange", "2026-09-01 00:00:00", "2026-09-10 00:00:00"))).toEqual([
+    expect(
+      expresionesDeFiltros(
+        filtro("inRange", "2026-09-01 00:00:00", "2026-09-10 00:00:00"),
+      ),
+    ).toEqual([
       'and(hora_entrada.gte."2026-09-02T00:00:00-06:00",hora_entrada.lt."2026-09-10T00:00:00-06:00")',
     ]);
   });
 
   it("vacío en la fecha de salida es 'sigue adentro'", () => {
-    expect(expresionesDeFiltros({ fecha_salida: { filterType: "date", type: "blank" } })).toEqual([
-      "hora_salida.is.null",
-    ]);
-    expect(expresionesDeFiltros({ fecha_salida: { filterType: "date", type: "notBlank" } })).toEqual([
-      "hora_salida.not.is.null",
-    ]);
+    expect(
+      expresionesDeFiltros({
+        fecha_salida: { filterType: "date", type: "blank" },
+      }),
+    ).toEqual(["hora_salida.is.null"]);
+    expect(
+      expresionesDeFiltros({
+        fecha_salida: { filterType: "date", type: "notBlank" },
+      }),
+    ).toEqual(["hora_salida.not.is.null"]);
   });
 
   it("sin fecha válida no genera condición", () => {
@@ -155,7 +210,9 @@ describe("expresionesDeFiltros -- combinaciones", () => {
         condition2: { type: "equals", filter: "Luis" },
       },
     };
-    expect(expresionesDeFiltros(modelo)).toEqual(['or(nombre_p.eq."ana",nombre_p.eq."luis")']);
+    expect(expresionesDeFiltros(modelo)).toEqual([
+      'or(nombre_p.eq."ana",nombre_p.eq."luis")',
+    ]);
   });
 
   it("varias columnas dan una expresión cada una (AND entre columnas) e ignora las desconocidas", () => {
@@ -164,8 +221,147 @@ describe("expresionesDeFiltros -- combinaciones", () => {
       gafete_numero: { filterType: "number", type: "equals", filter: 3 },
       inventada: { filterType: "text", type: "equals", filter: "x" },
     };
-    expect(expresionesDeFiltros(modelo)).toEqual(['empresa_p.eq."bac"', "gafete_numero.eq.3"]);
+    expect(expresionesDeFiltros(modelo)).toEqual([
+      'empresa_p.eq."bac"',
+      "gafete_numero.eq.3",
+    ]);
     expect(expresionesDeFiltros(undefined)).toEqual([]);
     expect(expresionesDeFiltros({})).toEqual([]);
+  });
+});
+
+describe("filtrosParaServidor", () => {
+  it("texto: cada opción de la grilla con su operación; el valor va tal cual (lo pliega el servidor)", () => {
+    const casos: [string, string][] = [
+      ["contains", "contiene"],
+      ["notContains", "no_contiene"],
+      ["equals", "igual"],
+      ["notEqual", "distinto"],
+      ["startsWith", "empieza"],
+      ["endsWith", "termina"],
+    ];
+    for (const [type, op] of casos) {
+      expect(
+        filtrosParaServidor({
+          empresa_nombre: { filterType: "text", type, filter: "Él Ñandú" },
+        }),
+      ).toEqual([
+        {
+          columna: "empresa_p",
+          union: "and",
+          condiciones: [{ op, valor: "Él Ñandú" }],
+        },
+      ]);
+    }
+    expect(
+      filtrosParaServidor({
+        usuario_salida_nombre: { filterType: "text", type: "blank" },
+      }),
+    ).toEqual([
+      {
+        columna: "usuario_salida_p",
+        union: "and",
+        condiciones: [{ op: "vacio" }],
+      },
+    ]);
+  });
+
+  it("dos condiciones unidas con O y columnas desconocidas o vacías ignoradas", () => {
+    expect(
+      filtrosParaServidor({
+        empresa_nombre: {
+          filterType: "text",
+          operator: "OR",
+          conditions: [
+            { type: "startsWith", filter: "otra" },
+            { type: "contains", filter: "50%" },
+          ],
+        },
+        id: { filterType: "text", type: "equals", filter: "x" },
+        contratista_nombre: {
+          filterType: "text",
+          type: "contains",
+          filter: "   ",
+        },
+      }),
+    ).toEqual([
+      {
+        columna: "empresa_p",
+        union: "or",
+        condiciones: [
+          { op: "empieza", valor: "otra" },
+          { op: "contiene", valor: "50%" },
+        ],
+      },
+    ]);
+  });
+
+  it("número: comparaciones, entre y valores inválidos", () => {
+    expect(
+      filtrosParaServidor({
+        gafete_numero: {
+          filterType: "number",
+          type: "inRange",
+          filter: 5,
+          filterTo: 30,
+        },
+      }),
+    ).toEqual([
+      {
+        columna: "gafete_numero",
+        union: "and",
+        condiciones: [{ op: "entre", valor: 5, valor2: 30 }],
+      },
+    ]);
+    expect(
+      filtrosParaServidor({
+        gafete_numero: {
+          filterType: "number",
+          type: "lessThanOrEqual",
+          filter: "7",
+        },
+      }),
+    ).toEqual([
+      {
+        columna: "gafete_numero",
+        union: "and",
+        condiciones: [{ op: "menor_igual", valor: 7 }],
+      },
+    ]);
+    expect(
+      filtrosParaServidor({
+        gafete_numero: { filterType: "number", type: "equals", filter: "abc" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("fecha: el día calendario de Costa Rica como instantes, igual que el selector de rango", () => {
+    const fecha = (type: string, dateFrom: string, dateTo?: string) =>
+      filtrosParaServidor({
+        fecha_ingreso: { filterType: "date", type, dateFrom, dateTo },
+      })[0]?.condiciones[0];
+    expect(fecha("equals", "2026-09-09 00:00:00")).toEqual({
+      op: "rango",
+      desde: "2026-09-09T00:00:00-06:00",
+      hasta: "2026-09-10T00:00:00-06:00",
+    });
+    expect(fecha("notEqual", "2026-09-09")).toEqual({
+      op: "fuera",
+      desde: "2026-09-09T00:00:00-06:00",
+      hasta: "2026-09-10T00:00:00-06:00",
+    });
+    expect(fecha("greaterThan", "2026-09-09")).toEqual({
+      op: "rango",
+      desde: "2026-09-10T00:00:00-06:00",
+    });
+    expect(fecha("lessThan", "2026-09-09")).toEqual({
+      op: "rango",
+      hasta: "2026-09-09T00:00:00-06:00",
+    });
+    expect(fecha("inRange", "2026-09-01", "2026-09-09")).toEqual({
+      op: "rango",
+      desde: "2026-09-02T00:00:00-06:00",
+      hasta: "2026-09-09T00:00:00-06:00",
+    });
   });
 });

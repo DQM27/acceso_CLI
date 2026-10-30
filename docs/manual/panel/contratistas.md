@@ -69,4 +69,4 @@ El cambio llega a todos los equipos en segundos.
 
 ## Relacionado
 
-- [Adentro ahora](adentro-ahora.md)
+- [Activos](activos.md)
