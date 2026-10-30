@@ -616,11 +616,14 @@ class ActivosViewModel(
                             fallidos.add("gafete ${coincidencia.numero}: ${excepcion.mensajeDeErrorEsperado()}")
                         }
                     }
-                    val partes = mutableListOf<String>()
-                    if (registrados.isNotEmpty()) partes.add("Salida registrada: ${registrados.joinToString(", ")}")
-                    if (fallidos.isNotEmpty()) partes.add(fallidos.joinToString(" · "))
-                    mensaje = partes.joinToString(" · ").ifEmpty { null }
-                    mensajeEsError = registrados.isEmpty() && fallidos.isNotEmpty()
+                    // Lo logrado va al aviso pasajero, como toda otra salida;
+                    // sólo los gafetes que fallaron quedan fijos en la franja
+                    // hasta la próxima búsqueda.
+                    if (registrados.isNotEmpty()) {
+                        confirmacion.mostrar("Salida registrada · ${registrados.joinToString(", ")}")
+                    }
+                    mensaje = fallidos.joinToString(" · ").ifEmpty { null }
+                    mensajeEsError = fallidos.isNotEmpty()
                     texto = ""
                 }
                 refrescar()

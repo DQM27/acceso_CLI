@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./componentes/ErrorBoundary";
+import NieveNavidena from "./componentes/NieveNavidena";
 import "./index.css";
 import { iniciarTelemetria } from "./telemetria";
 
@@ -26,6 +27,7 @@ if (!raiz) {
 createRoot(raiz).render(
   <StrictMode>
     <ErrorBoundary>
+      <NieveNavidena />
       <App />
     </ErrorBoundary>
   </StrictMode>,

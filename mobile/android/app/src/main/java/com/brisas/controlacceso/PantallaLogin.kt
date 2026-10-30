@@ -8,9 +8,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -88,6 +90,9 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
     // título de lo que se hace ("Iniciar sesión") y, debajo, la unidad en una
     // línea gris; los campos agrupados en un solo bloque sobre el fondo, sin
     // hoja elevada, íconos ni marcos.
+    // La nieve de temporada, de fondo en toda la pantalla (ver `NieveNavidena.kt`).
+    Box(modifier = Modifier.fillMaxSize()) {
+    NieveNavidena()
     HojaPorteria(
         conHoja = false,
         encabezado = { compacto ->
@@ -137,6 +142,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
                 if (cambiando) PasoPasswordTemporal(viewModel) else PasoCredenciales(viewModel)
             }
         }
+    }
     }
 }
 

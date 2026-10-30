@@ -464,6 +464,56 @@ class ActivosViewModelTest {
         assertEquals(BusquedaActivos.Vacia, viewModel.busqueda)
     }
 
+    private fun kotlinx.coroutines.test.TestScope.conGafeteSieteAdentro(): ActivosViewModel {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso,
+                fecha_vencimiento_praind
+            ) VALUES ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31');
+            """.trimIndent(),
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L, null)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        return viewModel
+    }
+
+    @Test
+    fun `salida por numero de gafete se confirma con aviso pasajero, no con franja fija`() = runTest(dispatcher) {
+        // Caso reportado 2026-10-29: "Salida registrada: …" quedaba fija
+        // arriba de la lista en vez de desaparecer como las demás salidas.
+        val viewModel = conGafeteSieteAdentro()
+        viewModel.cambiarTexto("7")
+        advanceUntilIdle()
+
+        viewModel.registrarSalidaPorGafetes()
+        advanceUntilIdle()
+
+        assertEquals("Salida registrada · Con Gafete Siete", viewModel.confirmacion.actual?.texto)
+        assertNull(viewModel.mensaje)
+        assertEquals(0, viewModel.totalAdentro)
+    }
+
+    @Test
+    fun `salida por gafetes con alguno fallido deja fijo solo el error`() = runTest(dispatcher) {
+        val viewModel = conGafeteSieteAdentro()
+        viewModel.cambiarTexto("7, 8")
+        advanceUntilIdle()
+
+        viewModel.registrarSalidaPorGafetes()
+        advanceUntilIdle()
+
+        assertEquals("Salida registrada · Con Gafete Siete", viewModel.confirmacion.actual?.texto)
+        assertEquals("gafete 8: sin ingreso activo", viewModel.mensaje)
+        assertTrue(viewModel.mensajeEsError)
+    }
+
 
     // --- Registro de ingreso desde el formulario (M2) ---
 
