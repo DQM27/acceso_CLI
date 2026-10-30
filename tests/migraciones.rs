@@ -2018,3 +2018,79 @@ fn migracion_60_separa_los_conflictos_de_los_errores_en_la_cola() {
         ]
     );
 }
+
+/// Incidente 2026-10-30: al actualizar, las empresas de proveedor cuya alta
+/// falló vuelven a la cola (sin intentos) y los ingresos de proveedor que
+/// fallaron por esa empresa faltante se descartan. El resto de la cola no se
+/// toca: otro error real sigue fallido y un conflicto sigue como conflicto.
+#[test]
+fn migracion_61_recupera_empresas_de_proveedor_y_descarta_sus_ingresos() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch("PRAGMA user_version = 60;")
+        .unwrap();
+    let filas = [
+        (
+            1,
+            "empresa_proveedor",
+            "fallido",
+            Some("error"),
+            r#"El receptor respondió 403: {"code":"42501"}"#,
+        ),
+        (
+            2,
+            "ingreso_proveedor",
+            "fallido",
+            Some("error"),
+            r#"El receptor respondió 409: {"code":"23503","message":"violates foreign key constraint \"ingresos_proveedor_empresa_id_fkey\""}"#,
+        ),
+        (
+            3,
+            "ingreso_proveedor",
+            "fallido",
+            Some("error"),
+            "El receptor respondió 500: {}",
+        ),
+        (
+            4,
+            "ingreso",
+            "fallido",
+            Some("conflicto"),
+            r#"El receptor respondió 409: {"message":"\"ingresos_gafete_activo_sitio_idx\""}"#,
+        ),
+        (5, "empresa_proveedor", "enviado", None, ""),
+    ];
+    for (id, entidad, estado, motivo, error) in filas {
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                     id, entidad, entidad_uuid, operacion, estado, motivo_fallo, intentos,
+                     creado_en, actualizado_en, ultimo_error
+                 ) VALUES (?1, ?2, ?3, 'crear', ?4, ?5, 20,
+                           '2026-10-10T00:00:00Z', '2026-10-10T00:00:00Z', ?6)",
+                rusqlite::params![id, entidad, format!("uuid-{id}"), estado, motivo, error],
+            )
+            .unwrap();
+    }
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let filas: Vec<(i64, String, i64)> = connection
+        .prepare("SELECT id, estado, intentos FROM cola_salida ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        filas,
+        vec![
+            (1, "pendiente".to_string(), 0),
+            (3, "fallido".to_string(), 20),
+            (4, "fallido".to_string(), 20),
+            (5, "enviado".to_string(), 20),
+        ]
+    );
+}

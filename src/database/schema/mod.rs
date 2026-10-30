@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 60;
+pub const SCHEMA_VERSION: i64 = 61;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -458,6 +458,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 59 {
         aplicar_migracion_60(connection)?;
         *version = 60;
+    }
+
+    if *version == 60 {
+        aplicar_migracion_61(connection)?;
+        *version = 61;
     }
 
     Ok(())
@@ -1044,6 +1049,17 @@ fn aplicar_migracion_60(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_60)?;
     transaction.execute_batch("PRAGMA user_version = 60")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Recuperación por única vez de las empresas de proveedor que no pudieron
+/// darse de alta (vuelven a la cola) y descarte de los ingresos de proveedor
+/// que fallaron por esa empresa faltante (incidente 2026-10-30).
+fn aplicar_migracion_61(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_61)?;
+    transaction.execute_batch("PRAGMA user_version = 61")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1726,3 +1742,4 @@ const MIGRACION_57: &str = include_str!("migraciones/migracion_57.sql");
 const MIGRACION_58: &str = include_str!("migraciones/migracion_58.sql");
 const MIGRACION_59: &str = include_str!("migraciones/migracion_59.sql");
 const MIGRACION_60: &str = include_str!("migraciones/migracion_60.sql");
+const MIGRACION_61: &str = include_str!("migraciones/migracion_61.sql");

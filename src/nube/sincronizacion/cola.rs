@@ -83,7 +83,10 @@ pub(super) fn destino_lote(
         ("empresa", _) => Some(("empresas", Some("nombre"))),
         ("contratista", _) => Some(("contratistas", Some("identificacion"))),
         ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
-        ("ingreso" | "salida_ruta", "cerrar") => None,
+        // El alta de empresa de proveedor va fila por fila: tiene que
+        // confirmar qué empresa quedó en la nube con ese nombre (ver
+        // `crear_empresa_proveedor`).
+        ("ingreso" | "salida_ruta", "cerrar") | ("empresa_proveedor", "crear") => None,
         ("ingreso", _) => Some(("ingresos", None)),
         ("ruta", _) => Some(("rutas", Some("numero"))),
         ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
@@ -300,6 +303,9 @@ fn enviar_fila(
         ("prestamo_gafete_provisional", _) => {
             enviar_prestamo_gafete_provisional(cliente, connection, contexto, &fila.entidad_uuid)
         }
+        ("empresa_proveedor", "crear") => {
+            crear_empresa_proveedor(cliente, connection, contexto, &fila.entidad_uuid).map(|_| ())
+        }
         ("empresa_proveedor", _) => {
             enviar_empresa_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
         }
@@ -347,7 +353,22 @@ pub(super) fn procesar_fila_individual(
         return Ok(());
     }
 
-    let resultado = enviar_fila(cliente, connection, contexto, &fila);
+    let mut resultado = enviar_fila(cliente, connection, contexto, &fila);
+    if let Err(error) = &resultado
+        && falta_la_empresa_del_ingreso_proveedor(&fila, error)
+    {
+        // La nube no tiene la empresa de este ingreso (su alta falló antes):
+        // se manda ahora y se reintenta el ingreso una vez, en vez de dejarlo
+        // fallar hasta agotar los intentos. Ver
+        // `reparar_empresa_del_ingreso_proveedor`.
+        resultado = reparar_empresa_del_ingreso_proveedor(
+            cliente,
+            connection,
+            contexto,
+            &fila.entidad_uuid,
+        )
+        .and_then(|()| enviar_fila(cliente, connection, contexto, &fila));
+    }
 
     match resultado {
         Ok(()) => {
@@ -1562,6 +1583,175 @@ pub(super) fn enviar_empresa_proveedor(
         .map_err(NubeError::Red)?;
 
     exigir_2xx(respuesta)
+}
+
+#[derive(serde::Deserialize)]
+struct EmpresaProveedorEnLaNube {
+    id: String,
+    nombre: String,
+}
+
+/// Alta de una empresa de proveedor sin pisar a ninguna que ya esté en la
+/// nube. Devuelve el `uuid` con que quedó (el propio, o el de la nube si ese
+/// nombre ya existía).
+///
+/// Antes el alta era un upsert por nombre que, si el nombre ya existía,
+/// le cambiaba el `id` a la empresa de la nube: los ingresos que otro equipo
+/// tenía con el `id` viejo quedaban colgados (o el cambio chocaba con su
+/// clave foránea y el alta fallaba para siempre).
+///
+/// Ahora: el `POST` ignora el duplicado por nombre (y un `409` por otra
+/// grafía del mismo nombre o por un reintento de un alta que ya había
+/// llegado), y después se pregunta qué empresa de la unidad tiene ese nombre
+/// (sin mayúsculas ni tildes, como el índice único de la nube). Si es otra,
+/// este equipo adopta su `uuid` (ver `adoptar_uuid_empresa_proveedor`).
+pub(super) fn crear_empresa_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<String, SincronizacionError> {
+    let cuerpo = construir_cuerpo_empresa_proveedor(connection, contexto, uuid)?;
+    let nombre = cuerpo["nombre"].as_str().unwrap_or_default().to_string();
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/empresas_proveedor?on_conflict=nombre",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=ignore-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+    match exigir_2xx(respuesta) {
+        Ok(()) => {}
+        Err(SincronizacionError::RespuestaInesperada {
+            status: 409,
+            cuerpo,
+        }) if cuerpo.contains("23505") => {}
+        Err(error) => return Err(error),
+    }
+
+    let respuesta = cliente
+        .get(format!(
+            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre",
+            contexto.base_url, contexto.sitio_id
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .send()
+        .map_err(NubeError::Red)?;
+    if !respuesta.status().is_success() {
+        let status = respuesta.status().as_u16();
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    let empresas: Vec<EmpresaProveedorEnLaNube> = respuesta.json().map_err(NubeError::Red)?;
+
+    if empresas.iter().any(|empresa| empresa.id == uuid) {
+        return Ok(uuid.to_string());
+    }
+    let plegado = crate::texto::plegar_para_busqueda(&nombre);
+    let Some(en_la_nube) = empresas
+        .into_iter()
+        .find(|empresa| crate::texto::plegar_para_busqueda(&empresa.nombre) == plegado)
+    else {
+        // Ni la nuestra ni otra con ese nombre en la unidad: el nombre lo
+        // tiene otra unidad (único en toda la nube). No se resuelve solo.
+        return Err(SincronizacionError::RespuestaInesperada {
+            status: 409,
+            cuerpo: "La empresa de proveedor no quedó en la nube: el nombre ya lo usa otra unidad \
+                     (constraint \"empresas_proveedor_nombre_key\")"
+                .to_string(),
+        });
+    };
+    adoptar_uuid_empresa_proveedor(connection, uuid, &en_la_nube.id)?;
+    Ok(en_la_nube.id)
+}
+
+/// Este equipo pasa a usar el `uuid` de la empresa que ya estaba en la nube
+/// con el mismo nombre. Los ingresos locales apuntan a la empresa por su `id`
+/// local (entero), así que todos quedan apuntando a la de la nube sin
+/// tocarlos; los cambios de la empresa que esperan en la cola se mudan al
+/// `uuid` nuevo.
+fn adoptar_uuid_empresa_proveedor(
+    connection: &Connection,
+    viejo: &str,
+    nuevo: &str,
+) -> Result<(), SincronizacionError> {
+    log::warn!(
+        "cola_salida: la empresa de proveedor {viejo} ya estaba en la nube como {nuevo}; este equipo adopta ese uuid"
+    );
+    connection.execute_batch("SAVEPOINT adoptar_uuid_empresa_proveedor")?;
+    let resultado = (|| -> rusqlite::Result<()> {
+        connection.execute(
+            "UPDATE empresas_proveedor SET uuid = ?2 WHERE uuid = ?1",
+            params![viejo, nuevo],
+        )?;
+        connection.execute(
+            "UPDATE cola_salida SET entidad_uuid = ?2
+             WHERE entidad = 'empresa_proveedor' AND entidad_uuid = ?1 AND estado <> 'enviado'",
+            params![viejo, nuevo],
+        )?;
+        Ok(())
+    })();
+    match resultado {
+        Ok(()) => connection.execute_batch("RELEASE adoptar_uuid_empresa_proveedor")?,
+        Err(error) => {
+            connection.execute_batch(
+                "ROLLBACK TO adoptar_uuid_empresa_proveedor; RELEASE adoptar_uuid_empresa_proveedor",
+            )?;
+            return Err(error.into());
+        }
+    }
+    Ok(())
+}
+
+/// La nube rechazó el alta de un ingreso de proveedor porque su empresa no
+/// existe allá (`ingresos_proveedor_empresa_id_fkey`).
+fn falta_la_empresa_del_ingreso_proveedor(fila: &FilaCola, error: &SincronizacionError) -> bool {
+    fila.entidad == "ingreso_proveedor"
+        && fila.operacion != "cerrar"
+        && matches!(
+            error,
+            SincronizacionError::RespuestaInesperada { status: 409, cuerpo }
+                if cuerpo.contains("ingresos_proveedor_empresa_id_fkey")
+        )
+}
+
+/// Manda (otra vez) la empresa del ingreso de proveedor `uuid_ingreso` y deja
+/// su alta como enviada en la cola. Incidente 2026-10-30: un teléfono con una
+/// versión vieja no pudo dar de alta 8 empresas; agotaron sus intentos y
+/// desde ahí todo ingreso de esas empresas falló por la clave foránea, sin
+/// que nada volviera a mandarlas.
+fn reparar_empresa_del_ingreso_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid_ingreso: &str,
+) -> Result<(), SincronizacionError> {
+    let uuid_empresa: String = connection.query_row(
+        "SELECT e.uuid FROM registro_ingresos_proveedor r
+         JOIN empresas_proveedor e ON e.id = r.empresa_id
+         WHERE r.uuid = ?1",
+        params![uuid_ingreso],
+        |row| row.get(0),
+    )?;
+    log::warn!(
+        "cola_salida: el ingreso de proveedor {uuid_ingreso} no tiene su empresa {uuid_empresa} en la nube; se manda la empresa y se reintenta"
+    );
+    let uuid_final = crear_empresa_proveedor(cliente, connection, contexto, &uuid_empresa)?;
+    connection.execute(
+        "UPDATE cola_salida
+         SET estado = 'enviado', motivo_fallo = NULL,
+             actualizado_en = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+         WHERE entidad = 'empresa_proveedor' AND operacion = 'crear'
+           AND entidad_uuid IN (?1, ?2) AND estado <> 'enviado'",
+        params![uuid_empresa, uuid_final],
+    )?;
+    Ok(())
 }
 
 /// Ingresos de proveedor (`docs/features-futuras/plan-control-proveedores.md`,
