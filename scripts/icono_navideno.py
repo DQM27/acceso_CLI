@@ -15,12 +15,15 @@ dependencias de `desktop/` instaladas para `tauri icon`):
 `generar` dibuja cada icono desde el SVG (nítido en cualquier tamaño), con
 la forma (esquinas redondeadas o círculo) y el encuadre del icono normal
 del mismo tamaño. `poner` y `quitar` también cambian el logo grande de
-adentro de las apps (login, arranque y carga; ver LOGOS_INTERNOS) y regeneran los iconos de
+adentro de las apps (login, arranque y carga; ver LOGOS_INTERNOS), las
+imágenes del instalador, prenden o apagan la nieve del móvil
+(NAVIDAD_ACTIVA en NieveNavidena.kt) y regeneran los iconos de
 prueba (beta/diagnóstico) con `generar_iconos_beta.py`, para que lleven el
 mismo dibujo con su cinta.
 """
 
 import io
+import re
 import shutil
 import subprocess
 import sys
@@ -46,6 +49,12 @@ LOGOS_INTERNOS = (
     RAIZ / "desktop" / "src" / "assets" / "marca.png",
     RAIZ / "desktop" / "public" / "lattis-splash.png",
 )
+
+# La nieve del móvil: `poner` y `quitar` cambian sólo este valor.
+NIEVE_KT = RAIZ / "mobile" / "android" / "app" / "src" / "main" / "java" / "com" / "brisas" / "controlacceso" / "NieveNavidena.kt"
+INTERRUPTOR_NIEVE = re.compile(r"internal const val NAVIDAD_ACTIVA = (true|false)")
+# Banda lateral y encabezado del instalador NSIS: el logo en un cuadro blanco.
+INSTALADOR = ("nsis-header.bmp", "nsis-sidebar.bmp")
 
 ANDROID = ("ic_launcher.png", "ic_launcher_round.png")
 # Lo que `tauri icon` genera y está en git (el resto, android/ e ios/, no se usa).
@@ -98,9 +107,24 @@ def desde_svg(normal: Image.Image) -> Image.Image:
     return resultado
 
 
+def instalador_desde_svg(normal: Image.Image) -> Image.Image:
+    """La imagen del instalador con el logo navideño en su cuadro blanco."""
+    rgb = normal.convert("RGB")
+    # El cuadro del logo es lo único casi blanco (el fondo es azul).
+    x0, y0, x1, y1 = rgb.convert("L").point(lambda v: 255 if v > 235 else 0).getbbox()
+    lado = min(x1 - x0, y1 - y0)
+    logo = Image.new("RGBA", (lado * 4, lado * 4), (255, 255, 255, 255))
+    logo.alpha_composite(renderizar(lado * 4))
+    resultado = rgb.copy()
+    resultado.paste(logo.convert("RGB").resize((lado, lado), Image.LANCZOS), (x0, y0))
+    return resultado
+
+
 def generar() -> None:
     (NAVIDAD / "escritorio").mkdir(parents=True, exist_ok=True)
     desde_svg(Image.open(NORMAL / "escritorio" / "icon.png")).save(NAVIDAD / "escritorio" / "icon.png")
+    for nombre in INSTALADOR:
+        instalador_desde_svg(Image.open(NORMAL / "escritorio" / nombre)).save(NAVIDAD / "escritorio" / nombre)
     for carpeta in sorted((NORMAL / "android").glob("mipmap-*dpi")):
         destino = NAVIDAD / "android" / carpeta.name
         destino.mkdir(parents=True, exist_ok=True)
@@ -113,9 +137,18 @@ def generar() -> None:
 
 
 def aplicar(origen: Path) -> None:
-    logo = LOGO_NAVIDAD if origen == NAVIDAD else LOGO_NORMAL
+    navidad = origen == NAVIDAD
+    logo = LOGO_NAVIDAD if navidad else LOGO_NORMAL
     for destino in LOGOS_INTERNOS:
         shutil.copyfile(logo, destino)
+    for nombre in INSTALADOR:
+        shutil.copyfile(origen / "escritorio" / nombre, ICONOS_ESCRITORIO / nombre)
+
+    codigo = NIEVE_KT.read_text(encoding="utf-8")
+    nuevo, cambios = INTERRUPTOR_NIEVE.subn(f"internal const val NAVIDAD_ACTIVA = {str(navidad).lower()}", codigo)
+    if cambios != 1:
+        sys.exit("no encontré NAVIDAD_ACTIVA en NieveNavidena.kt")
+    NIEVE_KT.write_text(nuevo, encoding="utf-8")
 
     for carpeta in sorted((origen / "android").glob("mipmap-*dpi")):
         for nombre in ANDROID:

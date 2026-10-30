@@ -18,19 +18,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.withFrameNanos
-import java.time.LocalDate
-import java.time.Month
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 
-/// Nieve muy sutil sobre la barra de arriba en temporada navideña (pedido
-/// del usuario 2026-10-29): los copos caen por la franja del título y los
+/// Navidad prendida o apagada: nieve en la app, y con ella el icono y el logo
+/// navideños. No se toca a mano: lo cambia `scripts/icono_navideno.py`
+/// (`poner` en el parche de fines de noviembre, `quitar` en el de
+/// principios de enero), sin fechas en el código (pedido del usuario
+/// 2026-10-29: un parche que se pone y se quita, nada más).
+internal const val NAVIDAD_ACTIVA = true
+
+/// Nieve muy sutil sobre la barra de arriba (pedido del usuario
+/// 2026-10-29): los copos caen por la franja del título y los
 /// botones, pasan apenas sobre la tarjeta más cercana y se desvanecen ahí.
 /// Va encima de todo (no detrás) para poder pisar esa tarjeta, que es opaca.
 ///
-/// - Sólo en temporada ([esTemporadaNavidena]): se prende y se apaga sola,
-///   sin sacar versión.
+/// - Sólo con [NAVIDAD_ACTIVA].
 /// - Con "Quitar animaciones" del sistema (escala 0) no se dibuja.
 /// - Pocos copos, chicos y transparentes; no recibe toques (un `Canvas` sin
 ///   `pointerInput` deja pasar el dedo a lo de abajo).
@@ -42,12 +46,12 @@ import kotlin.random.Random
 /// poco más rápido para que la caída larga no se vea vacía.
 @Composable
 internal fun NieveNavidena(altoBarra: Dp? = null, modifier: Modifier = Modifier) {
+    if (!NAVIDAD_ACTIVA) return
     val contexto = LocalContext.current
     val animacionesApagadas = remember(contexto) {
         Settings.Global.getFloat(contexto.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
-    // En debug siempre, para poder verla fuera de temporada.
-    if (animacionesApagadas || !(BuildConfig.DEBUG || esTemporadaNavidena(LocalDate.now()))) return
+    if (animacionesApagadas) return
 
     val oscuro = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     // En claro la nieve blanca no se ve: gris azulado tenue.
@@ -85,10 +89,6 @@ internal fun NieveNavidena(altoBarra: Dp? = null, modifier: Modifier = Modifier)
         }
     }
 }
-
-/// Del 1 de diciembre al 6 de enero (Reyes) inclusive.
-internal fun esTemporadaNavidena(fecha: LocalDate): Boolean =
-    (fecha.month == Month.DECEMBER) || (fecha.month == Month.JANUARY && fecha.dayOfMonth <= 6)
 
 /// Opacidad según la altura: entera sobre la barra, se apaga a lo largo del
 /// [desborde] (lo poco que pisa la primera tarjeta) y entra suave arriba.
