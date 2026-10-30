@@ -4,34 +4,37 @@ Mismo diseño para escritorio y móvil. Se pone en el parche de la última
 semana de noviembre y se quita en el de la primera de enero; las dos
 versiones quedan guardadas en `assets/iconos/` para el año siguiente.
 
-Uso (desde la raíz del repo, requiere `pip install pillow` y las
+Uso (desde la raíz del repo, requiere `pip install pillow resvg-py` y las
 dependencias de `desktop/` instaladas para `tauri icon`):
 
     python scripts/icono_navideno.py poner     # copia la versión navideña
     python scripts/icono_navideno.py quitar    # vuelve a la normal
     python scripts/icono_navideno.py generar   # rehace assets/iconos/navidad
-                                               # desde assets/iconos/normal
+                                               # desde assets/lattis-navidad.svg
 
-`poner` y `quitar` también regeneran los iconos de prueba (beta/diagnóstico)
-con `generar_iconos_beta.py`, para que lleven el mismo dibujo con su cinta.
-Si cambia el logo, actualizar `assets/iconos/normal/` y correr `generar`.
+`generar` dibuja cada icono desde el SVG (nítido en cualquier tamaño), con
+la forma (esquinas redondeadas o círculo) y el encuadre del icono normal
+del mismo tamaño. `poner` y `quitar` también regeneran los iconos de
+prueba (beta/diagnóstico) con `generar_iconos_beta.py`, para que lleven el
+mismo dibujo con su cinta.
 """
 
-import math
+import io
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+import resvg_py
+from PIL import Image
 
 RAIZ = Path(__file__).resolve().parent.parent
 ICONOS_ESCRITORIO = RAIZ / "desktop" / "src-tauri" / "icons"
 RES_ANDROID = RAIZ / "mobile" / "android" / "app" / "src" / "main" / "res"
 NORMAL = RAIZ / "assets" / "iconos" / "normal"
 NAVIDAD = RAIZ / "assets" / "iconos" / "navidad"
-LOGO = RAIZ / "assets" / "iconoL.png"
+SVG_NAVIDAD = RAIZ / "assets" / "lattis-navidad.svg"
 LOGO_NAVIDAD = RAIZ / "assets" / "iconoL-navidad.png"
 
 ANDROID = ("ic_launcher.png", "ic_launcher_round.png")
@@ -43,24 +46,15 @@ ESCRITORIO = (
     "Square284x284Logo.png", "Square310x310Logo.png", "StoreLogo.png",
 )
 
-ROJO = (206, 32, 52, 255)
-ROJO_SOMBRA = (150, 20, 38, 255)
-BLANCO = (255, 255, 255, 255)
-CONTORNO = (178, 198, 222, 255)
-NIEVE_SOMBRA = (212, 226, 243, 255)
-
-# Medidas tomadas sobre assets/iconoL.png (1254 px): caja del logo (L + texto)
-# y el borde de arriba de la L, que sube hacia la derecha.
-CAJA_REFERENCIA = (219, 183, 1039, 1046)
-CENTRO_ALA = (490, 214)
-ANGULO_ALA = math.atan2(-41, 105)
+# Lienzo del SVG y caja del logo (la L y "Lattis") dentro de él.
+LIENZO_SVG = 1254
+CAJA_SVG = (219, 183, 1039, 1046)
 
 
 def caja_logo(imagen: Image.Image) -> tuple[int, int, int, int]:
-    """Caja de los píxeles oscuros del logo (la L y "Lattis")."""
-    gris = imagen.convert("RGBA")
-    ancho, alto = gris.size
-    datos = gris.load()
+    """Caja de los píxeles oscuros del logo en un icono normal."""
+    datos = imagen.convert("RGBA").load()
+    ancho, alto = imagen.size
     xs, ys = [], []
     for y in range(alto):
         for x in range(ancho):
@@ -71,113 +65,40 @@ def caja_logo(imagen: Image.Image) -> tuple[int, int, int, int]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def bezier(p0, p1, p2, p3, pasos=40):
-    puntos = []
-    for i in range(pasos + 1):
-        t = i / pasos
-        m = 1 - t
-        puntos.append((
-            m ** 3 * p0[0] + 3 * m * m * t * p1[0] + 3 * m * t * t * p2[0] + t ** 3 * p3[0],
-            m ** 3 * p0[1] + 3 * m * m * t * p1[1] + 3 * m * t * t * p2[1] + t ** 3 * p3[1],
-        ))
-    return puntos
+def renderizar(lado: int) -> Image.Image:
+    png = resvg_py.svg_to_bytes(svg_path=str(SVG_NAVIDAD), width=lado, height=lado)
+    return Image.open(io.BytesIO(bytes(png))).convert("RGBA")
 
 
-def navideno(original: Image.Image) -> Image.Image:
-    """El mismo icono con sombrero y nieve; conserva su forma (alfa)."""
-    base = original.convert("RGBA")
-    lado = base.width
-    x0, y0, x1, y1 = caja_logo(base)
-
+def desde_svg(normal: Image.Image) -> Image.Image:
+    """El icono navideño con la forma y el encuadre de `normal`."""
+    lado = normal.width
+    x0, _, x1, _ = caja_logo(normal)
+    escala = (x1 - x0) / (CAJA_SVG[2] - CAJA_SVG[0])
+    # A 4x y reducido: los bordes del logo encajan al píxel en los chicos.
     factor = 4
-    grande = lado * factor
-    capa = Image.new("RGBA", (grande, grande), (0, 0, 0, 0))
-    dibujo = ImageDraw.Draw(capa)
-
-    # De coordenadas de iconoL.png a las de esta imagen (a 4x).
-    rx0, ry0, rx1, _ = CAJA_REFERENCIA
-    escala = (x1 - x0) / (rx1 - rx0)
-
-    def mundo(x, y):
-        return ((x0 + (x - rx0) * escala) * factor, (y0 + (y - ry0) * escala) * factor)
-
-    # Ejes del sombrero: `u` a lo largo del borde de la L, `v` hacia afuera.
-    du = (math.cos(ANGULO_ALA), math.sin(ANGULO_ALA))
-    dv = (math.sin(ANGULO_ALA), -math.cos(ANGULO_ALA))
-
-    def local(u, v):
-        cx, cy = CENTRO_ALA
-        return mundo(cx + u * du[0] + v * dv[0], cy + u * du[1] + v * dv[1])
-
-    def trazo(px):
-        return max(1, round(px * escala * factor))
-
-    # Cono: sube por la izquierda y cae doblado hacia la derecha.
-    exterior = bezier((-100, 22), (-95, 175), (70, 222), (222, 52))
-    interior = bezier((200, 40), (140, 110), (100, 75), (100, 22))
-    dibujo.polygon([local(*p) for p in exterior + interior], fill=ROJO)
-    # Pliegue: la cara de abajo de la punta que cae, más oscura.
-    pliegue = bezier((60, 172), (150, 170), (205, 105), (222, 52)) + bezier((200, 40), (150, 112), (105, 140), (60, 172))
-    dibujo.polygon([local(*p) for p in pliegue], fill=ROJO_SOMBRA)
-
-    # Ala blanca de piel sobre el borde de la L.
-    # Una cápsula: tramo recto y dos puntas redondeadas.
-    radio_ala, recto, centro_v = 27, 95, 2
-    ala = [(-recto + 2 * recto * i / 30, centro_v - radio_ala) for i in range(31)]
-    ala += [(recto + radio_ala * math.sin(math.pi * i / 20), centro_v - radio_ala * math.cos(math.pi * i / 20)) for i in range(1, 20)]
-    ala += [(recto - 2 * recto * i / 30, centro_v + radio_ala) for i in range(31)]
-    ala += [(-recto - radio_ala * math.sin(math.pi * i / 20), centro_v + radio_ala * math.cos(math.pi * i / 20)) for i in range(1, 20)]
-    dibujo.polygon([local(*p) for p in ala], fill=BLANCO, outline=CONTORNO, width=trazo(6))
-
-    # Pompón.
-    cx, cy = local(222, 44)
-    r = 40 * escala * factor
-    dibujo.ellipse((cx - r, cy - r, cx + r, cy + r), fill=BLANCO, outline=CONTORNO, width=trazo(6))
-
-    # Nieve al pie: tapa apenas la base de las letras, como si el logo
-    # estuviera medio enterrado, y se oscurece un poco hacia abajo.
-    alto_letras = (1046 - 810) * escala
-    tope = (y1 - alto_letras * 0.11) * factor
-
-    def perfil(bajada: float) -> list[tuple[float, float]]:
-        puntos = []
-        for i in range(0, grande + 1, max(1, grande // 200)):
-            t = i / grande
-            y = tope + alto_letras * factor * (
-                bajada + 0.07 * math.sin(t * 2 * math.pi * 1.6 + 0.6) + 0.035 * math.sin(t * 2 * math.pi * 3.7 + 1.9)
-            )
-            puntos.append((i, y))
-        return puntos
-
-    # Capas de abajo hacia arriba: cada una un poco más baja y más azul da el
-    # volumen del montículo; el borde de arriba queda blanco con su contorno.
-    borde = perfil(0)
-    dibujo.polygon(borde + [(grande, grande), (0, grande)], fill=BLANCO)
-    for paso in range(1, 7):
-        t = paso / 6
-        color = tuple(round(BLANCO[c] + (NIEVE_SOMBRA[c] - BLANCO[c]) * t) for c in range(3)) + (255,)
-        capa_nieve = perfil(0.12 + 0.09 * paso)
-        dibujo.polygon(capa_nieve + [(grande, grande), (0, grande)], fill=color)
-    dibujo.line(borde, fill=CONTORNO, width=trazo(8), joint="curve")
-
-    capa = capa.resize((lado, lado), Image.LANCZOS)
-    mascara = base.getchannel("A")
-    recorte = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
-    recorte.paste(capa, (0, 0), mascara)
-    resultado = base.copy()
-    resultado.alpha_composite(recorte)
+    dibujo = renderizar(round(LIENZO_SVG * escala * factor))
+    lienzo = Image.new("RGBA", (lado * factor, lado * factor), (255, 255, 255, 255))
+    desplazamiento = round((x0 - CAJA_SVG[0] * escala) * factor)
+    _, y0, _, _ = caja_logo(normal)
+    desplazamiento_y = round((y0 - CAJA_SVG[1] * escala) * factor)
+    lienzo.alpha_composite(dibujo, (desplazamiento, desplazamiento_y))
+    resultado = lienzo.resize((lado, lado), Image.LANCZOS)
+    resultado.putalpha(normal.convert("RGBA").getchannel("A"))
     return resultado
 
 
 def generar() -> None:
     (NAVIDAD / "escritorio").mkdir(parents=True, exist_ok=True)
-    navideno(Image.open(NORMAL / "escritorio" / "icon.png")).save(NAVIDAD / "escritorio" / "icon.png")
+    desde_svg(Image.open(NORMAL / "escritorio" / "icon.png")).save(NAVIDAD / "escritorio" / "icon.png")
     for carpeta in sorted((NORMAL / "android").glob("mipmap-*dpi")):
         destino = NAVIDAD / "android" / carpeta.name
         destino.mkdir(parents=True, exist_ok=True)
         for nombre in ANDROID:
-            navideno(Image.open(carpeta / nombre)).save(destino / nombre)
-    navideno(Image.open(LOGO).convert("RGBA")).convert("RGB").save(LOGO_NAVIDAD)
+            desde_svg(Image.open(carpeta / nombre)).save(destino / nombre)
+    grande = Image.new("RGBA", (LIENZO_SVG, LIENZO_SVG), (255, 255, 255, 255))
+    grande.alpha_composite(renderizar(LIENZO_SVG))
+    grande.convert("RGB").save(LOGO_NAVIDAD)
     print("assets/iconos/navidad generado")
 
 
