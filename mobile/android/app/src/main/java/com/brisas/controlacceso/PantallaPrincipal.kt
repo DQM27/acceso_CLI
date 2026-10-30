@@ -78,6 +78,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -401,6 +403,9 @@ fun PantallaPrincipal(
     // el color y la barra acompañan al dedo.
     val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
 
+    // Alto de la barra de arriba, para que la nieve sepa dónde termina.
+    var altoBarraSuperiorPx by remember { mutableIntStateOf(0) }
+
     CompositionLocalProvider(LocalAvisosBreves provides avisosBreves) {
     Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -409,7 +414,10 @@ fun PantallaPrincipal(
         // propio "‹ Volver" y su título, como una pantalla nueva de iOS.
         if (panel == PanelPrincipal.PESTANAS && pantallasCompletas.cantidad == 0) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onSizeChanged { altoBarraSuperiorPx = it.height }
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -766,6 +774,14 @@ fun PantallaPrincipal(
                 }
             }
         }
+    }
+    // Nieve de temporada sobre la barra de arriba, sólo con las pestañas a la
+    // vista (ver `NieveNavidena.kt`).
+    if (panel == PanelPrincipal.PESTANAS && pantallasCompletas.cantidad == 0 && altoBarraSuperiorPx > 0) {
+        NieveNavidena(
+            altoBarra = with(LocalDensity.current) { altoBarraSuperiorPx.toDp() },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
     // Encima de todo, los avisos cortos.
     HostAvisosBreves(
