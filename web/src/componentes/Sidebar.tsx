@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -133,6 +133,20 @@ export default function Sidebar({
   // Cuándo terminó el último arrastre (ver `recienArrastrado` en `ItemSidebar`).
   const finArrastre = useRef(0);
   const recienArrastrado = () => performance.now() - finArrastre.current < MS_CLIC_TRAS_ARRASTRE;
+
+  // Al soltar sobre el mismo ítem (pasa al subirlo: queda bajo el puntero),
+  // dnd-kit frena la propagación de ese clic pero no cancela su acción por
+  // defecto: React no lo ve (el `onClick` de `ItemSidebar` no corre, ni el
+  // de React Router) y el navegador abría el enlace como página nueva,
+  // recargando el panel entero. Se cancela acá, en la captura del documento,
+  // que corre antes de que dnd-kit lo frene.
+  useEffect(() => {
+    const cancelarClicTrasArrastre = (evento: MouseEvent) => {
+      if (performance.now() - finArrastre.current < MS_CLIC_TRAS_ARRASTRE) evento.preventDefault();
+    };
+    document.addEventListener("click", cancelarClicTrasArrastre, true);
+    return () => document.removeEventListener("click", cancelarClicTrasArrastre, true);
+  }, []);
 
   const visibles = secciones.filter((seccion) => !ocultas.includes(seccion.id));
 
