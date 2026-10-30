@@ -53,184 +53,216 @@ async function preparar(page: Page) {
     },
     { usuario },
   );
-  await page.route("https://xidaepyaljzkpbsxrqsm.supabase.co/**", async (ruta) => {
-    const peticion = ruta.request();
-    const url = new URL(peticion.url());
-    const responder = (datos: unknown, status = 200) =>
-      ruta.fulfill({ status, contentType: "application/json", body: JSON.stringify(datos) });
+  await page.route(
+    "https://xidaepyaljzkpbsxrqsm.supabase.co/**",
+    async (ruta) => {
+      const peticion = ruta.request();
+      const url = new URL(peticion.url());
+      const responder = (datos: unknown, status = 200) =>
+        ruta.fulfill({
+          status,
+          contentType: "application/json",
+          body: JSON.stringify(datos),
+        });
 
-    if (url.pathname === "/auth/v1/user") return responder(usuario);
-    if (url.pathname === "/auth/v1/logout") return responder({});
-    if (url.pathname === "/rest/v1/administradores_panel") return responder({ correo });
-    if (url.pathname === "/rest/v1/empresas") return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
-    if (url.pathname === "/functions/v1/admin-crear-contratista")
-      return responder({
-        id: "9",
-        identificacion: "112340567",
-        nombre: "ANA PEREZ",
-        empresa_nombre: "EMPRESA DE PRUEBA",
-        tipo_ingreso: "PRAIND",
-        fecha_vencimiento_praind: null,
-        es_personal_ruta: false,
-        activo: false,
-      });
-    if (url.pathname === "/functions/v1/admin-editar-contratista") {
-      const cuerpo = peticion.postDataJSON() as { nombre: string };
-      return responder({
-        id: "1",
-        identificacion: "123456789",
-        nombre: cuerpo.nombre.toUpperCase(),
-        empresa_nombre: "EMPRESA DE PRUEBA",
-        tipo_ingreso: "PRAIND",
-        fecha_vencimiento_praind: "2026-09-01",
-        es_personal_ruta: false,
-        activo: true,
-      });
-    }
-    if (url.pathname === "/rest/v1/panel_contratistas_estado")
-      return responder([
-        {
+      if (url.pathname === "/auth/v1/user") return responder(usuario);
+      if (url.pathname === "/auth/v1/logout") return responder({});
+      if (url.pathname === "/rest/v1/administradores_panel")
+        return responder({ correo });
+      if (url.pathname === "/rest/v1/empresas")
+        return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
+      if (url.pathname === "/functions/v1/admin-crear-contratista")
+        return responder({
+          id: "9",
+          identificacion: "112340567",
+          nombre: "ANA PEREZ",
+          empresa_nombre: "EMPRESA DE PRUEBA",
+          tipo_ingreso: "PRAIND",
+          fecha_vencimiento_praind: null,
+          es_personal_ruta: false,
+          activo: false,
+        });
+      if (url.pathname === "/functions/v1/admin-editar-contratista") {
+        const cuerpo = peticion.postDataJSON() as { nombre: string };
+        return responder({
           id: "1",
-          identificacion: "1-2345-6789",
-          nombre: "Contratista de prueba",
-          empresa_id: "e1",
-          empresa_nombre: "Empresa de prueba",
+          identificacion: "123456789",
+          nombre: cuerpo.nombre.toUpperCase(),
+          empresa_nombre: "EMPRESA DE PRUEBA",
           tipo_ingreso: "PRAIND",
           fecha_vencimiento_praind: "2026-09-01",
           es_personal_ruta: false,
           activo: true,
-          empresa_activa: true,
-          requiere_praind: true,
-          dias_para_vencer: -3,
-          estado_praind: "VENCIDA",
-          estado_acceso: "PRAIND_VENCIDO",
-          adentro_sitio_nombre: sitio.nombre,
-          adentro_desde: "2026-09-30T14:00:00Z",
-        },
-      ]);
-    if (url.pathname === "/rest/v1/panel_adentro_ahora")
-      return responder([
-        {
-          tipo: "PROVEEDOR",
-          id: "p1",
-          sitio_id: sitio.id,
-          sitio_nombre: sitio.nombre,
-          identificacion: "800000001",
-          nombre: "Proveedor de prueba",
-          empresa_nombre: "Distribuidora",
-          gafete_numero: 31,
-          placa: "ABC123",
-          hora_entrada: new Date(Date.now() - 90 * 60_000).toISOString(),
-          usuario_entrada_nombre: "Operador de prueba",
-        },
-      ]);
-    if (url.pathname === "/rest/v1/panel_bitacora_sesiones")
-      return responder([
-        {
-          id: 7,
-          cedula: "900000301",
-          nombre: "Operador en sesión",
-          dispositivo_etiqueta: "PC recepción",
-          dispositivo_tipo: "pc",
-          sitio_id: sitio.id,
-          sitio_nombre: sitio.nombre,
-          iniciada_en: "2026-09-30T12:00:00Z",
-          cerrada_en: "2026-09-30T14:30:00Z",
-          motivo_cierre: "otra_unidad",
-          ultima_actividad: "2026-09-30T14:30:00Z",
-          abierta: false,
-        },
-      ]);
-    // Como la base real con `select`: devuelve la fila cambiada.
-    if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH") return responder([{ id: "1" }]);
-    if (url.pathname === "/rest/v1/usuarios")
-      return responder([
-        { id: "1", cedula: "1-2345-6789", nombre: "Operador de prueba", rol: "OPERADOR", activo: true },
-      ]);
-    if (url.pathname === "/rest/v1/sitios") return responder([sitio]);
-    if (url.pathname === "/rest/v1/panel_movimientos")
-      return responder([
-        {
-          id: "1",
-          sitio_id: sitio.id,
-          sitio_nombre: sitio.nombre,
-          contratista_cedula: "1-2345-6789",
-          contratista_nombre: "Contratista de prueba",
-          empresa_nombre: "Empresa de prueba",
-          tipo_ingreso: "OBRA",
-          medio_ingreso: "MANUAL",
-          gafete_numero: 12,
-          hora_entrada: "2026-09-09T12:00:00Z",
-          hora_salida: "2026-09-09T18:00:00Z",
-          usuario_entrada_nombre: "Operador de prueba",
-          usuario_salida_nombre: "Operador de prueba",
-          dispositivo_entrada_tipo: "pc",
-          tipo_texto: "OBRA",
-          medio_texto: "CAMINANDO",
-        },
-      ]);
-    if (url.pathname === "/functions/v1/admin-list-devices")
-      return responder({
-        sitios: [sitio],
-        dispositivos: [
+        });
+      }
+      if (url.pathname === "/rest/v1/panel_contratistas_estado")
+        return responder([
           {
-            id: "3",
+            id: "1",
+            identificacion: "1-2345-6789",
+            nombre: "Contratista de prueba",
+            empresa_id: "e1",
+            empresa_nombre: "Empresa de prueba",
+            tipo_ingreso: "PRAIND",
+            fecha_vencimiento_praind: "2026-09-01",
+            es_personal_ruta: false,
+            activo: true,
+            empresa_activa: true,
+            requiere_praind: true,
+            dias_para_vencer: -3,
+            estado_praind: "VENCIDA",
+            estado_acceso: "PRAIND_VENCIDO",
+            adentro_sitio_nombre: sitio.nombre,
+            adentro_desde: "2026-09-30T14:00:00Z",
+          },
+        ]);
+      if (url.pathname === "/rest/v1/panel_adentro_ahora")
+        return responder([
+          {
+            tipo: "PROVEEDOR",
+            id: "p1",
             sitio_id: sitio.id,
-            tipo: "pc",
-            etiqueta: "PC de prueba",
-            created_at: "2026-09-09T12:00:00Z",
-            revoked_at: null,
-            last_seen_at: null,
-            oculto_en_panel: false,
-            identificador_hardware: null,
-            nombre_dispositivo: null,
-            plataforma: null,
-            version_build: null,
-            app_version: null,
-            last_ip: null,
-            clave_huella: "huella-prueba",
-            vinculado_en: "2026-09-09T12:05:00Z",
-            credencial: "clave",
+            sitio_nombre: sitio.nombre,
+            identificacion: "800000001",
+            nombre: "Proveedor de prueba",
+            empresa_nombre: "Distribuidora",
+            gafete_numero: 31,
+            placa: "ABC123",
+            hora_entrada: new Date(Date.now() - 90 * 60_000).toISOString(),
+            usuario_entrada_nombre: "Operador de prueba",
           },
-        ],
-        codigos_pendientes: [],
-        eventos: [
+        ]);
+      if (url.pathname === "/rest/v1/panel_bitacora_sesiones")
+        return responder([
           {
-            id: 1,
-            ocurrido_en: "2026-09-09T12:10:00Z",
-            dispositivo_id: "3",
-            tipo: "codigo_usado",
-            ip: "203.0.113.7",
-            detalle: null,
+            id: 7,
+            cedula: "900000301",
+            nombre: "Operador en sesión",
+            dispositivo_etiqueta: "PC recepción",
+            dispositivo_tipo: "pc",
+            sitio_id: sitio.id,
+            sitio_nombre: sitio.nombre,
+            iniciada_en: "2026-09-30T12:00:00Z",
+            cerrada_en: "2026-09-30T14:30:00Z",
+            motivo_cierre: "otra_unidad",
+            ultima_actividad: "2026-09-30T14:30:00Z",
+            abierta: false,
           },
-        ],
-      });
-    if (url.pathname === "/functions/v1/admin-provision-device")
-      return responder({
-        sitio_id: sitio.id,
-        sitio_nombre: sitio.nombre,
-        dispositivo_id: "4",
-        codigo: "K7QM-R4XT-2P",
-        expira_en: new Date(Date.now() + 15 * 60_000).toISOString(),
-      });
-    throw new Error(`Petición inesperada: ${url.pathname}`);
-  });
+        ]);
+      // Como la base real con `select`: devuelve la fila cambiada.
+      if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH")
+        return responder([{ id: "1" }]);
+      if (url.pathname === "/rest/v1/usuarios")
+        return responder([
+          {
+            id: "1",
+            cedula: "1-2345-6789",
+            nombre: "Operador de prueba",
+            rol: "OPERADOR",
+            activo: true,
+          },
+        ]);
+      if (url.pathname === "/rest/v1/sitios") return responder([sitio]);
+      // El Historial de contratistas pide sus páginas a la función (con
+      // índices y cursor); la vista queda para lo demás.
+      if (
+        url.pathname === "/rest/v1/panel_movimientos" ||
+        url.pathname === "/rest/v1/rpc/panel_historial_contratistas"
+      )
+        return responder([
+          {
+            id: "1",
+            sitio_id: sitio.id,
+            sitio_nombre: sitio.nombre,
+            contratista_cedula: "1-2345-6789",
+            contratista_nombre: "Contratista de prueba",
+            empresa_nombre: "Empresa de prueba",
+            tipo_ingreso: "OBRA",
+            medio_ingreso: "MANUAL",
+            gafete_numero: 12,
+            hora_entrada: "2026-09-09T12:00:00Z",
+            hora_salida: "2026-09-09T18:00:00Z",
+            usuario_entrada_nombre: "Operador de prueba",
+            usuario_salida_nombre: "Operador de prueba",
+            dispositivo_entrada_tipo: "pc",
+            tipo_texto: "OBRA",
+            medio_texto: "CAMINANDO",
+          },
+        ]);
+      if (url.pathname === "/functions/v1/admin-list-devices")
+        return responder({
+          sitios: [sitio],
+          dispositivos: [
+            {
+              id: "3",
+              sitio_id: sitio.id,
+              tipo: "pc",
+              etiqueta: "PC de prueba",
+              created_at: "2026-09-09T12:00:00Z",
+              revoked_at: null,
+              last_seen_at: null,
+              oculto_en_panel: false,
+              identificador_hardware: null,
+              nombre_dispositivo: null,
+              plataforma: null,
+              version_build: null,
+              app_version: null,
+              last_ip: null,
+              clave_huella: "huella-prueba",
+              vinculado_en: "2026-09-09T12:05:00Z",
+              credencial: "clave",
+            },
+          ],
+          codigos_pendientes: [],
+          eventos: [
+            {
+              id: 1,
+              ocurrido_en: "2026-09-09T12:10:00Z",
+              dispositivo_id: "3",
+              tipo: "codigo_usado",
+              ip: "203.0.113.7",
+              detalle: null,
+            },
+          ],
+        });
+      if (url.pathname === "/functions/v1/admin-provision-device")
+        return responder({
+          sitio_id: sitio.id,
+          sitio_nombre: sitio.nombre,
+          dispositivo_id: "4",
+          codigo: "K7QM-R4XT-2P",
+          expira_en: new Date(Date.now() + 15 * 60_000).toISOString(),
+        });
+      throw new Error(`Petición inesperada: ${url.pathname}`);
+    },
+  );
 }
 
-test("Contratistas (AG Grid) carga sin violaciones de CSP", async ({ page }) => {
+test("Contratistas (AG Grid) carga sin violaciones de CSP", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/contratistas");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
 });
 
-test("Adentro ahora muestra quién está adentro y el conteo por tipo", async ({ page }) => {
+test("Activos muestra quién está adentro y el conteo por clase", async ({
+  page,
+}) => {
   await preparar(page);
-  await page.goto("/adentro");
+  await page.goto("/activos");
   await expect(page.getByText("Proveedor de prueba")).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "1 adentro" })).toContainText("Proveedor: 1");
+  // Los conteos son los botones de los filtros ("Adentro ahora" pasó a ser
+  // Activos, con los filtros de escritorio).
+  await expect(
+    page.getByRole("button", { name: "Proveedores: 1" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 en total" })).toBeVisible();
 });
 
-test("Contratistas: el modal registra a alguien con el acceso denegado", async ({ page }) => {
+test("Contratistas: el modal registra a alguien con el acceso denegado", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/contratistas");
   await page.getByRole("button", { name: "+ Nuevo" }).click();
@@ -244,14 +276,21 @@ test("Contratistas: el modal registra a alguien con el acceso denegado", async (
 
   await modal.getByLabel("Cédula").fill("1-1234-0567");
   await modal.getByLabel("Nombre").fill("Ana Perez");
-  await modal.getByLabel("Empresa", { exact: false }).first().selectOption("e1");
+  await modal
+    .getByLabel("Empresa", { exact: false })
+    .first()
+    .selectOption("e1");
   await modal.getByRole("button", { name: "Guardar" }).click();
 
-  await expect(page.getByText("ANA PEREZ registrado con el acceso denegado.")).toBeVisible();
+  await expect(
+    page.getByText("ANA PEREZ registrado con el acceso denegado."),
+  ).toBeVisible();
   await expect(modal).toBeHidden();
 });
 
-test("Contratistas: Editar corrige los datos con las reglas del núcleo", async ({ page }) => {
+test("Contratistas: Editar corrige los datos con las reglas del núcleo", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/contratistas");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
@@ -263,12 +302,20 @@ test("Contratistas: Editar corrige los datos con las reglas del núcleo", async 
   // Tiene el PRAIND vencido: igual se le corrige el nombre sin tocar la fecha
   // (las reglas del núcleo reciben lo que tenía guardado).
   await modal.getByLabel("Nombre").fill("Contratista corregido");
-  const pedido = page.waitForRequest("**/functions/v1/admin-editar-contratista");
+  const pedido = page.waitForRequest(
+    "**/functions/v1/admin-editar-contratista",
+  );
   await modal.getByRole("button", { name: "Guardar" }).click();
   // El nombre ya viaja en mayúscula: regla del núcleo, aplicada mientras se escribe.
-  expect((await pedido).postDataJSON()).toMatchObject({ id: "1", nombre: "CONTRATISTA CORREGIDO", empresa_id: "e1" });
+  expect((await pedido).postDataJSON()).toMatchObject({
+    id: "1",
+    nombre: "CONTRATISTA CORREGIDO",
+    empresa_id: "e1",
+  });
 
-  await expect(page.getByText("CONTRATISTA CORREGIDO actualizado.")).toBeVisible();
+  await expect(
+    page.getByText("CONTRATISTA CORREGIDO actualizado."),
+  ).toBeVisible();
   await expect(modal).toBeHidden();
 });
 
@@ -282,13 +329,20 @@ test("Usuarios: Editar cambia nombre y rol, no la cédula", async ({ page }) => 
   await expect(modal.getByLabel("Cédula")).toBeDisabled();
   await modal.getByLabel("Nombre").fill("Operadora nueva");
   await modal.getByLabel("Rol").selectOption("ADMINISTRADOR");
-  const pedido = page.waitForRequest((p) => p.url().includes("/rest/v1/usuarios") && p.method() === "PATCH");
+  const pedido = page.waitForRequest(
+    (p) => p.url().includes("/rest/v1/usuarios") && p.method() === "PATCH",
+  );
   await modal.getByRole("button", { name: "Guardar" }).click();
-  expect((await pedido).postDataJSON()).toEqual({ nombre: "OPERADORA NUEVA", rol: "ADMINISTRADOR" });
+  expect((await pedido).postDataJSON()).toEqual({
+    nombre: "OPERADORA NUEVA",
+    rol: "ADMINISTRADOR",
+  });
   await expect(page.getByText("OPERADORA NUEVA actualizado.")).toBeVisible();
 });
 
-test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) => {
+test("Sesiones muestra la bitácora con el motivo del cierre", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/sesiones");
   await expect(page.getByText("Operador en sesión")).toBeVisible();
@@ -297,7 +351,9 @@ test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) 
   if (test.info().project.name === "escritorio") {
     await expect(page.getByText("Entró en otra unidad")).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Exportar a PDF" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Exportar a PDF" }),
+  ).toBeVisible();
 });
 
 test("Usuarios (AG Grid) carga sin violaciones de CSP", async ({ page }) => {
@@ -316,7 +372,9 @@ test("Dispositivos carga sin violaciones de CSP", async ({ page }) => {
   await expect(page.getByText("203.0.113.7")).toBeVisible();
 });
 
-test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", async ({ page }) => {
+test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/dispositivos");
   await page.getByRole("button", { name: "+ Nuevo" }).click();
@@ -324,19 +382,29 @@ test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", as
   await page.getByRole("button", { name: "Crear y generar código" }).click();
 
   await expect(page.getByText("K7QM-R4XT-2P")).toBeVisible();
-  await expect(page.getByRole("img", { name: "Código QR de vinculación" })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Código QR de vinculación" }),
+  ).toBeVisible();
   await expect(page.getByText(/Vence en \d+:\d{2}/)).toBeVisible();
 });
 
-test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({ page }) => {
+test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
+  page,
+}) => {
   await preparar(page);
   await page.goto("/historial");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
   // Paginación en el servidor: la grilla muestra el rango de la página y los
   // tres botones de exportación (Excel, CSV y PDF) como en escritorio.
-  await expect(page.locator(".ag-paging-row-summary-content")).toHaveText("1 a 1 de 1");
-  await expect(page.getByRole("button", { name: "Exportar a Excel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Exportar a CSV" })).toBeVisible();  // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
+  await expect(page.locator(".ag-paging-row-summary-content")).toHaveText(
+    "1 a 1 de 1",
+  );
+  await expect(
+    page.getByRole("button", { name: "Exportar a Excel" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Exportar a CSV" }),
+  ).toBeVisible(); // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
   // <style> inline en un iframe oculto (about:blank hereda el CSP del
   // documento que lo creó) -- si algo en la política bloquea ese estilo,
   // tiene que aparecer acá como violación real, no sólo en teoría. La
