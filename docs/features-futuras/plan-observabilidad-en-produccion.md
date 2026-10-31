@@ -40,11 +40,44 @@ no compita con la operación:
 - Esquema propio **`observabilidad`**, **no expuesto** por la API: nadie lee
   ni escribe las tablas directo. Se entra sólo por dos funciones.
 - Escritura por **lote en una sola llamada** (`insert ... select from
-  jsonb_to_recordset`), sin triggers ni Realtime en estas tablas.
+  jsonb_to_recordset`), sin triggers ni Realtime en estas tablas; el lote
+  viaja comprimido con brotli (ver "Transporte").
 - Índices mínimos (equipo + hora); sin claves foráneas hacia tablas
   operativas en la ruta caliente salvo `dispositivos`.
 - **Retención** automática con `pg_cron` (una vez por día, de madrugada):
   borrar por lotes lo vencido.
+
+## Transporte: HTTP/2 + brotli, por un receptor propio
+
+Probado contra staging el 2026-10-31:
+
+- **HTTP/2:** Supabase lo negocia (`HTTP 2` en API y Edge Functions). El
+  núcleo ya lo usa (`reqwest` con `http2`); la telemetría del móvil no (va por
+  `HttpURLConnection`, HTTP/1.1).
+- **Cuerpo comprimido directo a la RPC: no funciona.** La puerta de entrada de
+  Supabase no descomprime el cuerpo de la petición: con `Content-Encoding:
+  gzip` o `br`, PostgREST responde `PGRST102 Empty or invalid json`. Sólo
+  comprime las *respuestas*.
+- **Una Edge Function sí recibe el cuerpo comprimido intacto** (probado con
+  `Content-Encoding: br` hacia `receptor-errores`).
+- **Ahorro real** (lote de 200 filas reales del móvil): 75.463 B en JSON,
+  5.474 B con gzip (nivel 6), **4.778 B con brotli (calidad 5)**, 4.031 B con
+  brotli 11. Brotli 5: ~16 veces menos datos, con poco CPU en el teléfono.
+
+Por eso:
+
+- Un receptor **`observabilidad`** (Edge Function, `verify_jwt = true`) con dos
+  rutas, `/telemetria` y `/errores`. Acepta `Content-Encoding: br` (y `gzip`
+  como respaldo), descomprime **con tope** (1 MB descomprimido; un cuerpo que
+  lo pase se corta y responde 413: nada de bombas de compresión) y llama a la
+  RPC **reenviando el JWT del equipo**, no con `service_role`: la identidad y
+  los límites siguen en la base.
+- El envío vive **en el núcleo** (Rust, `reqwest` con HTTP/2 y el crate
+  `brotli` para comprimir), y lo usan las dos plataformas: el móvil le pasa
+  sus lotes por UniFFI en vez de mandarlos por su cuenta. Una sola
+  implementación de cola, token, compresión y reintentos.
+- Costo: una invocación por minuto por equipo (~43.000 al mes por equipo),
+  dentro del cupo de Edge Functions.
 
 ## Modelo
 
@@ -145,9 +178,9 @@ Si un error `resuelto` vuelve a aparecer en una versión nueva, el grupo pasa a
 
 | # | Fase | Qué |
 |---|---|---|
-| 1 | Nube | Migración del esquema `observabilidad`, las RPC, retención con `pg_cron` y batería. Staging primero. |
-| 2 | Núcleo | Envío por RPC con token desde el núcleo (escritorio y móvil comparten la cola de errores; la telemetría del escritorio también está en Rust). |
-| 3 | Plataformas | Kotlin y escritorio apuntan al nuevo envío; contrato esquema 3. Durante la transición las versiones viejas siguen mandando a staging. |
+| 1 | Nube | Migración del esquema `observabilidad`, las RPC, retención con `pg_cron` y batería; Edge Function receptora (brotli, JWT). Staging primero. |
+| 2 | Núcleo | Envío desde el núcleo: HTTP/2, brotli y token del equipo, para telemetría y errores de las dos plataformas. |
+| 3 | Plataformas | Kotlin entrega sus lotes al núcleo por UniFFI y el escritorio usa el mismo envío; contrato esquema 3. Durante la transición las versiones viejas siguen mandando a staging. |
 | 4 | Panel | Telemetría y Errores leen de producción (filtro por equipo, versión, rango en hora de Costa Rica). |
 | 5 | Alertas | Edge Function + Resend: errores nuevos o regresiones, equipo sin conectarse, equipo nuevo en vinculación, errores reales de la cola. Los eventos se definen con el dueño. |
 | 6 | Retiro | Apagar Grafana, el receptor de staging y las tablas viejas cuando ninguna versión en uso mande allá. |
