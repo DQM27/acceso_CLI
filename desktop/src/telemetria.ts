@@ -21,6 +21,7 @@ import {
   tipoDeError,
   tipoDeRed,
 } from "./telemetriaCalculos";
+import { fijarPantallaErrores } from "./errores";
 
 const INTERVALO_VOLCADO_MS = 30_000;
 /** La memoria del WebView cambia despacio: se anota una vez cada tantos
@@ -73,6 +74,8 @@ export function registrarLlamada(nombre: string, ms: number, ok: boolean, error?
  * navegador pintó el cuadro siguiente (dos `requestAnimationFrame`). */
 export function registrarPantalla(nombre: string) {
   if (nombre === pantallaActual) return;
+  // El registro de errores la necesita siempre, mida o no la telemetría.
+  fijarPantallaErrores(nombre);
   const anterior = pantallaActual;
   // Se anota aunque todavía no se sepa si mide (`iniciarTelemetria` es
   // asíncrona): las muestras siguientes dicen en qué pantalla ocurrieron.

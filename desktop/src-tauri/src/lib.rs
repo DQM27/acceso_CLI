@@ -14,6 +14,7 @@ use zeroize::Zeroizing;
 mod clave_cifrado;
 mod comandos;
 mod dto;
+mod errores;
 mod estado;
 mod pdf;
 #[cfg(windows)]
@@ -22,21 +23,6 @@ mod sincronizacion_auto;
 mod telemetria;
 
 use estado::GuiState;
-
-/// A dónde van los errores: el receptor propio
-/// (`supabase/functions-staging/receptor-errores`). El DSN no es un secreto
-/// (va embebido en el cliente, misma lógica que la publishable key de Supabase
-/// en `web/`) y llega por la variable `SENTRY_DSN` al compilar (el CI la toma
-/// del secreto del mismo nombre).
-///
-/// Sin variable, o vacía, queda vacío y el SDK no envía nada: los errores
-/// quedan sólo en el registro local. Antes había un DSN de respaldo del
-/// proyecto de sentry.io, y un build sin el secreto mandaba allá los errores
-/// sin que nadie los viera.
-const SENTRY_DSN: &str = match option_env!("SENTRY_DSN") {
-    Some(dsn) => dsn,
-    None => "",
-};
 
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue
 /// abierta. Realtime dispara sincronizaciones bajo demanda, pero este pulso
@@ -164,23 +150,20 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                 Ok(Err(error)) => {
                     log::warn!("sincronización automática falló: {error}");
                     // Sin red, sin vincular o suspendido quedan sólo en el
-                    // registro local; lo inesperado va a Sentry, una vez por
-                    // hora como máximo por mensaje (ver `sincronizacion_auto`).
+                    // registro local; lo inesperado va al registro de
+                    // errores, una vez por hora como máximo por mensaje (ver
+                    // `sincronizacion_auto`).
                     if !sincronizacion_auto::es_fallo_esperado(&error)
                         && reportes.debe_reportar(&error, std::time::Instant::now())
                     {
-                        sentry::capture_message(
-                            &format!("sincronización automática falló: {error}"),
-                            sentry::Level::Warning,
-                        );
+                        errores::reportar(&format!("sincronización automática falló: {error}"));
                     }
                 }
                 Err(error) => {
                     log::error!("tarea de sincronización automática no pudo ejecutarse: {error}");
-                    sentry::capture_message(
-                        &format!("tarea de sincronización automática no pudo ejecutarse: {error}"),
-                        sentry::Level::Error,
-                    );
+                    errores::reportar(&format!(
+                        "tarea de sincronización automática no pudo ejecutarse: {error}"
+                    ));
                 }
             }
 
@@ -231,7 +214,8 @@ fn registrar_fallo_fatal_en_archivo(mensaje: &str) {
 fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
     #[cfg(windows)]
     registrar_fallo_fatal_en_archivo(mensaje);
-    sentry::capture_message(mensaje, sentry::Level::Fatal);
+    // Queda en disco y sale en el próximo arranque.
+    errores::reportar(mensaje);
 
     #[cfg(windows)]
     {
@@ -280,7 +264,7 @@ fn intentar_abrir_nucleo(
 /// Diálogo nativo Sí/No: ofrece reconstruir el sitio desde la nube tras un
 /// fallo real de apertura (ver `intentar_abrir_nucleo`). No expone el error
 /// técnico crudo -- mismo criterio que `mensajes::mensaje_*`, eso ya quedó
-/// en el log/Sentry (`abrir_nucleo_con_recuperacion`).
+/// en el log y en el registro de errores (`abrir_nucleo_con_recuperacion`).
 #[cfg(windows)]
 fn confirmar_reconstruccion_desde_nube() -> bool {
     let resultado = rfd::MessageDialog::new()
@@ -331,10 +315,9 @@ fn abrir_nucleo_con_recuperacion(
             Err(error) => error,
         };
         log::error!("no se pudo abrir la base de datos local: {error_original}");
-        sentry::capture_message(
-            &format!("no se pudo abrir la base de datos local: {error_original}"),
-            sentry::Level::Error,
-        );
+        errores::reportar(&format!(
+            "no se pudo abrir la base de datos local: {error_original}"
+        ));
         if !confirmar_reconstruccion_desde_nube() {
             mostrar_error_fatal_y_salir(&error_original);
         }
@@ -386,7 +369,7 @@ fn abrir_sin_base_descartada(
 /// invoke desde React apenas pinta la pantalla real, sin esperar nada fijo),
 /// sólo la red de seguridad para primer-arranque/bases grandes o un frontend
 /// colgado. Si esto llega a dispararse en producción es señal de un bug real
-/// (ver el log/Sentry que deja `configurar_cierre_de_splash`), no de que el
+/// (ver el log y el error que deja `configurar_cierre_de_splash`), no de que el
 /// arranque tardó -- por eso no se acorta para "que se sienta rápido": lo que
 /// tiene que sentirse rápido es el camino normal, no este timeout.
 const ESPERA_MAXIMA_SPLASH: Duration = Duration::from_secs(8);
@@ -398,7 +381,7 @@ const ESPERA_MAXIMA_SPLASH: Duration = Duration::from_secs(8);
 /// todavía devuelve `Some` (ambiguo: `close()` no destruye la ventana en el
 /// acto, así que esa devolvería `Some` durante una ventana de tiempo corta
 /// aunque el cierre normal ya haya arrancado, y generaría un falso positivo
-/// en el log/Sentry de abajo).
+/// en el log y el registro de errores de abajo).
 struct EstadoSplash {
     cerrado_por_frontend: std::sync::atomic::AtomicBool,
 }
@@ -463,7 +446,7 @@ fn configurar_cierre_de_splash(app: &tauri::App) {
                 ESPERA_MAXIMA_SPLASH.as_secs()
             );
             log::warn!("{mensaje}");
-            sentry::capture_message(&mensaje, sentry::Level::Warning);
+            errores::reportar(&mensaje);
             cerrar_splash_y_mostrar_principal(&handle, "red_de_seguridad");
         }
     });
@@ -563,31 +546,6 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     };
     app.plugin(tauri_plugin_log::Builder::default().level(nivel).build())?;
     Ok(())
-}
-
-/// Guarda viva hasta que `run()` retorna (recién ahí termina el proceso) --
-/// en el `Drop` hace flush de eventos pendientes antes de cerrar. Captura
-/// panics automáticamente (feature "panic" de `sentry`, activa por default)
-/// desde que se llama esto en adelante -- separada de `run()` únicamente
-/// para mantenerla bajo el tope de líneas de Clippy (mismo motivo que
-/// `preparar_nucleo`/`configurar_plugins_condicionales`).
-fn inicializar_sentry() -> sentry::ClientInitGuard {
-    // `ClientOptions` es `#[non_exhaustive]` desde sentry 0.49 -- ya no se
-    // puede construir con la sintaxis de struct literal, sólo con este
-    // builder. `traces_sampling_strategy` queda en su default
-    // (`TracesSamplingStrategy::Disabled`), equivalente al viejo
-    // `traces_sample_rate: 0.0` (sólo error-tracking, sin performance
-    // tracing).
-    sentry::init((
-        SENTRY_DSN,
-        sentry::ClientOptions::new()
-            .maybe_release(sentry::release_name!())
-            .environment(if cfg!(debug_assertions) {
-                "development"
-            } else {
-                "production"
-            }),
-    ))
 }
 
 /// Cuerpo del `.setup()` de `run()` -- separado únicamente para mantenerla
@@ -724,8 +682,20 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::identidad_equipo,
         telemetria::telemetria_grupos,
         telemetria::telemetria_eventos,
+        errores::reportar_error_js,
+        errores::errores_pantalla,
         mostrar_ventana_principal,
     ]
+}
+
+/// El despachador de comandos, anotando cada uno en el rastro de operaciones
+/// que viaja con el próximo error.
+fn despachador() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    let manejador = manejador_de_comandos();
+    move |invoke| {
+        errores::anotar_comando(invoke.message.command());
+        manejador(invoke)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -759,7 +729,15 @@ fn umbrales_desde_texto(
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
-    let _guardia_sentry = inicializar_sentry();
+    // Antes de abrir la base: un fallo al abrirla también se reporta. Mismo
+    // directorio que la base (si no se puede resolver, lo dice
+    // `preparar_nucleo`).
+    if let Some(directorio) = ruta_base_datos()
+        .ok()
+        .and_then(|ruta| ruta.parent().map(Path::to_path_buf))
+    {
+        errores::instalar(&directorio);
+    }
     let (ruta_base_datos, instancia, clave_base_datos, mut core, firmante) = preparar_nucleo();
     if let Some(umbrales) = umbrales_de_prueba() {
         log::warn!("umbrales de permanencia de PRUEBA activos: {umbrales:?}");
@@ -776,7 +754,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(estado)
         .setup(configurar_arranque)
-        .invoke_handler(manejador_de_comandos())
+        .invoke_handler(despachador())
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, evento| {

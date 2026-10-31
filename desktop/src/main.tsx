@@ -4,6 +4,7 @@ import App from "./App";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import NieveNavidena from "./componentes/NieveNavidena";
 import "./index.css";
+import { instalarCapturaDeErrores } from "./errores";
 import { iniciarTelemetria } from "./telemetria";
 
 // El menú contextual nativo del WebView (Atrás/Actualizar/Guardar como/
@@ -16,7 +17,10 @@ import { iniciarTelemetria } from "./telemetria";
 // corra en la fase de burbujeo, así que no compiten.
 document.addEventListener("contextmenu", (evento) => evento.preventDefault());
 
-// Sólo mide en el build de diagnóstico (ver `telemetria.ts`).
+// Antes de montar React: un error del primer render también se reporta.
+instalarCapturaDeErrores();
+
+// Mide lo que diga la orden de telemetría de este equipo (ver `telemetria.ts`).
 void iniciarTelemetria();
 
 const raiz = document.getElementById("root");
