@@ -56,6 +56,7 @@ uniffi::setup_scaffolding!();
 mod catalogo;
 mod correo;
 mod error;
+mod errores;
 mod firmante;
 mod gafetes;
 mod ingresos;

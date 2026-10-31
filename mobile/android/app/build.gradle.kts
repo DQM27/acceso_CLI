@@ -27,14 +27,14 @@ val keystoreProperties = Properties().apply {
     }
 }
 
-// A dónde van los errores de la app (ver `io.sentry.dsn` en
-// AndroidManifest.xml): al receptor propio
+// A dónde van los errores de la app (`BuildConfig.DSN_ERRORES`, ver
+// RegistroErrores.kt): al receptor propio
 // (supabase/functions-staging/receptor-errores), con la variable de entorno
-// `SENTRY_DSN_MOVIL` (el CI la toma del secreto `SENTRY_DSN`). Sin ella, o
-// vacía, el SDK queda desactivado y no envía nada. Antes había un DSN de
-// respaldo del proyecto de sentry.io, y un build sin el secreto mandaba allá
-// los errores sin que nadie los viera. Es variable de entorno y no `-P` para
-// que el DSN no quede en la línea de comandos ni en el registro del CI.
+// `SENTRY_DSN_MOVIL` (el CI la toma del secreto `SENTRY_DSN`; el nombre quedó
+// del SDK de Sentry, que ya no se usa). Sin ella, o vacía, los errores quedan
+// en el teléfono. Es variable de entorno y no `-P` para que el DSN no quede
+// en la línea de comandos ni en el registro del CI. No es un secreto: va
+// dentro de la app.
 val dsnErrores: String =
     providers.environmentVariable("SENTRY_DSN_MOVIL").orNull?.takeIf { it.isNotBlank() }
         ?: ""
@@ -52,12 +52,7 @@ android {
         versionCode = 57
         versionName = "1.8.12"
 
-        // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
-        // el default acá es "development" (debug); `release {}` abajo lo
-        // pisa a "production". Mismo criterio que `cfg!(debug_assertions)`
-        // del lado de escritorio.
-        manifestPlaceholders["sentryEnvironment"] = "development"
-        manifestPlaceholders["sentryDsn"] = dsnErrores
+        buildConfigField("String", "DSN_ERRORES", "\"$dsnErrores\"")
 
         // Sólo el procesador del dispositivo real (arm64-v8a, Samsung A25):
         // el APK no se usa en emuladores. Las librerías nativas de ML Kit y
@@ -117,7 +112,6 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            manifestPlaceholders["sentryEnvironment"] = "production"
             buildConfigField(
                 "String",
                 "URL_MANIFIESTO_ACTUALIZACION",
@@ -206,12 +200,6 @@ dependencies {
     // actualiza sola (ver docs/actualizaciones-android.md) -- y deja
     // consultar si ya se compiló (`ProfileVerifier`, ver Telemetria.kt).
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
-    // Error-tracking (docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
-    // punto 5.4 -- espejo mobile del que ya se conectó en desktop). Init
-    // automático vía meta-data en AndroidManifest.xml, sin tocar código:
-    // captura crashes no manejados desde el primer arranque después de
-    // instalarlo.
-    implementation("io.sentry:sentry-android:8.9.0")
     // Firebase Cloud Messaging: recibir avisos con la app cerrada (la
     // conexión Realtime sólo vive con la app en primer plano, ver
     // NubeRealtime.kt). El BOM fija versiones compatibles entre sí.

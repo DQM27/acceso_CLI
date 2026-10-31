@@ -156,6 +156,7 @@ object Telemetria {
 
     fun enPrimerPlano(visible: Boolean) {
         motor?.enPrimerPlano(visible)
+        if (!visible) RegistroErrores.enviarYa()
     }
 
     /// Métricas de Realtime (`null` si no rige `sincronizacion`).
@@ -167,10 +168,12 @@ object Telemetria {
 
     fun entrarPantalla(nombre: String) {
         motor?.pantallas?.entrar(nombre)
+        RegistroErrores.pantalla(nombre)
     }
 
     fun salirPantalla(nombre: String) {
         motor?.pantallas?.salir(nombre)
+        RegistroErrores.pantalla(pantallaActual())
     }
 
     fun pantallaDibujada(nombre: String, nanosDesdeEntrada: Long) {
@@ -188,11 +191,12 @@ object Telemetria {
     }
 }
 
-/// Mide una llamada al núcleo Rust y la suma a la telemetría. Sin el grupo
-/// `rendimiento` es sólo la llamada.
+/// Mide una llamada al núcleo Rust y la suma a la telemetría (sólo con el
+/// grupo `rendimiento`). Siempre la anota en el rastro del registro de
+/// errores: las últimas llamadas viajan con el próximo error.
 inline fun <T> medirNucleo(nombre: String, bloque: () -> T): T {
-    if (!Telemetria.permite("llamada_nucleo")) return bloque()
-    val inicio = System.nanoTime()
+    val mide = Telemetria.permite("llamada_nucleo")
+    val inicio = if (mide) System.nanoTime() else 0L
     var ok = false
     var tipoError: String? = null
     try {
@@ -201,10 +205,11 @@ inline fun <T> medirNucleo(nombre: String, bloque: () -> T): T {
         return resultado
     } catch (error: Throwable) {
         // Sólo el tipo, de una lista fija: nunca el mensaje.
-        tipoError = tipoDeErrorNucleo(error)
+        if (mide) tipoError = tipoDeErrorNucleo(error)
         throw error
     } finally {
-        Telemetria.registrarLlamada(nombre, System.nanoTime() - inicio, ok, tipoError)
+        RegistroErrores.operacion(nombre, ok)
+        if (mide) Telemetria.registrarLlamada(nombre, System.nanoTime() - inicio, ok, tipoError)
     }
 }
 

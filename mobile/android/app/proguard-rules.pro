@@ -1,6 +1,6 @@
 # Trazas de error legibles. R8 sigue quitando código muerto y optimizando,
 # pero no renombra clases ni métodos y conserva archivo y número de línea:
-# un error llega al Sentry propio (supabase/functions-staging/receptor-errores)
+# un error llega al registro propio (supabase/functions-staging/receptor-errores)
 # con la traza tal cual, sin tener que guardar el mapeo de cada versión y
 # aplicarlo después. El código es público, así que ofuscar no protege nada.
 # Si el repositorio pasa a privado y se quiere ofuscar otra vez, hay que subir

@@ -80,6 +80,11 @@ pub fn interno<E: std::fmt::Display>(error: E) -> String {
 /// Kotlin muestra sólo qué hacer.
 pub fn apertura<E: std::fmt::Display>(error: E) -> String {
     log::error!("apertura de la base de datos: {error}");
+    control_acceso::errores::reportar(
+        control_acceso::errores::Origen::Nucleo,
+        &format!("apertura de la base de datos: {error}"),
+        Vec::new(),
+    );
     "No se pudo abrir la base de datos de este teléfono. Cierre y vuelva a abrir la app; si sigue \
      pasando, avise a un administrador"
         .into()

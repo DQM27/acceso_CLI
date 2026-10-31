@@ -216,7 +216,7 @@ fun esArranqueEnFrio(tipoArranque: Int?, procesoHastaActividadMs: Long): Boolean
 const val TIPO_ARRANQUE_EN_FRIO = 1
 
 // Proceso -> `Activity.onCreate` en frío: en el A25 la creación de la
-// aplicación (núcleo Rust, Sentry, telemetría) tarda menos de 1 s; el
+// aplicación (núcleo Rust, registro de errores, telemetría) tarda menos de 1 s; el
 // margen cubre un teléfono más lento sin confundir un proceso despertado
 // en segundo plano.
 private const val MS_MAXIMO_PROCESO_HASTA_ACTIVIDAD_EN_FRIO = 5_000L
