@@ -60,8 +60,22 @@ export function similitudNombres(a: string, b: string): number {
  * las apps). */
 export const UMBRAL_PARECIDA = 0.5;
 
-/** Las empresas en las que se puede fusionar `origen`: de la misma unidad, sin
- * fusionar y distintas de ella. Primero las parecidas (de la más a la menos),
+/** Qué empresa queda y cuál desaparece al fusionar desde la fila `fila` con
+ * `elegida`. Lo natural es pararse en la buena y elegir la mal escrita (así se
+ * equivocó el primer administrador con la versión anterior, que era al
+ * revés): por defecto queda la fila; `invertido` da vuelta los lados. */
+export function ladosFusion(
+  fila: EmpresaProveedorPanel,
+  elegida: EmpresaProveedorPanel,
+  invertido: boolean,
+): { queda: EmpresaProveedorPanel; desaparece: EmpresaProveedorPanel } {
+  return invertido
+    ? { queda: elegida, desaparece: fila }
+    : { queda: fila, desaparece: elegida };
+}
+
+/** Las empresas con las que se puede fusionar `origen`: de la misma unidad,
+ * sin fusionar y distintas de ella. Primero las parecidas (de la más a la menos),
  * después el resto por nombre. */
 export function destinosPosibles(
   origen: EmpresaProveedorPanel,

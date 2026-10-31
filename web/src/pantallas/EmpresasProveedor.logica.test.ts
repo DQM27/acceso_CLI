@@ -4,6 +4,7 @@ import {
   destinosPosibles,
   estadoRevision,
   filtrarPorRevision,
+  ladosFusion,
   similitudNombres,
   UMBRAL_PARECIDA,
 } from "./EmpresasProveedor.logica";
@@ -66,6 +67,27 @@ describe("filtrarPorRevision", () => {
     expect(filtrarPorRevision(todas, "vigentes")).toEqual([nueva, revisada]);
     expect(filtrarPorRevision(todas, "fusionadas")).toEqual([fusionada]);
     expect(estadoRevision(fusionada)).toBe("fusionada");
+  });
+});
+
+describe("ladosFusion", () => {
+  // El primer uso real: el administrador se paró en la correcta y eligió la
+  // mal escrita; con la versión anterior quedó al revés.
+  const correcta = empresa("CAYCHA DEL NORTE");
+  const malEscrita = empresa("CAYCHA");
+
+  it("por defecto queda la fila desde la que se abrió", () => {
+    expect(ladosFusion(correcta, malEscrita, false)).toEqual({
+      queda: correcta,
+      desaparece: malEscrita,
+    });
+  });
+
+  it("invertido queda la elegida", () => {
+    expect(ladosFusion(correcta, malEscrita, true)).toEqual({
+      queda: malEscrita,
+      desaparece: correcta,
+    });
   });
 });
 
