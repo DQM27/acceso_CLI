@@ -52,17 +52,62 @@ no compita con la operación:
 Probado contra staging el 2026-10-31:
 
 - **HTTP/2:** Supabase lo negocia (`HTTP 2` en API y Edge Functions). El
-  núcleo ya lo usa (`reqwest` con `http2`); la telemetría del móvil no (va por
-  `HttpURLConnection`, HTTP/1.1).
+  núcleo ya lo usa: comprobado con su cliente, `HTTP/2.0` contra producción;
+  por ahí van todas las operaciones de las dos apps (ingresos, verificaciones,
+  sincronización). Lo que sale de Kotlin por `HttpURLConnection` (HTTP/1.1,
+  una conexión nueva cada vez) es la telemetría, el registro de avisos push
+  y la búsqueda de actualizaciones.
 - **Cuerpo comprimido directo a la RPC: no funciona.** La puerta de entrada de
   Supabase no descomprime el cuerpo de la petición: con `Content-Encoding:
   gzip` o `br`, PostgREST responde `PGRST102 Empty or invalid json`. Sólo
   comprime las *respuestas*.
 - **Una Edge Function sí recibe el cuerpo comprimido intacto** (probado con
   `Content-Encoding: br` hacia `receptor-errores`).
-- **Ahorro real** (lote de 200 filas reales del móvil): 75.463 B en JSON,
-  5.474 B con gzip (nivel 6), **4.778 B con brotli (calidad 5)**, 4.031 B con
-  brotli 11. Brotli 5: ~16 veces menos datos, con poco CPU en el teléfono.
+- **Ahorro real:** ver la tabla de formatos más abajo.
+
+### Formato del lote: columnar por tipo + brotli 11
+
+Medido sobre el mismo lote real (200 filas del móvil), en bytes:
+
+| Formato | Crudo | gzip 6 | brotli 5 | brotli 11 |
+|---|---:|---:|---:|---:|
+| JSON por fila (hoy) | 75.463 | 5.532 | 4.846 | 4.054 |
+| JSON con cabecera de sesión y tiempo en diferencias | 34.515 | 4.457 | 4.140 | 3.424 |
+| **JSON columnar por tipo** | 11.479 | 3.373 | 3.303 | **2.932** |
+| El mismo columnar en MessagePack | 11.870 | 3.818 | 3.702 | 3.489 |
+| El mismo columnar en CBOR | 11.906 | 3.803 | 3.670 | 3.465 |
+
+- **Columnar:** lo común del lote va una vez en la cabecera (sesión, versión,
+  `esquema`, `plataforma`); cada tipo de evento lleva sus nombres de columna
+  una vez y después sólo filas de valores; la hora va como diferencia en ms
+  con la fila anterior, y una lista de tipos conserva el orden original.
+- **Los binarios no ganan:** después de comprimir, MessagePack y CBOR quedan
+  más grandes que el JSON columnar (brotli aprovecha mejor el texto
+  repetitivo), y JSON se depura y se valida en la base sin decodificador
+  extra. Protobuf/gRPC tampoco aplica: Supabase no expone gRPC, y lo que
+  gRPC aporta (una conexión HTTP/2 reutilizada, binario compacto) se cubre con
+  HTTP/2 + este formato.
+- **Brotli 11:** 22 ms para comprimir el lote en una PC (en el teléfono unas
+  pocas decenas de ms más), una vez por minuto y en un hilo de fondo;
+  descomprimir, 0,08 ms. Total: de 75 KB a **~3 KB por lote (25 veces
+  menos)**, ~1,3 MB → ~50 KB de datos por día por equipo.
+- **Sin pérdida, comprobado:** el lote reconstruido desde el columnar es
+  idéntico al original fila por fila (hora al milisegundo, tipo y cada campo
+  de `datos`). Un campo ausente se distingue de uno `null`.
+
+### Que no se corrompa ni se duplique
+
+- **Integridad en el viaje:** TLS ya autentica cada byte; un cuerpo alterado
+  no descomprime o no valida y se rechaza entero (400), nunca a medias.
+- **Todo o nada:** el lote entra en una sola transacción; si una fila no pasa
+  la validación (tipo fuera del catálogo, campo de tipo incorrecto), no entra
+  ninguna y el equipo lo sabe por la respuesta.
+- **Sin duplicados:** cada lote lleva un `lote_id` (UUID) y la base lo guarda
+  con restricción única. Si la respuesta se pierde y el equipo reintenta, el
+  segundo envío responde "ya recibido" sin insertar otra vez. El equipo borra
+  el lote de su cola sólo con esa confirmación.
+- **Pruebas de ida y vuelta** en Rust (columnar → JSON → brotli y vuelta) y
+  en la función receptora, con lotes reales como casos.
 
 Por eso:
 
