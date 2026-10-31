@@ -34,7 +34,7 @@ use control_acceso::telemetria::{Grupo, config, grupo_de_evento};
 /// Proyecto de STAGING (sandbox): la telemetría nunca va a producción. La
 /// llave es la publicable (rol `anon`), que en esta tabla sólo puede
 /// insertar (ver `supabase/scripts/telemetria_diagnostico_staging.sql`).
-const URL_STAGING: &str = "https://pmrytjktlyiuikxuuxpr.supabase.co";
+pub const URL_STAGING: &str = "https://pmrytjktlyiuikxuuxpr.supabase.co";
 const APIKEY_STAGING: &str = "sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4";
 
 /// Tope de la cola: sin red por mucho tiempo, lo más viejo se descarta
@@ -319,7 +319,7 @@ fn cargar_pendientes(t: &Telemetria) {
 }
 
 /// Lo que `version_app` dice de este build: `desktop-1.8.12+abc1234`.
-fn version_app() -> String {
+pub fn version_app() -> String {
     format!(
         "desktop-{}+{}",
         env!("CARGO_PKG_VERSION"),
@@ -379,8 +379,8 @@ fn arrancar(directorio: &Path) {
 }
 
 /// Anota el panic (sólo dónde ocurrió, nunca el mensaje) y guarda la cola
-/// en el archivo de pendientes antes de seguir con el gancho anterior
-/// (Sentry). No manda nada por la red acá: el panic puede ocurrir dentro de
+/// en el archivo de pendientes antes de seguir con el gancho anterior (el del
+/// registro de errores, que sí guarda el mensaje y la traza). No manda nada por la red acá: el panic puede ocurrir dentro de
 /// un hilo de tokio, donde el cliente HTTP bloqueante entra en pánico a su
 /// vez. Lo guardado sale en el próximo arranque.
 fn instalar_gancho_de_panic() {

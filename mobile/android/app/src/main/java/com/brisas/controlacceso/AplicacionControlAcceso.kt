@@ -40,6 +40,9 @@ class AplicacionControlAcceso : Application(), CameraXConfig.Provider {
             Os.setenv("CONTROL_ACCESO_SUPABASE_URL", AmbienteStaging.URL, true)
             Os.setenv("CONTROL_ACCESO_SUPABASE_APIKEY", AmbienteStaging.APIKEY, true)
         }
+        // Antes que nada que use el núcleo: un fallo al abrir la base también
+        // se reporta. Siempre encendido (ver RegistroErrores.kt).
+        RegistroErrores.instalar(this)
         // Qué se mide lo decide la orden de este teléfono (ver Telemetria.kt).
         Telemetria.iniciar(this)
         // Antes del primer mensaje push, que puede llegar con la app cerrada

@@ -34,7 +34,7 @@ data class ResultadoEstabilizacion(
 /// sus dígitos verificadores, espera del reverso de la cédula, mensajes--
 /// vive en el núcleo Rust (`EstabilizadorDocumento`,
 /// `lectura_documentos/estabilizador.rs`). Esta clase fija los valores por
-/// defecto, pone la fecha de hoy y avisa a Sentry de las correcciones de
+/// defecto, pone la fecha de hoy y pasa a la telemetría las correcciones de
 /// confusables del MRZ.
 ///
 /// Una instancia por sesión de escaneo; segura entre hilos (el núcleo se
@@ -86,7 +86,7 @@ class EstabilizadorLectura(
 
 private fun ResultadoNucleo.aResultado(): ResultadoEstabilizacion {
     // Sólo llegan con un MRZ CONFIRMADO: nunca por frames intermedios.
-    if (correccionesMrz.isNotEmpty()) registrarCorreccionesMrzEnSentry(correccionesMrz)
+    if (correccionesMrz.isNotEmpty()) registrarCorreccionesMrz(correccionesMrz)
     return ResultadoEstabilizacion(
         estado = estado,
         documento = documento?.aDocumentoDetectado(),

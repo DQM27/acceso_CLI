@@ -133,7 +133,7 @@ panel web.
   | `fluidez` | `frames`, `ui_bloqueos` | Desde el panel |
   | `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | Desde el panel |
   | `recursos` | `muestra_sistema`, `muestra_webview`, `memoria_baja` | Desde el panel |
-  | `escaneo` | `ocr_sesion`, `camara_info` | Desde el panel |
+  | `escaneo` | `ocr_sesion`, `camara_info`, `correccion_mrz` | Desde el panel |
   | `depuracion` | `strictmode`, `retencion` | Desde el panel, por poco tiempo |
 
 - **La orden.** Una fila por equipo en `telemetria_ordenes` (producción, por
@@ -152,6 +152,48 @@ panel web.
   `grupos` (los vigentes, con `base`: sin orden llega `["base", "rendimiento"]`). Es la forma de saber si la orden llegó.
 - **Ambiente.** `sesion_inicio` del móvil lleva `ambiente` (`produccion` o
   `staging`) para separar en los datos la app de pruebas de la real.
+
+- **`correccion_mrz`** (móvil, grupo `escaneo`): una por cada corrección de
+  confusables de un MRZ confirmado, con `campo`, `posicion`, `leido` y
+  `corregido` (un carácter suelto). Antes iba a Sentry como mensaje.
+
+## Registro de errores
+
+Aparte de la telemetría: **siempre encendido**, no depende de la orden ni se
+apaga desde el panel. Vive en el núcleo (`src/errores/`) y lo usan las dos
+plataformas, sin el SDK de Sentry. Cada error se escribe en el momento en
+`errores_pendientes/` (un JSON por error, tope 50, junto a la base local) y un
+hilo propio lo manda cada minuto a `receptor-errores` (staging):
+
+```text
+POST https://<proyecto>.supabase.co/functions/v1/receptor-errores/v1/errores
+x-clave-errores: <clave>
+{"reportes": [ ...hasta 10... ]}
+```
+
+La dirección y la clave salen del DSN de siempre (`SENTRY_DSN` al compilar;
+`SENTRY_DSN_MOVIL` en Gradle): `https://<clave>@<proyecto>.supabase.co/functions/v1/receptor-errores/1`.
+Sin DSN, los errores quedan en el equipo.
+
+Cada reporte (`Reporte` en `src/errores/formato.rs`, `esquema` 1):
+
+| Campo | Qué es |
+|---|---|
+| `id` | UUID aleatorio: el receptor ignora un reintento repetido. |
+| `ocurrido_en` | UTC con milisegundos. |
+| `plataforma` | `escritorio` o `movil`. |
+| `version_app` | La misma de la telemetría (`desktop-1.10.7+abc1234`, `1.8.13 (58)`). |
+| `origen` | `panico` (Rust), `excepcion` (Kotlin sin atrapar), `anr`, `nativo`, `js` o `nucleo` (error inesperado del núcleo o del lado Rust del escritorio). |
+| `titulo` | Mensaje del error, limpio de datos personales (`errores::limpiar_texto`, las mismas reglas que el receptor). |
+| `traza` | Hasta 30 marcos, del más nuevo al más viejo: `funcion`, `archivo` (sin el usuario del sistema), `linea` y `propio`. En un pánico el primero es el lugar exacto, aunque el release no tenga símbolos. |
+| `pantalla` | La que estaba viendo quien opera. |
+| `operaciones` | Las últimas 20: `nombre` (comando del escritorio o llamada al núcleo del móvil), `ok` y `en`. Nunca datos. |
+| `contexto` | Sólo datos del equipo: `os`, `os_version`, `modelo`, `fabricante`, `arquitectura`, `android_sdk`, `ambiente` (`produccion`, `staging` o `desarrollo`). |
+
+Un mismo error (título sin números) se reporta como mucho 3 veces por sesión
+y una sesión no pasa de 100. El receptor limpia otra vez, agrupa por huella
+(plataforma, origen, título sin números y los últimos tres marcos propios) y
+guarda en `errores_app` (`supabase/scripts/errores_app_staging.sql`).
 
 ## Lo que todavía no está resuelto
 

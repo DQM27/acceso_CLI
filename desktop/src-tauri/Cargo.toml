@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.10.6"
+version = "1.10.7"
 description = "Interfaz gráfica de escritorio para Lattis"
 authors = ["Daniel Quintana — DQM27"]
 license = "MIT"
@@ -52,12 +52,6 @@ tauri-plugin-dialog = "2.7.2"
 # aporta `relaunch()` para reiniciar la app después de instalar.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-# Error-tracking (docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
-# punto 5.4). Captura panics automáticamente (feature "panic", parte del
-# default) además de los envíos explícitos en `iniciar_sincronizacion_automatica`.
-# `traces_sample_rate = 0.0` en la init: solo error-tracking, sin performance
-# tracing (evita gastar cuota del plan gratis en algo que no se usa).
-sentry = "0.49"
 url = "=2.5.8"
 tokio = { version = "=1.53.3", features = ["sync", "time"] }
 # Telemetría (src/telemetria.rs): manda los lotes a staging. Misma versión y

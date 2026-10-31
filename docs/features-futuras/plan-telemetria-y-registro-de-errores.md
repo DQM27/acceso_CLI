@@ -51,9 +51,10 @@ Cada evento lleva identidad de la unidad, versión y commit, título limpio, tra
 receptor (`calcularHuella`), para poder cambiar la agrupación sin sacar
 versiones.
 
-El **receptor se reutiliza**: pasa a aceptar el formato propio y mantiene el de
-Sentry mientras queden versiones viejas instaladas. Cuando no quede ninguna,
-se retira el formato de Sentry, el SDK de las dos apps y el DSN.
+El **receptor se reutiliza**: pasa a aceptar sólo el formato propio. El de
+Sentry se retiró de una vez (decisión del 2026-10-31): hay dos equipos y se
+actualizan juntos, así que no hace falta convivir con versiones viejas. El
+DSN se conserva: de él salen la dirección y la clave del receptor.
 
 A vigilar, sólo comprobable en un release instalado: que el pánico se guarde
 antes de que muera el proceso; que las trazas de Rust del release salgan con
@@ -242,9 +243,10 @@ Lo que impidió saber si el HTTP/2 mejoró algo:
   combinación de grupos, con sus pruebas, pasan de `desktop/src-tauri/src/telemetria.rs`
   al núcleo compartido, para que el móvil y el escritorio usen la misma.
 - El DSN de respaldo a sentry.io (en la fase 0).
-- Al final de la captura propia: el crate `sentry`, `io.sentry:sentry-android`,
-  sus `meta-data` del manifiesto, las reglas de ProGuard y el secreto
-  `SENTRY_DSN`.
+- Con la captura propia (hecho): el crate `sentry`, `io.sentry:sentry-android`,
+  sus `meta-data` del manifiesto y el formato de Sentry del receptor. El
+  secreto `SENTRY_DSN` se queda: de él salen la dirección y la clave del
+  receptor (se podría renombrar, pero obliga a tocar los tres workflows).
 
 ## Fases
 
@@ -256,7 +258,7 @@ Cada fase termina con **el release instalado en los equipos reales**.
 | 1 | **Orden en la nube:** migración con `telemetria_unidades`, su historial, RLS (escribe sólo el desarrollador, cada unidad lee la suya) y el trigger que avisa por tiempo real. | Pruebas de RLS: una unidad no lee la fila de otra ni puede escribir; un cambio emite `telemetria_config` en el canal del sitio. |
 | 2 | **Orden en la unidad:** tabla local `config_telemetria` (migración del esquema), estado en memoria del núcleo, lectura en la sincronización, atención del aviso en las dos plataformas y confirmación en `base`. Todos los puntos de medición preguntan al núcleo; fuera los flags y las variantes de compilación. | En un release: encender `fluidez` en una unidad empieza a mandar `frames` en segundos; apagarlo los detiene; una unidad sin red al momento de la orden la aplica en la siguiente sincronización; al vencer se apaga sola. |
 | 3 | **Panel:** página "Telemetría" para el rol de desarrollador, con el estado confirmado por cada unidad. | Encender y apagar desde el panel sin SQL, y ver la confirmación. |
-| 4 | **Captura propia de errores:** módulo del núcleo con la cola compartida, gancho de pánicos, excepciones de Kotlin, `ApplicationExitInfo`, errores de JS y del núcleo; el receptor acepta el formato propio. Se retira el SDK cuando no queden versiones viejas. | En un release instalado, un pánico, una excepción de Kotlin, un error de JS y un error interno del núcleo llegan agrupados, con mensaje, traza legible y últimas operaciones. |
+| 4 | **Captura propia de errores:** módulo del núcleo con la cola compartida, gancho de pánicos, excepciones de Kotlin, `ApplicationExitInfo`, errores de JS y del núcleo; el receptor acepta el formato propio. Se retira el SDK. **Código hecho (2026-10-31, rama `feat/errores-captura-propia`); falta desplegar el receptor y probarlo en un release.** El formato está en `docs/telemetria-contrato.md` ("Registro de errores"). | En un release instalado, un pánico, una excepción de Kotlin, un error de JS y un error interno del núcleo llegan agrupados, con mensaje, traza legible y últimas operaciones. |
 | 5 | **Ajustes de `rendimiento`:** commit en la versión del móvil, cubos de histograma, red frente a local y HTTP/2. | El tablero compara una unidad contra su semana anterior y contra otra unidad. |
 | 6 | **Recortes:** `camara_info` una vez por versión, niveles de `memoria_baja`, motivo 16 con nombre, retención programada, tablero por grupos, contrato reescrito. | `docs/telemetria-contrato.md` describe los grupos y lo que hace el código. |
 

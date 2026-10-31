@@ -1,15 +1,15 @@
-//! Qué fallos de la sincronización automática merecen un aviso a Sentry.
+//! Qué fallos de la sincronización automática van al registro de errores.
 //!
 //! La sincronización automática (`iniciar_sincronizacion_automatica` en
 //! `lib.rs`) corre cada 5 minutos con la app abierta, haya alguien con sesión
 //! o no. Sin sesión, sin red o con el equipo sin vincular falla por razones
-//! normales, y mandar cada una a Sentry llenó el proyecto de ruido: 552 avisos
+//! normales, y mandar cada una a Sentry (antes del registro propio) llenó el proyecto de ruido: 552 avisos
 //! "No hay una sesión activa" en 28 días, con picos de 186 en un día (la PC
 //! esperando en el login), más del 90 % de todo lo que reportaba el escritorio.
 //!
 //! Dos reglas, probadas acá sin Tauri ni red:
 //! - los fallos **esperados** quedan sólo en el registro local;
-//! - un mismo mensaje inesperado no se repite en Sentry antes de una hora.
+//! - un mismo mensaje inesperado no se repite antes de una hora.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

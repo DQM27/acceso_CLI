@@ -133,6 +133,7 @@ pub const CATALOGO: &[(&str, Grupo)] = &[
     ("memoria_baja", Grupo::Recursos),
     ("ocr_sesion", Grupo::Escaneo),
     ("camara_info", Grupo::Escaneo),
+    ("correccion_mrz", Grupo::Escaneo),
     ("strictmode", Grupo::Depuracion),
     ("retencion", Grupo::Depuracion),
 ];
@@ -200,6 +201,7 @@ mod tests {
         assert_eq!(grupo_de_evento("reloj"), Some(Grupo::Sincronizacion));
         assert_eq!(grupo_de_evento("muestra_sistema"), Some(Grupo::Recursos));
         assert_eq!(grupo_de_evento("ocr_sesion"), Some(Grupo::Escaneo));
+        assert_eq!(grupo_de_evento("correccion_mrz"), Some(Grupo::Escaneo));
         assert_eq!(grupo_de_evento("strictmode"), Some(Grupo::Depuracion));
         assert_eq!(grupo_de_evento("desconocido"), None);
     }

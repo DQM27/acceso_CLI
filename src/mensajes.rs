@@ -883,6 +883,8 @@ pub const MENSAJE_ERROR_INESPERADO: &str =
 /// le sirve saber (qué hacer) se decide acá, no en la interfaz.
 pub fn mensaje_generico<E: std::fmt::Display>(error: E) -> String {
     log::error!("{error}");
+    #[cfg(feature = "nube")]
+    crate::errores::reportar_inesperado(&error);
     MENSAJE_ERROR_INESPERADO.into()
 }
 

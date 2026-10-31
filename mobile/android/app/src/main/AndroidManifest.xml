@@ -48,32 +48,6 @@
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-        <!-- Sentry (io.sentry:sentry-android): init automático, sin
-             Application/código propio. DSN del proyecto
-             `control-acceso-mobile`, mismo criterio que el DSN de escritorio
-             en desktop/src-tauri/src/lib.rs: no es secreto, va embebido en
-             el cliente. `sentryDsn` y `sentryEnvironment` vienen de los
-             `manifestPlaceholders` de app/build.gradle.kts (el DSN, de la
-             variable de entorno `SENTRY_DSN_MOVIL`; vacío desactiva el SDK;
-             el entorno: debug="development", release="production"). El sample rate en
-             0.0: sólo error-tracking, sin performance tracing (mismo motivo
-             que `traces_sample_rate = 0.0` en desktop, para no gastar cuota
-             del plan gratis en algo sin usar). -->
-        <meta-data android:name="io.sentry.dsn"
-            android:value="${sentryDsn}" />
-        <meta-data android:name="io.sentry.environment"
-            android:value="${sentryEnvironment}" />
-        <!-- Qué paquetes son código propio (`in_app`): el SDK sólo reconoce
-             por defecto el `applicationId` (com.dqm27.lattis), pero el código
-             vive en `com.brisas.controlacceso` y los bindings del núcleo en
-             `uniffi.control_acceso_mobile`. Sin esto ningún marco cuenta como
-             propio y la huella con que se agrupan los errores se calcularía
-             sobre marcos de librerías. -->
-        <meta-data android:name="io.sentry.in-app-includes"
-            android:value="com.brisas.controlacceso,uniffi.control_acceso_mobile" />
-        <meta-data android:name="io.sentry.traces.sample-rate"
-            android:value="0.0" />
-
         <!-- Firebase Cloud Messaging: canal e ícono para los mensajes con
              bloque `notification` que Android muestra solo con la app en
              segundo plano (p. ej. una prueba desde la consola de Firebase).

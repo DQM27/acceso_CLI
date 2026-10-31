@@ -731,6 +731,16 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_anotar_operacion(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_enviar_errores_pendientes(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_fijar_pantalla_errores(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_instalar_registro_errores(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_reportar_error(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -1264,6 +1274,16 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_interpretar_busqueda_activos(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_anotar_operacion(`nombre`: RustBuffer.ByValue,`ok`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_func_enviar_errores_pendientes(uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    external fun uniffi_control_acceso_mobile_fn_func_fijar_pantalla_errores(`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_func_instalar_registro_errores(`directorio`: RustBuffer.ByValue,`versionApp`: RustBuffer.ByValue,`dsn`: RustBuffer.ByValue,`contexto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_reportar_error(`origen`: RustBuffer.ByValue,`titulo`: RustBuffer.ByValue,`traza`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_func_extraer_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1460,6 +1480,21 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_interpretar_busqueda_activos() and 0xFFFF) != 28362) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_anotar_operacion() and 0xFFFF) != 36252) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_enviar_errores_pendientes() and 0xFFFF) != 56350) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_fijar_pantalla_errores() and 0xFFFF) != 19873) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_instalar_registro_errores() and 0xFFFF) != 60049) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_reportar_error() and 0xFFFF) != 38019) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
@@ -14392,6 +14427,85 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Anota una llamada al núcleo en el rastro que viaja con el próximo error.
+         */ fun `anotarOperacion`(`nombre`: kotlin.String, `ok`: kotlin.Boolean)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_anotar_operacion(
+    
+        
+        FfiConverterString.lower(`nombre`),
+        FfiConverterBoolean.lower(`ok`),_status)
+}
+    
+    
+
+        /**
+         * Manda ya lo pendiente (bloqueante, fuera del hilo de la pantalla). El
+         * registro lo hace solo cada minuto; Kotlin lo pide al pasar a segundo
+         * plano, por si el sistema mata el proceso. Devuelve cuántos salieron.
+         */ fun `enviarErroresPendientes`(): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_enviar_errores_pendientes(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * La pantalla que está viendo quien opera.
+         */ fun `fijarPantallaErrores`(`nombre`: kotlin.String)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_fijar_pantalla_errores(
+    
+        
+        FfiConverterString.lower(`nombre`),_status)
+}
+    
+    
+
+        /**
+         * Pone en marcha el registro. Se llama al crear la `Application`, antes de
+         * abrir la base. `dsn`: el de siempre (`BuildConfig.DSN_ERRORES`); vacío =
+         * los errores quedan en el teléfono. Devuelve `false` si ya estaba.
+         */ fun `instalarRegistroErrores`(`directorio`: kotlin.String, `versionApp`: kotlin.String, `dsn`: kotlin.String, `contexto`: Map<kotlin.String, kotlin.String>): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_instalar_registro_errores(
+    
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`versionApp`),
+        FfiConverterString.lower(`dsn`),
+        FfiConverterMapStringString.lower(`contexto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Reporta un error que vio Kotlin. `origen`: `excepcion`, `anr` o `nativo`
+         * (otro valor se descarta y devuelve `false`). `traza`: el texto de la traza
+         * (`stackTraceToString()` o el volcado del ANR).
+         */ fun `reportarError`(`origen`: kotlin.String, `titulo`: kotlin.String, `traza`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_reportar_error(
+    
+        
+        FfiConverterString.lower(`origen`),
+        FfiConverterString.lower(`titulo`),
+        FfiConverterString.lower(`traza`),_status)
 }
     )
     }
