@@ -23,7 +23,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::lote::{self, EventoTelemetria};
 
@@ -70,7 +70,7 @@ impl ColaTelemetria {
         let mut lineas = String::new();
         let mut descartados = 0;
         for evento in eventos {
-            let linea = a_linea(evento);
+            let linea = evento.a_linea();
             if ocupado + (lineas.len() + linea.len()) as u64 > TOPE_BYTES {
                 descartados += 1;
                 continue;
@@ -88,6 +88,18 @@ impl ColaTelemetria {
             archivo.write_all(lineas.as_bytes())?;
         }
         Ok(descartados)
+    }
+
+    /// Cuántos eventos esperan, aproximado (por el tamaño de los archivos, sin
+    /// leerlos): alcanza para decidir si conviene no esperar más
+    /// (`disparador`). Unos 150 bytes por evento.
+    pub fn pendientes_aprox(&self) -> usize {
+        let bytes: u64 = ["eventos.jsonl", "tomando.jsonl", "en_vuelo.json"]
+            .iter()
+            .filter_map(|nombre| fs::metadata(self.ruta(nombre)).ok())
+            .map(|m| m.len())
+            .sum();
+        usize::try_from(bytes / 150).unwrap_or(usize::MAX)
     }
 
     /// `true` si hay algo para mandar (un lote en vuelo o eventos nuevos).
@@ -158,7 +170,7 @@ impl ColaTelemetria {
         let lote = lote::armar(&nuevo_id(), sesion, &eventos);
         let contenido = json!({
             "lote": lote,
-            "resto": resto.iter().map(a_valor).collect::<Vec<_>>(),
+            "resto": resto.iter().map(EventoTelemetria::a_valor).collect::<Vec<_>>(),
         });
         escribir_atomico(
             &self.ruta("en_vuelo.json"),
@@ -182,29 +194,18 @@ impl ColaTelemetria {
         };
         let resto = valor["resto"]
             .as_array()
-            .map(|eventos| eventos.iter().filter_map(de_valor).collect())
+            .map(|eventos| {
+                eventos
+                    .iter()
+                    .filter_map(EventoTelemetria::desde_valor)
+                    .collect()
+            })
             .unwrap_or_default();
         Ok(Some(EnVuelo {
             lote: valor["lote"].clone(),
             resto,
         }))
     }
-}
-
-fn a_valor(evento: &EventoTelemetria) -> Value {
-    json!({ "t": evento.ocurrido_ms, "tipo": evento.tipo, "d": evento.datos })
-}
-
-fn a_linea(evento: &EventoTelemetria) -> String {
-    a_valor(evento).to_string()
-}
-
-fn de_valor(valor: &Value) -> Option<EventoTelemetria> {
-    Some(EventoTelemetria {
-        ocurrido_ms: valor["t"].as_i64()?,
-        tipo: valor["tipo"].as_str()?.to_owned(),
-        datos: valor["d"].as_object().cloned().unwrap_or_else(Map::new),
-    })
 }
 
 /// Las líneas que se pueden leer; una dañada (corte a mitad de escritura) se
@@ -215,7 +216,7 @@ fn leer_lineas(ruta: &Path) -> io::Result<Vec<EventoTelemetria>> {
         .lines()
         .map_while(Result::ok)
         .filter_map(|linea| serde_json::from_str::<Value>(&linea).ok())
-        .filter_map(|valor| de_valor(&valor))
+        .filter_map(|valor| EventoTelemetria::desde_valor(&valor))
         .collect())
 }
 
@@ -352,7 +353,7 @@ mod tests {
         // Simula que murió antes de borrar `tomando.jsonl`.
         fs::write(
             dir.path().join(CARPETA).join("tomando.jsonl"),
-            format!("{}\n", a_linea(&evento(1))),
+            format!("{}\n", evento(1).a_linea()),
         )
         .unwrap();
         let reintento = cola.lote_a_enviar(&sesion(), &nuevo_id).unwrap().unwrap();

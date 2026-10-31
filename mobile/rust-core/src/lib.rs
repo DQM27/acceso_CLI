@@ -64,6 +64,7 @@ mod nube;
 mod proveedores;
 mod rutas;
 mod sesion;
+mod telemetria_nube;
 mod tipos;
 mod visitas;
 

@@ -8,10 +8,13 @@
 //! Quien llama pasa el cliente HTTP (el del núcleo, con la conexión ya
 //! abierta) y el token vigente.
 
+use std::sync::atomic::{AtomicI64, Ordering};
+
 use reqwest::StatusCode;
 use serde_json::Value;
 
 use super::cola::ColaTelemetria;
+use super::disparador::{Perfil, Situacion, debe_enviar};
 use super::lote;
 
 /// Ruta de la receptora, relativa a la URL base del proyecto.
@@ -137,6 +140,77 @@ pub fn vaciar_cola(
             return resumen;
         }
     }
+}
+
+/// Cuándo fue el último envío (o el arranque, si todavía no hubo). Lo
+/// comparten las vueltas del hilo de telemetría.
+pub struct RitmoEnvio {
+    ultimo_envio_ms: AtomicI64,
+}
+
+impl RitmoEnvio {
+    pub fn desde(inicio_ms: i64) -> Self {
+        Self {
+            ultimo_envio_ms: AtomicI64::new(inicio_ms),
+        }
+    }
+
+    pub fn ultimo_envio_ms(&self) -> i64 {
+        self.ultimo_envio_ms.load(Ordering::Relaxed)
+    }
+}
+
+/// A dónde y con qué cliente se manda.
+pub struct Destino<'a> {
+    pub cliente: &'a reqwest::blocking::Client,
+    pub base_url: &'a str,
+    pub apikey: &'a str,
+}
+
+/// Una vuelta del hilo de telemetría: decide con [`disparador::debe_enviar`]
+/// si conviene mandar ahora y, si conviene, vacía la cola. `None` si no tocó
+/// la red (no convenía, o todavía no hay token: se vuelve a probar en la
+/// próxima vuelta). El token se pide sólo si va a hacer falta.
+///
+/// `ultima_actividad_red_ms` es [`disparador::ultima_actividad_red`] (un
+/// parámetro para poder probarlo sin estado global).
+#[allow(clippy::too_many_arguments)]
+pub fn enviar_si_conviene(
+    perfil: Perfil,
+    ritmo: &RitmoEnvio,
+    ahora_ms: i64,
+    ultima_actividad_red_ms: Option<i64>,
+    cola: &ColaTelemetria,
+    sesion: &Value,
+    token: impl FnOnce() -> Option<String>,
+    destino: &Destino<'_>,
+    nuevo_id: impl Fn() -> String,
+) -> Option<ResumenEnvio> {
+    if !cola.hay_pendientes() {
+        return None;
+    }
+    let situacion = Situacion {
+        ahora_ms,
+        pendientes: cola.pendientes_aprox().max(1),
+        ultimo_envio_ms: ritmo.ultimo_envio_ms(),
+        ultima_actividad_red_ms,
+    };
+    if !debe_enviar(perfil, situacion) {
+        return None;
+    }
+    let token = token()?;
+    // Aunque falle, no se reintenta en la vuelta siguiente: se espera a la
+    // próxima ventana (radio despierta, o el máximo sin enviar).
+    ritmo.ultimo_envio_ms.store(ahora_ms, Ordering::Relaxed);
+    Some(vaciar_cola(
+        cola,
+        sesion,
+        destino.cliente,
+        destino.base_url,
+        destino.apikey,
+        &token,
+        nuevo_id,
+    ))
 }
 
 #[cfg(test)]
@@ -363,6 +437,94 @@ mod tests {
         );
 
         assert_eq!(resumen.pendiente.as_deref(), Some("sin autorización"));
+        assert!(cola.hay_pendientes());
+    }
+
+    #[test]
+    fn el_movil_espera_la_radio_despierta_y_no_pide_token_si_no_va_a_mandar() {
+        let dir = tempfile::tempdir().unwrap();
+        let cola = ColaTelemetria::en(dir.path());
+        cola.agregar(&[evento(1), evento(2), evento(3)]).unwrap();
+        let (url, peticiones) = receptora(vec![(200, RECIBIDO_3)]);
+        let cliente = reqwest::blocking::Client::new();
+        let destino = Destino {
+            cliente: &cliente,
+            base_url: &url,
+            apikey: "k",
+        };
+        let ahora = 1_793_470_000_000;
+        let ritmo = RitmoEnvio::desde(ahora - 60_000);
+        let pidio_token = Cell::new(false);
+        let token = || {
+            pidio_token.set(true);
+            Some("t".to_owned())
+        };
+
+        // Sin actividad de red reciente: no manda ni pide el token.
+        let quieto = enviar_si_conviene(
+            Perfil::Movil,
+            &ritmo,
+            ahora,
+            None,
+            &cola,
+            &sesion(),
+            token,
+            &destino,
+            ids(),
+        );
+        assert_eq!(quieto, None);
+        assert!(!pidio_token.get());
+
+        // Una verificación despertó la radio hace 1 s: aprovecha.
+        let a_caballo = enviar_si_conviene(
+            Perfil::Movil,
+            &ritmo,
+            ahora,
+            Some(ahora - 1_000),
+            &cola,
+            &sesion(),
+            || Some("t".to_owned()),
+            &destino,
+            ids(),
+        );
+        assert_eq!(a_caballo.map(|r| r.lotes), Some(1));
+        assert_eq!(ritmo.ultimo_envio_ms(), ahora);
+        assert!(peticiones.recv().is_ok());
+        assert!(!cola.hay_pendientes());
+    }
+
+    #[test]
+    fn sin_token_no_toca_la_red_y_vuelve_a_probar() {
+        let dir = tempfile::tempdir().unwrap();
+        let cola = ColaTelemetria::en(dir.path());
+        cola.agregar(&[evento(1)]).unwrap();
+        let cliente = reqwest::blocking::Client::new();
+        let destino = Destino {
+            cliente: &cliente,
+            base_url: "http://127.0.0.1:9",
+            apikey: "k",
+        };
+        let ahora = 1_793_470_000_000;
+        let ritmo = RitmoEnvio::desde(ahora - 120_000);
+
+        let resultado = enviar_si_conviene(
+            Perfil::Escritorio,
+            &ritmo,
+            ahora,
+            None,
+            &cola,
+            &sesion(),
+            || None,
+            &destino,
+            ids(),
+        );
+
+        assert_eq!(resultado, None);
+        assert_eq!(
+            ritmo.ultimo_envio_ms(),
+            ahora - 120_000,
+            "no cuenta como envío"
+        );
         assert!(cola.hay_pendientes());
     }
 

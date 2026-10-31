@@ -49,6 +49,33 @@ pub struct EventoTelemetria {
     pub datos: Map<String, Value>,
 }
 
+impl EventoTelemetria {
+    /// El evento como una línea JSON compacta: `{"t": ms, "tipo": ..., "d": {...}}`.
+    /// Es el formato de la cola en disco y el que entregan las plataformas al
+    /// núcleo (el móvil, por `UniFFI`).
+    pub fn a_linea(&self) -> String {
+        self.a_valor().to_string()
+    }
+
+    pub(crate) fn a_valor(&self) -> Value {
+        json!({ "t": self.ocurrido_ms, "tipo": self.tipo, "d": self.datos })
+    }
+
+    /// La inversa de [`Self::a_linea`]. `None` si la línea no se puede leer
+    /// (cortada, o sin hora o sin tipo); sin `d`, los datos quedan vacíos.
+    pub fn desde_linea(linea: &str) -> Option<Self> {
+        Self::desde_valor(&serde_json::from_str(linea).ok()?)
+    }
+
+    pub(crate) fn desde_valor(valor: &Value) -> Option<Self> {
+        Some(Self {
+            ocurrido_ms: valor["t"].as_i64()?,
+            tipo: valor["tipo"].as_str()?.to_owned(),
+            datos: valor["d"].as_object().cloned().unwrap_or_default(),
+        })
+    }
+}
+
 /// Un lote que no se puede leer: el equipo lo descarta, no lo reintenta.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ErrorLote {
@@ -283,6 +310,27 @@ mod tests {
         assert_eq!(reloj["tipo"], "reloj");
         assert_eq!(reloj["filas"], json!([[0, false], [4_000, true]]));
         assert_eq!(lote["bloques"][1]["filas"], json!([[4_000, 1]]));
+    }
+
+    #[test]
+    fn la_linea_va_y_vuelve_y_rechaza_lo_ilegible() {
+        let original = evento(
+            1_793_470_000_123,
+            "frames",
+            json!({ "frames": 300, "carga": null }),
+        );
+        assert_eq!(
+            EventoTelemetria::desde_linea(&original.a_linea()),
+            Some(original)
+        );
+        assert_eq!(EventoTelemetria::desde_linea("{\"t\": 1793"), None);
+        assert_eq!(
+            EventoTelemetria::desde_linea("{\"tipo\": \"reloj\"}"),
+            None,
+            "sin hora"
+        );
+        let sin_datos = EventoTelemetria::desde_linea("{\"t\": 5, \"tipo\": \"reloj\"}").unwrap();
+        assert!(sin_datos.datos.is_empty());
     }
 
     #[test]

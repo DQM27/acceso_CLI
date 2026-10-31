@@ -312,6 +312,12 @@ impl CacheTokenDispositivo {
         metadata: Option<&MetadatosDispositivo>,
     ) -> Result<TokenDispositivo, NubeError> {
         let firmante = self.firmante().ok_or(NubeError::SinCredencial)?;
+        // Toda operación con la nube pide el token justo antes: es la señal de
+        // que la radio se despierta (o ya lo está), y la telemetría del móvil
+        // sale "a caballo" de ella (`telemetria::disparador`).
+        crate::telemetria::disparador::registrar_actividad_red(
+            chrono::Utc::now().timestamp_millis(),
+        );
         let dispositivo_id = firmante
             .dispositivo_vinculado()
             .ok_or(NubeError::SinCredencial)?;

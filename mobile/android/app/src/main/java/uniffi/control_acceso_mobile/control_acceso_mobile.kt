@@ -953,6 +953,12 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_agregar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_enviar_si_conviene(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_iniciar(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_visitas_adentro(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_entrada_visita(
@@ -1190,6 +1196,12 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_en_la_nube(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_agregar(`ptr`: Long,`lineas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_enviar_si_conviene(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_iniciar(`ptr`: Long,`directorio`: RustBuffer.ByValue,`cabeceraJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_visitas_adentro(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_entrada_visita(`ptr`: Long,`cedula`: RustBuffer.ByValue,`gafeteNumero`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1813,6 +1825,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube() and 0xFFFF) != 11186) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_agregar() and 0xFFFF) != 6298) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_enviar_si_conviene() and 0xFFFF) != 41665) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_iniciar() and 0xFFFF) != 6831) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_visitas_adentro() and 0xFFFF) != 33782) {
@@ -4392,6 +4413,29 @@ public interface NucleoInterface {
     fun `cerrarSesionEnLaNube`(`cedula`: kotlin.String)
     
     /**
+     * Guarda en la cola en disco los eventos que midió Kotlin, cada uno como
+     * una línea `{"t": ms, "tipo": ..., "d": {...}}`. Devuelve cuántos se
+     * perdieron (ilegibles o por el tope de la cola). Sin `telemetria_iniciar`
+     * se pierden todos: Kotlin no llama antes.
+     */
+    fun `telemetriaAgregar`(`lineas`: List<kotlin.String>): kotlin.UInt
+    
+    /**
+     * Una vuelta del hilo de telemetría de Kotlin: manda sólo si conviene
+     * (la radio ya está despierta por otra petición, pasó mucho sin mandar o
+     * se juntó mucho; ver `telemetria::disparador`). Barato si no conviene:
+     * no toca la red ni pide el token. `true` si mandó algo.
+     */
+    fun `telemetriaEnviarSiConviene`(): kotlin.Boolean
+    
+    /**
+     * Prepara el envío de la telemetría: la cola en disco en `directorio` (el
+     * de la app) y la cabecera de esta sesión (JSON). Una vez por proceso;
+     * `false` si la cabecera no sirve o ya estaba iniciada.
+     */
+    fun `telemetriaIniciar`(`directorio`: kotlin.String, `cabeceraJson`: kotlin.String): kotlin.Boolean
+    
+    /**
      * Quién está adentro por visita en la unidad: primero las de este
      * equipo, después las del otro (caché que llena la sincronización y
      * refresca el aviso en vivo). Sin nube vinculada, sólo las de acá.
@@ -6091,6 +6135,65 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Guarda en la cola en disco los eventos que midió Kotlin, cada uno como
+     * una línea `{"t": ms, "tipo": ..., "d": {...}}`. Devuelve cuántos se
+     * perdieron (ilegibles o por el tope de la cola). Sin `telemetria_iniciar`
+     * se pierden todos: Kotlin no llama antes.
+     */override fun `telemetriaAgregar`(`lineas`: List<kotlin.String>): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_agregar(
+        it,
+        
+        FfiConverterSequenceString.lower(`lineas`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Una vuelta del hilo de telemetría de Kotlin: manda sólo si conviene
+     * (la radio ya está despierta por otra petición, pasó mucho sin mandar o
+     * se juntó mucho; ver `telemetria::disparador`). Barato si no conviene:
+     * no toca la red ni pide el token. `true` si mandó algo.
+     */override fun `telemetriaEnviarSiConviene`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_enviar_si_conviene(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Prepara el envío de la telemetría: la cola en disco en `directorio` (el
+     * de la app) y la cabecera de esta sesión (JSON). Una vez por proceso;
+     * `false` si la cabecera no sirve o ya estaba iniciada.
+     */override fun `telemetriaIniciar`(`directorio`: kotlin.String, `cabeceraJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_iniciar(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`cabeceraJson`),_status)
+}
+    }
+    )
+    }
     
 
     

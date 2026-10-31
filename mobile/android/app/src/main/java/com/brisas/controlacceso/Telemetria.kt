@@ -27,8 +27,6 @@ import uniffi.control_acceso_mobile.EstadoTelemetria
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.telemetriaCatalogo
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -47,11 +45,13 @@ import java.util.concurrent.TimeUnit
 /// defecto y el resto lo enciende el panel, con vencimiento (ver
 /// `docs/features-futuras/plan-telemetria-y-registro-de-errores.md`).
 ///
-/// Todo va a la tabla `telemetria_diagnostico` del SANDBOX (staging, ver
-/// `supabase/scripts/telemetria_diagnostico_staging.sql`), en lotes cada
-/// minuto y al pasar la app a segundo plano; lo que no se pudo enviar se
-/// guarda en un archivo y se reintenta. Sólo números y nombres técnicos:
-/// nunca texto leído, cédulas, nombres ni imágenes.
+/// Sale por el NÚCLEO (`docs/features-futuras/plan-red-movil-por-el-nucleo.md`):
+/// cada pocos segundos los eventos medidos pasan a la cola en disco del núcleo
+/// (`Nucleo.telemetriaAgregar`), y el núcleo los manda a producción con su
+/// cliente HTTP/2, brotli y el token del teléfono, "a caballo" de otro tráfico
+/// para no despertar la radio por su cuenta (`Nucleo.telemetriaEnviarSiConviene`).
+/// Hasta que el núcleo abre, los eventos esperan en memoria. Sólo números y
+/// nombres técnicos: nunca texto leído, cédulas, nombres ni imágenes.
 ///
 /// Lo que un grupo apagado cuesta en cada punto de medición es un chequeo de
 /// un conjunto. Hasta que el núcleo está abierto rige el estado por defecto
@@ -98,6 +98,7 @@ object Telemetria {
     /// su orden vigente.
     fun usarNucleo(nucleo: Nucleo) {
         fuenteGrupos = { nucleo.telemetriaEstado() }
+        motor?.usarNucleo(nucleo)
         refrescarGrupos()
     }
 
@@ -215,15 +216,20 @@ inline fun <T> medirNucleo(nombre: String, bloque: () -> T): T {
 
 private class MotorTelemetria(private val app: Application) {
     private val preferencias = app.getSharedPreferences("telemetria_diagnostico", Context.MODE_PRIVATE)
-    private val dispositivo: String = preferencias.getString(CLAVE_DISPOSITIVO, null)
+    /// Una por instalación: reinstalar la app genera otra. Va en el detalle de
+    /// la sesión para ver reinstalaciones (el teléfono lo identifica el token).
+    private val instalacion: String = preferencias.getString(CLAVE_DISPOSITIVO, null)
         ?: UUID.randomUUID().toString().also { preferencias.edit().putString(CLAVE_DISPOSITIVO, it).apply() }
     private val sesion = UUID.randomUUID().toString()
-    private val versionApp = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+    private val iniciadaEn = Instant.now()
     private val ejecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { tarea ->
         Thread(tarea, "telemetria").apply { priority = Thread.MIN_PRIORITY }
     }
     private val cola = ColaTelemetria()
-    private val archivoPendiente = File(app.filesDir, "telemetria_pendiente.jsonl")
+
+    /// El núcleo, una vez abierto y con la telemetría iniciada. Antes, los
+    /// eventos esperan en `cola`.
+    @Volatile private var nucleoEnvio: Nucleo? = null
     private val llamadas = AgregadorLlamadas()
     private val violaciones = AgregadorViolaciones()
     val realtime = AgregadorRealtime()
@@ -242,7 +248,9 @@ private class MotorTelemetria(private val app: Application) {
     private var ultimoTx = TrafficStats.getUidTxBytes(Process.myUid())
 
     fun arrancar() {
-        cargarPendientes()
+        // La cola del formato anterior (filas para staging): no sirve para el
+        // envío por el núcleo.
+        File(app.filesDir, "telemetria_pendiente.jsonl").delete()
         // El catálogo antes que los primeros eventos: sin él no se sabe a qué
         // grupo pertenecen.
         ejecutor.execute {
@@ -262,24 +270,49 @@ private class MotorTelemetria(private val app: Application) {
             override fun onLowMemory() = Unit
         })
         ejecutor.scheduleWithFixedDelay(::muestrear, SEGUNDOS_MUESTREO, SEGUNDOS_MUESTREO, TimeUnit.SECONDS)
-        ejecutor.scheduleWithFixedDelay(::enviar, SEGUNDOS_ENVIO, SEGUNDOS_ENVIO, TimeUnit.SECONDS)
+        ejecutor.scheduleWithFixedDelay(::enviar, SEGUNDOS_REVISION, SEGUNDOS_REVISION, TimeUnit.SECONDS)
     }
+
+    /// Inicia el envío por el núcleo con la cabecera de esta sesión. En el
+    /// hilo de telemetría: la primera llamada al núcleo puede tardar.
+    fun usarNucleo(nucleo: Nucleo) {
+        ejecutor.execute {
+            try {
+                nucleo.telemetriaIniciar(app.filesDir.absolutePath, aJson(cabeceraSesion()))
+                nucleoEnvio = nucleo
+            } catch (e: RuntimeException) {
+                encolar("error_telemetria", mapOf("donde" to "iniciar", "error" to e.javaClass.simpleName))
+            }
+        }
+    }
+
+    /// Lo que la nube guarda una vez por sesión (`observabilidad.sesiones`). El
+    /// teléfono y la unidad los pone la nube desde el token.
+    private fun cabeceraSesion(): Map<String, Any?> = mapOf(
+        "id" to sesion,
+        "plataforma" to "movil",
+        "version_app" to BuildConfig.VERSION_NAME,
+        "version_codigo" to BuildConfig.VERSION_CODE,
+        "ambiente" to if (BuildConfig.AMBIENTE_STAGING) "staging" else "produccion",
+        "iniciada_en" to iniciadaEn.toString(),
+        "sistema" to "Android ${Build.VERSION.RELEASE}",
+        "modelo" to Build.MODEL,
+        "ram_total_mb" to mb(ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo).totalMem),
+        "detalle" to datosDispositivo() + ("instalacion" to instalacion),
+    )
 
     /// Sin el grupo del evento, no se encola.
     fun encolar(tipo: String, datos: Map<String, Any?>) {
         if (!Telemetria.permite(tipo)) return
+        // El formato de línea del núcleo (`EventoTelemetria::desde_linea`). La
+        // versión del formato y la plataforma van una vez, en la cabecera de la
+        // sesión, no en cada evento.
         cola.agregar(
             aJson(
                 mapOf(
-                    "ocurrido_en" to Telemetria.ahora().toString(),
-                    "dispositivo" to dispositivo,
-                    "sesion" to sesion,
-                    "version_app" to versionApp,
+                    "t" to Telemetria.ahora().toEpochMilli(),
                     "tipo" to tipo,
-                    // Todo evento lleva la versión del formato y la plataforma
-                    // (ver `docs/telemetria-contrato.md`); lo que ya traiga el
-                    // evento manda sobre estos valores.
-                    "datos" to (mapOf("esquema" to ESQUEMA_TELEMETRIA, "plataforma" to "movil") + datos),
+                    "d" to (datos - "esquema" - "plataforma"),
                 ),
             ),
         )
@@ -312,9 +345,9 @@ private class MotorTelemetria(private val app: Application) {
 
     fun enPrimerPlano(visible: Boolean) {
         this.visible = visible
-        // Al irse a segundo plano: resumen de lo acumulado y envío ya, por
-        // si el sistema mata el proceso después.
-        if (!visible) ejecutor.execute { volcarAgregados(); enviar(); guardarPendientes() }
+        // Al irse a segundo plano: resumen de lo acumulado y a disco ya, por si
+        // el sistema mata el proceso después (sale en el próximo envío).
+        if (!visible) ejecutor.execute { volcarAgregados(); enviar() }
     }
 
     /// El tiempo "desde el inicio del proceso" sólo vale en un arranque en
@@ -592,62 +625,26 @@ private class MotorTelemetria(private val app: Application) {
         )
     }
 
-    /// Una excepción que escape de una tarea periódica cancela en silencio
-    /// todas sus ejecuciones siguientes (`scheduleWithFixedDelay`): por eso
-    /// ningún error de un envío puede salir de acá.
+    /// Pasa lo medido a la cola en disco del núcleo y le da al núcleo la
+    /// oportunidad de mandar (decide él: sólo si la radio ya está despierta por
+    /// otra petición, si pasó mucho o si se juntó mucho). Cada pocos segundos:
+    /// si no conviene, no toca la red. Una excepción que escape de una tarea
+    /// periódica cancela en silencio todas sus ejecuciones siguientes
+    /// (`scheduleWithFixedDelay`): por eso ningún error puede salir de acá.
     private fun enviar() {
+        val nucleo = nucleoEnvio ?: return
         try {
-            while (true) {
-                val lote = cola.tomar(FILAS_POR_LOTE)
-                if (lote.isEmpty()) return
-                if (!publicar(lote)) {
-                    cola.devolver(lote)
-                    guardarPendientes()
-                    return
-                }
+            val lote = cola.tomar(Int.MAX_VALUE)
+            if (lote.isNotEmpty()) {
+                val perdidos = nucleo.telemetriaAgregar(lote)
+                if (perdidos > 0u) encolar("telemetria_descartada", mapOf("filas" to perdidos.toLong()))
             }
+            nucleo.telemetriaEnviarSiConviene()
         } catch (e: RuntimeException) {
+            // Un núcleo cerrado (reconexión, cierre) lanza en cada llamada: se
+            // suelta y los eventos esperan hasta que `usarNucleo` dé el nuevo.
+            nucleoEnvio = null
             encolar("error_telemetria", mapOf("donde" to "enviar", "error" to e.javaClass.simpleName))
-        }
-    }
-
-    private fun publicar(lote: List<String>): Boolean = try {
-        val conexion = URL("${AmbienteStaging.URL}/rest/v1/telemetria_diagnostico").openConnection() as HttpURLConnection
-        try {
-            conexion.requestMethod = "POST"
-            conexion.connectTimeout = TIMEOUT_MS
-            conexion.readTimeout = TIMEOUT_MS
-            conexion.doOutput = true
-            conexion.setRequestProperty("apikey", AmbienteStaging.APIKEY)
-            conexion.setRequestProperty("Content-Type", "application/json")
-            conexion.setRequestProperty("Prefer", "return=minimal")
-            conexion.outputStream.use { it.write(lote.joinToString(",", "[", "]").toByteArray(Charsets.UTF_8)) }
-            conexion.responseCode in 200..299
-        } finally {
-            conexion.disconnect()
-        }
-    } catch (e: java.io.IOException) {
-        false
-    }
-
-    private fun guardarPendientes() {
-        val pendientes = cola.tomar(Int.MAX_VALUE)
-        cola.devolver(pendientes)
-        try {
-            archivoPendiente.writeText(pendientes.joinToString("\n"))
-        } catch (e: java.io.IOException) {
-            // Sin espacio o sin permiso: se pierde, es sólo diagnóstico.
-        }
-    }
-
-    private fun cargarPendientes() {
-        try {
-            if (archivoPendiente.exists()) {
-                cola.agregarTodas(archivoPendiente.readLines().filter { it.isNotBlank() })
-                archivoPendiente.delete()
-            }
-        } catch (e: java.io.IOException) {
-            archivoPendiente.delete()
         }
     }
 
@@ -667,8 +664,9 @@ private class MotorTelemetria(private val app: Application) {
         const val CLAVE_ULTIMA_SALIDA = "ultima_salida_informada"
         const val CLAVE_ULTIMA_VERSION_ARRANCADA = "ultima_version_arrancada"
         const val SEGUNDOS_MUESTREO = 30L
-        const val SEGUNDOS_ENVIO = 60L
-        const val FILAS_POR_LOTE = 200
+        /// Cada cuánto se revisa: la ventana de radio despierta del núcleo es de
+        /// 5 s (`telemetria::disparador`), así que hay que mirar más seguido.
+        const val SEGUNDOS_REVISION = 3L
         const val TIMEOUT_MS = 10_000
     }
 }
