@@ -1,6 +1,8 @@
 pub mod application;
 pub mod database;
 pub mod domain;
+#[cfg(feature = "nube")]
+pub mod errores;
 pub mod historial;
 pub mod instancia;
 // Sin feature gate a propósito: parser+resolver+ContextState no dependían de

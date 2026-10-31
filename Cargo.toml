@@ -12,7 +12,7 @@ serde = ["dep:serde", "chrono/serde", "control_acceso_reglas/serde"]
 # `p256`/`sha2`/`base64`: identidad del dispositivo por par de claves
 # (`nube::firmante`) -- firma ES256 de la aserción, huella RFC 7638 y
 # codificación base64url. `p256` ya venía en el árbol vía `jsonwebtoken`.
-nube = ["dep:reqwest", "dep:serde_json", "dep:jsonwebtoken", "dep:p256", "dep:sha2", "dep:base64", "serde"]
+nube = ["dep:reqwest", "dep:serde_json", "dep:jsonwebtoken", "dep:p256", "dep:sha2", "dep:base64", "dep:regex", "serde"]
 # Escritorio: la clave privada del dispositivo se guarda con DPAPI
 # (`dep:windows`, ligado al usuario de Windows). `machine-uid` queda sólo
 # para la metadata forense de vinculación (ver
@@ -58,6 +58,9 @@ serde_json = { version = "1", optional = true }
 # sync de un equipo (catálogo completo) y el historial del escritorio son JSON
 # que se comprime 5-10x: menos datos móviles y menos espera.
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2", "gzip", "brotli"], optional = true }
+# Limpiador de datos personales del registro de errores (`errores::limpieza`).
+# Ya viajaba en el escritorio y en el móvil por otras dependencias.
+regex = { version = "1", optional = true }
 # Verificación offline de los JWT que emite Supabase Auth (ES256, claves
 # asimétricas -- ya confirmado que el proyecto las tiene:
 # /auth/v1/.well-known/jwks.json devuelve 3 claves públicas EC).
