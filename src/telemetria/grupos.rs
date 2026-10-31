@@ -119,6 +119,9 @@ pub const CATALOGO: &[(&str, Grupo)] = &[
     ("error_telemetria", Grupo::Base),
     ("telemetria_descartada", Grupo::Base),
     ("orden_telemetria", Grupo::Base),
+    // Filas que la nube rechazó y quedaron en la bandeja de salida. Sólo se
+    // manda al abrir y cuando cambia, así que es barata y va siempre.
+    ("cola_fallidos", Grupo::Base),
     ("llamada_nucleo", Grupo::Rendimiento),
     ("transicion_ingreso", Grupo::Rendimiento),
     ("pantalla", Grupo::Rendimiento),
@@ -197,6 +200,7 @@ mod tests {
         assert_eq!(grupo_de_evento("llamada_nucleo"), Some(Grupo::Rendimiento));
         assert_eq!(grupo_de_evento("panic"), Some(Grupo::Base));
         assert_eq!(grupo_de_evento("telemetria_descartada"), Some(Grupo::Base));
+        assert_eq!(grupo_de_evento("cola_fallidos"), Some(Grupo::Base));
         assert_eq!(grupo_de_evento("frames"), Some(Grupo::Fluidez));
         assert_eq!(grupo_de_evento("reloj"), Some(Grupo::Sincronizacion));
         assert_eq!(grupo_de_evento("muestra_sistema"), Some(Grupo::Recursos));

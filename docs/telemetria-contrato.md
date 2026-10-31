@@ -113,6 +113,7 @@ En el teléfono el tipo sale de la variante de `NucleoException`
 | `llamada_nucleo` | `red_tipo`, el nombre canónico y, si hubo errores, `errores_por_tipo`. |
 | `transicion_ingreso` (móvil, nuevo) | Por cada contratista elegido: `origen` (`ocr` o `manual`), `ms_busqueda`, `ms_nucleo` (la espera de la nube), `ms_total` hasta tener el formulario del gafete y `resultado` (`formulario`, `bloqueada` o `error`). |
 | `ocr_sesion` (móvil) | `ms_cierre_unbind`, `ms_cierre_modelos`, `ms_cierre_total`: lo que tarda cerrar la cámara en el hilo principal. |
+| `cola_fallidos` (móvil, nuevo) | Filas de la bandeja de salida que la nube rechazó. Se manda al abrir y cuando cambia la cantidad o la fila más reciente. `cantidad`, `conflictos`, `errores` y `filas` (hasta 20, la más reciente primero) con `entidad`, `operacion`, `uuid` (del registro, no de la persona), `motivo` (`conflicto` o `error`), `intentos`, `creado_en`, `actualizado_en`, `http`, `codigo` (de Postgres) y `restriccion`. Sin cédulas ni nombres. |
 
 ## Qué mide cada equipo: estudios por equipo
 
@@ -128,7 +129,7 @@ panel web.
 
   | Grupo | Eventos | Cuándo va |
   |---|---|---|
-  | `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria`, `telemetria_descartada`, `orden_telemetria` | Siempre; no se puede apagar |
+  | `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria`, `telemetria_descartada`, `orden_telemetria`, `cola_fallidos` | Siempre; no se puede apagar |
   | `rendimiento` | `llamada_nucleo`, `transicion_ingreso`, `pantalla` | Por defecto (sin orden) |
   | `fluidez` | `frames`, `ui_bloqueos` | Desde el panel |
   | `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | Desde el panel |
