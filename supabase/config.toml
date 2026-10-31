@@ -401,6 +401,12 @@ verify_jwt = false
 [functions.device-reconectar]
 verify_jwt = false
 
+# Receptora de telemetría: no tiene privilegios (no usa `service_role`) y
+# reenvía el token del equipo a `registrar_telemetria`, que lo verifica en la
+# base. Ver supabase/functions/observabilidad/index.ts.
+[functions.observabilidad]
+verify_jwt = false
+
 [functions.admin-list-devices]
 verify_jwt = false
 

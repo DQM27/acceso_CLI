@@ -111,8 +111,11 @@ Medido sobre el mismo lote real (200 filas del móvil), en bytes:
 
 Por eso:
 
-- Un receptor **`observabilidad`** (Edge Function, `verify_jwt = true`) con dos
-  rutas, `/telemetria` y `/errores`. Acepta `Content-Encoding: br` (y `gzip`
+- Un receptor **`observabilidad`** (Edge Function) con dos rutas,
+  `/telemetria` y `/errores`. `verify_jwt = false`, como `device-auth`: no
+  tiene privilegios y reenvía el token del equipo, que verifica la base; antes
+  de descomprimir exige `Authorization: Bearer` y lee el cuerpo con tope
+  (256 KB comprimido). Acepta `Content-Encoding: br` (y `gzip`
   como respaldo), descomprime **con tope** (1 MB descomprimido; un cuerpo que
   lo pase se corta y responde 413: nada de bombas de compresión) y llama a la
   RPC **reenviando el JWT del equipo**, no con `service_role`: la identidad y
@@ -199,8 +202,7 @@ Si un error `resuelto` vuelve a aparecer en una versión nueva, el grupo pasa a
 - Límites dentro de la función: filas por lote (500), bytes por evento
   (16 KB), lotes por minuto por equipo.
 - Los errores se limpian otra vez en el servidor (la misma `limpiar_texto` del
-  receptor actual, portada a SQL o hecha en una Edge Function con
-  `verify_jwt = true`).
+  receptor actual, portada a SQL o hecha en la receptora `observabilidad`).
 - Lectura para el panel: funciones `security definer` con
   `private.es_admin_global()`, `grant to authenticated`.
 - Batería en `supabase/tests/` (probada en staging con `rollback`):
