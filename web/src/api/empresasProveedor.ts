@@ -62,3 +62,16 @@ export async function fusionarEmpresaProveedor(
   });
   if (error) throw new Error(error.message);
 }
+
+/** Deshace la fusión de `id`: vuelve a estar vigente (por revisar) y recupera
+ * los ingresos que se registraron con ella. Migración
+ * `20261031130000_empresas_proveedor_deshacer_fusion`. */
+export async function deshacerFusionEmpresaProveedor(
+  id: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "panel_deshacer_fusion_empresa_proveedor",
+    { p_id: id },
+  );
+  if (error) throw new Error(error.message);
+}

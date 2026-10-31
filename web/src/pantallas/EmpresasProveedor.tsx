@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, CircleCheck, Merge } from "lucide-react";
+import { ArrowLeftRight, Building2, CircleCheck, Merge } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
@@ -9,6 +9,7 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
 import {
   confirmarEmpresaProveedor,
+  deshacerFusionEmpresaProveedor,
   fusionarEmpresaProveedor,
   listarEmpresasProveedor,
 } from "../api/empresasProveedor";
@@ -20,6 +21,7 @@ import {
   destinosPosibles,
   estadoRevision,
   filtrarPorRevision,
+  ladosFusion,
 } from "./EmpresasProveedor.logica";
 import type { FiltroRevision } from "./EmpresasProveedor.logica";
 
@@ -35,6 +37,9 @@ export default function EmpresasProveedor() {
   const [filtro, setFiltro] = useState<FiltroRevision>("por_revisar");
   const [busqueda, setBusqueda] = useState("");
   const [fusionando, setFusionando] = useState<EmpresaProveedorPanel | null>(
+    null,
+  );
+  const [deshaciendo, setDeshaciendo] = useState<EmpresaProveedorPanel | null>(
     null,
   );
   const [ocupada, setOcupada] = useState<string | null>(null);
@@ -151,7 +156,15 @@ export default function EmpresasProveedor() {
         filter: false,
         sortable: false,
         cellRenderer: ({ data }: { data: EmpresaProveedorPanel }) =>
-          estadoRevision(data) === "fusionada" ? null : (
+          estadoRevision(data) === "fusionada" ? (
+            <button
+              type="button"
+              className="boton boton-celda-angosto"
+              onClick={() => setDeshaciendo(data)}
+            >
+              Deshacer fusión
+            </button>
+          ) : (
             <div className="flex gap-2">
               {estadoRevision(data) === "por_revisar" && (
                 <button
@@ -213,11 +226,21 @@ export default function EmpresasProveedor() {
 
       {fusionando && (
         <ModalFusion
-          origen={fusionando}
+          fila={fusionando}
           empresas={empresas}
           onCerrar={() => setFusionando(null)}
           onFusionada={() => {
             setFusionando(null);
+            void recargar();
+          }}
+        />
+      )}
+      {deshaciendo && (
+        <ModalDeshacer
+          empresa={deshaciendo}
+          onCerrar={() => setDeshaciendo(null)}
+          onDeshecha={() => {
+            setDeshaciendo(null);
             void recargar();
           }}
         />
@@ -227,33 +250,38 @@ export default function EmpresasProveedor() {
 }
 
 function ModalFusion({
-  origen,
+  fila,
   empresas,
   onCerrar,
   onFusionada,
 }: {
-  origen: EmpresaProveedorPanel;
+  fila: EmpresaProveedorPanel;
   empresas: readonly EmpresaProveedorPanel[];
   onCerrar: () => void;
   onFusionada: () => void;
 }) {
   const [filtro, setFiltro] = useState("");
-  const [destino, setDestino] = useState<EmpresaProveedorPanel | null>(null);
+  const [elegida, setElegida] = useState<EmpresaProveedorPanel | null>(null);
+  const [invertido, setInvertido] = useState(false);
   const [fusionando, setFusionando] = useState(false);
 
   const posibles = useMemo(() => {
     const texto = plegarTexto(filtro.trim());
-    return destinosPosibles(origen, empresas).filter(
+    return destinosPosibles(fila, empresas).filter(
       ({ empresa }) => !texto || plegarTexto(empresa.nombre).includes(texto),
     );
-  }, [origen, empresas, filtro]);
+  }, [fila, empresas, filtro]);
+
+  const lados = elegida ? ladosFusion(fila, elegida, invertido) : null;
 
   async function fusionar() {
-    if (!destino) return;
+    if (!lados) return;
     setFusionando(true);
     try {
-      await fusionarEmpresaProveedor(origen.id, destino.id);
-      toast.success(`${origen.nombre} quedó fusionada en ${destino.nombre}.`);
+      await fusionarEmpresaProveedor(lados.desaparece.id, lados.queda.id);
+      toast.success(
+        `${lados.desaparece.nombre} quedó fusionada en ${lados.queda.nombre}.`,
+      );
       onFusionada();
     } catch (error) {
       toast.error(mensajeError(error));
@@ -262,12 +290,11 @@ function ModalFusion({
   }
 
   return (
-    <Modal titulo={`Fusionar «${origen.nombre}»`} onCerrar={onCerrar}>
+    <Modal titulo={`Fusionar con «${fila.nombre}»`} onCerrar={onCerrar}>
       <div className="flex flex-col gap-3">
         <p className="m-0">
-          Elija la empresa que es la misma (bien escrita). «{origen.nombre}»
-          deja de ofrecerse en la portería y sus {origen.ingresos} ingreso(s)
-          pasan a la que elija.
+          Elija la empresa que es la misma. La que desaparece deja de ofrecerse
+          en la portería y sus ingresos pasan a la que queda.
         </p>
         <div className="campo">
           <input
@@ -277,7 +304,7 @@ function ModalFusion({
           />
         </div>
         <ul
-          className="m-0 flex max-h-72 list-none flex-col gap-1 overflow-y-auto p-0"
+          className="m-0 flex max-h-60 list-none flex-col gap-1 overflow-y-auto p-0"
           aria-label="Empresas posibles"
         >
           {posibles.map(({ empresa, parecida }) => (
@@ -285,9 +312,9 @@ function ModalFusion({
               <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="radio"
-                  name="destino"
-                  checked={destino?.id === empresa.id}
-                  onChange={() => setDestino(empresa)}
+                  name="elegida"
+                  checked={elegida?.id === empresa.id}
+                  onChange={() => setElegida(empresa)}
                 />
                 <span>{empresa.nombre}</span>
                 {parecida && (
@@ -298,18 +325,50 @@ function ModalFusion({
                     Parecida
                   </span>
                 )}
-                <span className="text-[var(--muted)]">
+                <span className="text-(--muted)">
                   · {empresa.ingresos} ingreso(s)
                 </span>
               </label>
             </li>
           ))}
           {posibles.length === 0 && (
-            <li className="text-[var(--muted)]">
+            <li className="text-(--muted)">
               No hay otra empresa en esta unidad.
             </li>
           )}
         </ul>
+        {lados && (
+          <div
+            className="flex items-center gap-3 rounded-md border border-(--borde) p-3"
+            aria-label="Resultado de la fusión"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div>
+                <span className="font-semibold text-(--exito)">Queda: </span>
+                <strong>{lados.queda.nombre}</strong>
+              </div>
+              <div>
+                <span className="font-semibold text-(--error)">
+                  Desaparece:{" "}
+                </span>
+                <span className="line-through">{lados.desaparece.nombre}</span>
+                <span className="text-(--muted)">
+                  {" "}
+                  · sus {lados.desaparece.ingresos} ingreso(s) pasan a{" "}
+                  {lados.queda.nombre}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="boton"
+              onClick={() => setInvertido((valor) => !valor)}
+              title="Dar vuelta: queda la otra"
+            >
+              <ArrowLeftRight size={16} aria-hidden /> Invertir
+            </button>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" className="boton" onClick={onCerrar}>
             Cancelar
@@ -317,14 +376,71 @@ function ModalFusion({
           <button
             type="button"
             className="boton boton-primario"
-            disabled={!destino || fusionando}
+            disabled={!lados || fusionando}
             onClick={() => void fusionar()}
           >
             {fusionando
               ? "Fusionando…"
-              : destino
-                ? `Fusionar en ${destino.nombre}`
+              : lados
+                ? `Fusionar: queda ${lados.queda.nombre}`
                 : "Elija una empresa"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ModalDeshacer({
+  empresa,
+  onCerrar,
+  onDeshecha,
+}: {
+  empresa: EmpresaProveedorPanel;
+  onCerrar: () => void;
+  onDeshecha: () => void;
+}) {
+  const [deshaciendo, setDeshaciendo] = useState(false);
+  const otra = empresa.fusionada_en_nombre ?? "la otra";
+
+  async function deshacer() {
+    setDeshaciendo(true);
+    try {
+      await deshacerFusionEmpresaProveedor(empresa.id);
+      toast.success(`${empresa.nombre} vuelve a estar vigente.`);
+      onDeshecha();
+    } catch (error) {
+      toast.error(mensajeError(error));
+      setDeshaciendo(false);
+    }
+  }
+
+  return (
+    <Modal
+      titulo={`Deshacer la fusión de «${empresa.nombre}»`}
+      onCerrar={onCerrar}
+    >
+      <div className="flex flex-col gap-3">
+        <p className="m-0">
+          «{empresa.nombre}» vuelve a ofrecerse en la portería, queda por
+          revisar y recupera sus ingresos, que hoy están en «{otra}».
+        </p>
+        <p className="m-0 text-(--muted)">
+          Las fusiones hechas antes de esta opción no guardaron qué ingresos
+          eran suyos: esos se quedan en «{otra}». Si se fusionó al revés,
+          después fusione en el sentido correcto y quedan todos juntos.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="boton" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="boton boton-primario"
+            disabled={deshaciendo}
+            onClick={() => void deshacer()}
+          >
+            {deshaciendo ? "Deshaciendo…" : "Deshacer fusión"}
           </button>
         </div>
       </div>
