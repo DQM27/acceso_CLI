@@ -53,7 +53,8 @@ mostrar la notificación) se queda en Kotlin: es del sistema Android.
 
 ### 3. Actualizaciones: red en el núcleo, instalación en Kotlin
 
-Probado contra `lt.megabrisas.com` (Cloudflare) el 2026-10-31: negocia
+`lt.megabrisas.com` es un bucket **R2 de Cloudflare** (compatible con S3)
+con dominio propio. Probado el 2026-10-31: negocia
 **HTTP/2**, manda **`ETag`** (`If-None-Match` → **304 con 0 bytes** de
 cuerpo; el manifiesto entero son 289 B) y **`Accept-Ranges: bytes`**. El APK
 1.8.13 pesa **36,3 MB**.
@@ -61,10 +62,26 @@ cuerpo; el manifiesto entero son 289 B) y **`Accept-Ranges: bytes`**. El APK
 - **Manifiesto condicional:** se guarda el `ETag`; si no cambió, la nube
   responde 304 sin cuerpo y no hay nada que leer ni validar.
 - **Descarga que se retoma:** hoy un corte al 90 % borra el `.part` y empieza
-  de cero los 36 MB. Con `Range` se retoma desde lo descargado, y la huella
+  de cero los 36 MB. Con `Range` se retoma desde lo descargado (probado: 206
+  con exactamente los bytes pedidos). Se pide con **`If-Range: <ETag>`**: si el
+  archivo del servidor cambió entre el corte y el reintento, R2 manda el
+  archivo entero en vez del pedazo, y nunca se pegan dos versiones. La huella
   SHA-256 se calcula sobre el archivo completo al final (si no coincide, se
   borra y se reintenta entero: nunca se instala un APK dañado).
+- **El `ETag` no es una huella del contenido:** el del APK
+  (`"1ffaba31…-5"`) es de una subida en 5 partes al estilo S3, no un MD5 del
+  archivo. Sirve para preguntar "¿cambió?" y para `If-Range`, nunca para
+  validar: la validación es la SHA-256 del manifiesto.
 - **Misma conexión** para manifiesto y APK (mismo servidor).
+- **Caché de Cloudflare para el APK (configuración, no código):** el APK ya
+  viene con `cache-control: public, max-age=31536000, immutable` (bien: cada
+  versión tiene nombre propio), pero `cf-cache-status: DYNAMIC`: Cloudflare no
+  lo guarda en su borde y cada descarga va hasta el bucket. Una regla de
+  caché para `lt.megabrisas.com/android/*.apk` (elegible para caché) hace que
+  se sirva desde el centro de datos más cercano (Costa Rica tiene uno). El
+  manifiesto queda como está (`no-cache`): tiene que estar siempre al día, y
+  el 304 ya lo hace barato. R2 no cobra la salida de datos, así que no cambia
+  el costo, sólo la velocidad.
 - **Sólo con Wi-Fi o cargando** para la descarga automática del APK
   (propuesta; la descarga pedida a mano por el usuario va siempre).
 - La validación del manifiesto ya está en el núcleo
