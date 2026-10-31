@@ -230,10 +230,45 @@ Si un error `resuelto` vuelve a aparecer en una versión nueva, el grupo pasa a
 | 5 | Alertas | Edge Function + Resend: errores nuevos o regresiones, equipo sin conectarse, equipo nuevo en vinculación, errores reales de la cola. Los eventos se definen con el dueño. |
 | 6 | Retiro | Apagar Grafana, el receptor de staging y las tablas viejas cuando ninguna versión en uso mande allá. |
 
+## Retención y espacio (decidido 2026-10-31)
+
+Producción está en el **plan gratuito de Supabase: 500 MB** de base; si se
+pasa, la base queda en sólo lectura y los equipos no pueden registrar ni
+sincronizar. Hoy ocupa 24 MB. Lo que viaja comprimido se guarda
+descomprimido, así que la retención se calcula sobre filas en disco.
+
+| Qué | Cuánto se guarda |
+|---|---|
+| Detalle fila por fila (`eventos`, `llamadas`) | **30 días** |
+| Resumen diario por versión, equipo y operación (llamadas, errores, p50, p90, máximo, frames trabados, conflictos…) | **1 año** |
+| Errores completos | **180 días** |
+| Tope de seguridad del esquema `observabilidad` | **150 MB**: si se pasa, se borra primero el detalle más viejo y llega un correo; nunca toca datos de operación |
+
+Las regresiones se evalúan sobre el resumen diario (versión contra
+versión), así que hay un año para comparar. Los días y el tope viven en una
+sola tabla de configuración (`private.observabilidad_config`): cambiarlos es
+una migración de una línea.
+
+## Extensiones y avisos del linter
+
+- **`pg_cron`:** `create extension pg_cron with schema pg_catalog` (lo que
+  indica Supabase). No es reubicable: sus tablas viven siempre en el esquema
+  `cron`, pero al no instalarse en `public` el linter no lo marca. Las tareas
+  (purga, resumen diario, tope) son funciones en `private`, sin `execute` para
+  `authenticated` ni `anon`.
+- **`pg_net` hoy está en `public`** y es la única advertencia
+  `extension_in_public` del proyecto. No se puede mover con `alter extension
+  set schema` (no es reubicable): hay que borrarla y crearla `with schema
+  extensions`. La usa el webhook de `sync_access_policy` y la usarán las
+  alertas de la fase 5. Va en la migración de la fase 1, probada primero en
+  staging (que el webhook siga funcionando después).
+- **No sumar advertencias `security definer`:** el linter ya marca 24
+  funciones públicas `security definer` (son las RPC de los equipos, a
+  propósito). Las nuevas no se suman: en `public` queda una función
+  `security invoker` que sólo llama a la de `private` (`security definer`,
+  con todas las validaciones); `private` no está expuesta por la API.
+  Aplicar el mismo patrón a las 24 existentes queda como limpieza aparte.
+
 ## Pendiente de decidir
 
-- Días de retención: propuesta **30** para eventos y llamadas, **180** para
-  errores (pocos y valiosos para ver regresiones).
-- `pg_cron`: disponible en producción (1.6.4) pero **no instalado**; la fase 1
-  lo habilita en su migración. `pg_net` ya está instalado (0.20.4) y sirve
-  para que las alertas de la fase 5 llamen a la Edge Function de correo.
+- Nada: retención, extensiones y patrón de funciones decididos arriba.
