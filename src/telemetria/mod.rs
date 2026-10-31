@@ -9,11 +9,20 @@
 //!   nueva.
 //!
 //! - [`lote`]: el lote que viaja a la nube (formato columnar + brotli).
+//! - [`cola`]: los eventos esperando en disco, sin pérdidas ni duplicados.
+//! - [`envio`]: el envío a la receptora (HTTP/2, brotli, token del equipo).
+//! - [`disparador`]: cuándo mandar (escritorio cada 60 s, móvil "a caballo"
+//!   de otro tráfico).
 //!
 //! El guardado local de la última orden está en
 //! [`crate::database::config_telemetria`].
 
+#[cfg(feature = "nube")]
+pub mod cola;
 pub mod config;
+pub mod disparador;
+#[cfg(feature = "nube")]
+pub mod envio;
 pub mod grupos;
 #[cfg(feature = "nube")]
 pub mod lote;
