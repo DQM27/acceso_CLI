@@ -1,13 +1,14 @@
--- Errores de las apps: el "Sentry propio" (ver
--- docs/features-futuras/plan-telemetria-ajustable.md, fases 4 y 5).
+-- Errores de las apps: el registro de errores propio (ver
+-- docs/features-futuras/plan-telemetria-y-registro-de-errores.md, fase 4).
 --
 -- SÓLO para el proyecto de STAGING (sandbox). A propósito NO está en
 -- supabase/migrations/: producción no recibe esta tabla. Se aplica a mano
 -- (SQL Editor) contra staging. Es idempotente.
 --
 -- Cómo funciona: la Edge Function `receptor-errores`
--- (supabase/functions-staging/receptor-errores) recibe lo que manda el SDK de
--- Sentry, lo limpia de datos personales y lo guarda con `registrar_error_app`.
+-- (supabase/functions-staging/receptor-errores) recibe lo que manda el registro
+-- de errores de las apps (`control_acceso::errores`), lo limpia de datos
+-- personales y lo guarda con `registrar_error_app`.
 -- La app (rol `anon`) no puede leer ni escribir esta tabla.
 --
 -- Estado de un error: se cambia desde el SQL Editor, por huella:
@@ -37,8 +38,16 @@ create table if not exists public.errores_app (
     estado       text not null default 'nuevo' check (estado in ('nuevo', 'visto', 'resuelto', 'ignorado'))
 );
 
+-- Fase 4 (captura propia): de dónde salió el error, en qué pantalla estaba
+-- quien operaba y las últimas operaciones (nombre, resultado y hora; nunca
+-- datos). Nulas/vacías en lo que mandó el SDK de Sentry antes.
+alter table public.errores_app add column if not exists origen text
+    check (origen in ('panico', 'excepcion', 'anr', 'nativo', 'js', 'nucleo'));
+alter table public.errores_app add column if not exists pantalla text;
+alter table public.errores_app add column if not exists operaciones jsonb not null default '[]'::jsonb;
+
 comment on table public.errores_app is
-    'Errores de las apps recibidos por receptor-errores (sólo staging). Sin datos personales por construcción. Ver docs/features-futuras/plan-telemetria-ajustable.md.';
+    'Errores de las apps recibidos por receptor-errores (sólo staging). Sin datos personales por construcción. Ver docs/features-futuras/plan-telemetria-y-registro-de-errores.md.';
 
 create index if not exists errores_app_huella_idx on public.errores_app (huella, recibido_en desc);
 create index if not exists errores_app_recibido_idx on public.errores_app (recibido_en desc);
@@ -56,14 +65,16 @@ select
     min(recibido_en)                                         as primera_vez,
     max(recibido_en)                                         as ultima_vez,
     array_agg(distinct version_app) filter (where version_app is not null) as versiones,
-    (array_agg(estado order by recibido_en desc))[1]         as estado
+    (array_agg(estado order by recibido_en desc))[1]         as estado,
+    -- Al final: `create or replace view` sólo deja agregar columnas al final.
+    max(origen)                                              as origen
 from public.errores_app
 group by huella, plataforma;
 
 revoke all on public.errores_agrupados from anon, authenticated;
 
 -- Guarda un error ya limpio. `security definer` y sólo para el rol de servicio:
--- lo llama la Edge Function. Devuelve 'ok', 'repetido' (el SDK reintentó) o
+-- lo llama la Edge Function. Devuelve 'ok', 'repetido' (la app reintentó) o
 -- 'limite' (más de 120 errores en el último minuto: alguien está inundando).
 create or replace function public.registrar_error_app(p jsonb)
 returns text
@@ -80,7 +91,7 @@ begin
 
     insert into public.errores_app (
         ocurrido_en, event_id, plataforma, version_app, entorno, nivel, tipo,
-        huella, titulo, traza, contexto
+        huella, titulo, traza, contexto, origen, pantalla, operaciones
     ) values (
         nullif(p->>'ocurrido_en', '')::timestamptz,
         left(p->>'event_id', 64),
@@ -92,7 +103,10 @@ begin
         left(p->>'huella', 32),
         left(p->>'titulo', 300),
         coalesce(p->'traza', '[]'::jsonb),
-        coalesce(p->'contexto', '{}'::jsonb)
+        coalesce(p->'contexto', '{}'::jsonb),
+        p->>'origen',
+        left(p->>'pantalla', 60),
+        coalesce(p->'operaciones', '[]'::jsonb)
     )
     on conflict (event_id) do nothing;
 

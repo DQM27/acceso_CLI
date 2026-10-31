@@ -2,123 +2,89 @@
 //   node --test supabase/functions-staging/receptor-errores/logica.test.ts
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  calcularHuella,
-  claveDeLaPeticion,
-  claveValida,
-  extraerEvento,
-  leerEnvelope,
-  limpiarTexto,
-} from "./logica.ts";
+import { calcularHuella, claveValida, extraerReporte, limpiarRuta, limpiarTexto } from "./logica.ts";
 
-const codificar = (texto: string) => new TextEncoder().encode(texto);
-
-/** Un envelope con un solo evento, como lo arma el SDK (con `length`). */
-function envelopeDe(evento: unknown, conLargo = true): Uint8Array {
-  const cuerpo = JSON.stringify(evento);
-  const largo = conLargo ? `,"length":${codificar(cuerpo).length}` : "";
-  return codificar(
-    `{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","sent_at":"2026-10-17T05:06:36Z"}\n` +
-      `{"type":"event"${largo}}\n${cuerpo}\n`,
-  );
-}
-
-const eventoRust = {
-  event_id: "9ec79c33ec9942ab8353589fcb2e04dc",
-  timestamp: 1792213596.858,
-  level: "warning",
-  release: "control-acceso-desktop@1.8.11",
-  environment: "production",
-  server_name: "PC-DE-PRUEBA",
-  message: "sincronización automática falló: No hay una sesión activa",
-  sdk: { name: "sentry.rust", version: "0.49.0" },
-  user: { geo: { country_code: "CR", city: "San José" }, ip_address: "200.119.185.54" },
-  contexts: { os: { name: "windows", version: "10.0.26300" }, device: { arch: "x86_64" } },
-  breadcrumbs: { values: [{ message: "cédula 1-0123-0456" }] },
+/** Un reporte como lo arma `control_acceso::errores` (traza del más nuevo al más viejo). */
+const reportePanico = {
+  esquema: 1,
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  ocurrido_en: "2026-10-31T12:00:00.123Z",
+  plataforma: "escritorio",
+  version_app: "desktop-1.10.6+abc1234",
+  origen: "panico",
+  titulo: "panic: called `Option::unwrap()` on a `None` value",
+  traza: [
+    { funcion: null, archivo: "src/nube/mod.rs", linea: 120, propio: true },
+    { funcion: "control_acceso::nube::sincronizar", archivo: "./src/nube/mod.rs", linea: 118, propio: true },
+    { funcion: "tokio::runtime::task::harness::poll", archivo: null, linea: null, propio: false },
+  ],
+  pantalla: "Ingresos",
+  operaciones: [
+    { nombre: "buscar_contratista", ok: true, en: "2026-10-31T11:59:58.000Z" },
+    { nombre: "registrar ingreso 1-0123-0456", ok: false, en: "2026-10-31T11:59:59.000Z" },
+  ],
+  contexto: { os: "windows", arquitectura: "x86_64", servidor: "PC-DE-PRUEBA" },
 };
 
-const eventoAndroid = {
-  event_id: "11112222333344445555666677778888",
-  timestamp: "2026-10-17T05:06:36.000Z",
-  level: "fatal",
-  release: "com.dqm27.lattis@1.4.13+35",
-  sdk: { name: "sentry.java.android", version: "8.9.0" },
-  exception: {
-    values: [
-      {
-        type: "RejectedExecutionException",
-        value: "Task rejected, pool size = 0, completed tasks = 5",
-        stacktrace: {
-          frames: [
-            { function: "execute", module: "java.util.concurrent.ThreadPoolExecutor", in_app: false },
-            { function: "sincronizar", module: "com.brisas.controlacceso.NubeViewModel", filename: "NubeViewModel.kt", lineno: 57, in_app: true },
-          ],
-        },
-      },
-    ],
-  },
-  contexts: { device: { model: "SM-A256E", arch: "arm64-v8a" } },
+const reporteKotlin = {
+  ...reportePanico,
+  id: "11112222-3333-4444-5555-666677778888",
+  plataforma: "movil",
+  version_app: "1.8.12 (57)",
+  origen: "excepcion",
+  titulo: "java.lang.IllegalStateException: cédula 1-0123-0456 de ana@correo.com",
+  traza: [
+    { funcion: "com.brisas.controlacceso.Ingreso.guardar", archivo: "Ingreso.kt", linea: 88, propio: true },
+    { funcion: "android.os.Handler.dispatchMessage", archivo: "Handler.java", linea: 106, propio: false },
+  ],
+  contexto: { modelo: "SM-A256E", ambiente: "produccion" },
 };
 
-test("lee un envelope con length", () => {
-  const envelope = leerEnvelope(envelopeDe(eventoRust));
-  assert.ok(envelope);
-  assert.equal(envelope.items.length, 1);
-  assert.equal(envelope.items[0].cabecera.type, "event");
-});
-
-test("lee un envelope sin length (el contenido llega hasta el salto de línea)", () => {
-  const envelope = leerEnvelope(envelopeDe(eventoRust, false));
-  assert.equal(envelope?.items.length, 1);
-  assert.ok(extraerEvento(envelope!.items[0].payload));
-});
-
-test("lee varios ítems y respeta length aunque el contenido tenga saltos de línea", () => {
-  const cuerpo = '{"a":"uno\\ndos"}';
-  const crudo = codificar(
-    `{"event_id":"x"}\n{"type":"session","length":${cuerpo.length}}\n${cuerpo}\n{"type":"event"}\n{"event_id":"y"}\n`,
-  );
-  const envelope = leerEnvelope(crudo);
-  assert.equal(envelope?.items.length, 2);
-  assert.equal(envelope?.items[0].cabecera.type, "session");
-  assert.equal(envelope?.items[1].cabecera.type, "event");
-});
-
-test("rechaza lo que no es un envelope", () => {
-  assert.equal(leerEnvelope(codificar("hola")), null);
-  assert.equal(leerEnvelope(codificar("")), null);
-  assert.equal(leerEnvelope(codificar('{"event_id":"x"}\n{"type":"event","length":999}\n{}\n')), null);
-});
-
-test("un mensaje de Rust queda sin servidor, usuario ni rastro de pasos", () => {
-  const evento = extraerEvento(codificar(JSON.stringify(eventoRust)));
+test("un pánico del escritorio queda con su traza al revés, sus operaciones y sin datos de más", () => {
+  const evento = extraerReporte(reportePanico);
   assert.ok(evento);
+  assert.equal(evento.event_id, reportePanico.id);
   assert.equal(evento.plataforma, "escritorio");
-  assert.equal(evento.tipo, "mensaje");
-  assert.equal(evento.titulo, "sincronización automática falló: No hay una sesión activa");
-  assert.equal(evento.version_app, "control-acceso-desktop@1.8.11");
-  assert.deepEqual(evento.contexto, { os: "windows", os_version: "10.0.26300", arquitectura: "x86_64" });
-  const serializado = JSON.stringify(evento);
-  for (const dato of ["PC-DE-PRUEBA", "200.119.185.54", "San José", "1-0123-0456"]) {
-    assert.ok(!serializado.includes(dato), `no debe contener ${dato}`);
-  }
+  assert.equal(evento.origen, "panico");
+  assert.equal(evento.nivel, "fatal");
+  assert.equal(evento.version_app, "desktop-1.10.6+abc1234");
+  assert.equal(evento.pantalla, "Ingresos");
+  assert.equal(evento.ocurrido_en, "2026-10-31T12:00:00.123Z");
+  // Del más viejo al más nuevo: el lugar del pánico queda al final.
+  assert.deepEqual(evento.traza.at(-1), { funcion: null, archivo: "src/nube/mod.rs", linea: 120, propio: true });
+  assert.equal(evento.traza.length, 3);
+  // Una operación con datos en el nombre no pasa.
+  assert.deepEqual(evento.operaciones, [{ nombre: "buscar_contratista", ok: true, en: "2026-10-31T11:59:58.000Z" }]);
+  // Sólo las claves de contexto de la lista.
+  assert.deepEqual(evento.contexto, { os: "windows", arquitectura: "x86_64" });
 });
 
-test("una excepción de Android trae su traza y marca el código propio", () => {
-  const evento = extraerEvento(codificar(JSON.stringify(eventoAndroid)));
+test("una excepción de Kotlin limpia el título y toma el ambiente como entorno", () => {
+  const evento = extraerReporte(reporteKotlin);
   assert.ok(evento);
   assert.equal(evento.plataforma, "movil");
-  assert.equal(evento.tipo, "excepcion");
+  assert.equal(evento.titulo, "java.lang.IllegalStateException: cédula <num> de <correo>");
+  assert.equal(evento.entorno, "produccion");
   assert.equal(evento.nivel, "fatal");
-  assert.match(evento.titulo, /^RejectedExecutionException: /);
-  assert.equal(evento.traza.length, 2);
-  assert.equal(evento.traza[1].propio, true);
-  assert.equal(evento.contexto.modelo, "SM-A256E");
 });
 
-test("descarta un evento sin event_id o sin contenido", () => {
-  assert.equal(extraerEvento(codificar("{}")), null);
-  assert.equal(extraerEvento(codificar(JSON.stringify({ event_id: "a", message: "   " }))), null);
+test("un error de JavaScript o del núcleo es nivel error, no fatal", () => {
+  assert.equal(extraerReporte({ ...reportePanico, origen: "js" })?.nivel, "error");
+  assert.equal(extraerReporte({ ...reportePanico, origen: "nucleo" })?.nivel, "error");
+});
+
+test("descarta lo que no es un reporte", () => {
+  assert.equal(extraerReporte(null), null);
+  assert.equal(extraerReporte([]), null);
+  assert.equal(extraerReporte({ ...reportePanico, id: "corto" }), null);
+  assert.equal(extraerReporte({ ...reportePanico, origen: "otro" }), null);
+  assert.equal(extraerReporte({ ...reportePanico, titulo: "   " }), null);
+});
+
+test("una plataforma o versión desconocida no se guarda tal cual", () => {
+  const evento = extraerReporte({ ...reportePanico, plataforma: "ios", version_app: "<script>" });
+  assert.equal(evento?.plataforma, "otra");
+  assert.equal(evento?.version_app, null);
 });
 
 test("limpia datos personales", () => {
@@ -143,35 +109,32 @@ test("no toca lo que no es personal", () => {
   assert.equal(limpiarTexto(texto), texto);
 });
 
+test("la ruta de la traza sólo pierde el usuario", () => {
+  assert.equal(limpiarRuta("C:\\Users\\daniel\\.cargo\\x.rs"), "C:\\Users\\<usuario>\\.cargo\\x.rs");
+  const propia = "desktop/src-tauri/src/comandos/nube.rs";
+  assert.equal(limpiarRuta(propia), propia);
+  const evento = extraerReporte({
+    ...reportePanico,
+    traza: [{ funcion: "x", archivo: propia, linea: 1, propio: true }],
+  });
+  assert.equal(evento?.traza[0].archivo, propia);
+});
+
 test("la huella agrupa lo mismo aunque cambien los números", async () => {
-  const a = extraerEvento(codificar(JSON.stringify({ ...eventoAndroid, event_id: "a".repeat(32) })))!;
-  const otro = structuredClone(eventoAndroid);
-  otro.exception.values[0].value = "Task rejected, pool size = 7, completed tasks = 912";
-  const b = extraerEvento(codificar(JSON.stringify({ ...otro, event_id: "b".repeat(32) })))!;
+  const a = extraerReporte({ ...reporteKotlin, titulo: "Timeout tras 1500 ms" })!;
+  const b = extraerReporte({ ...reporteKotlin, id: "99998888-7777-6666-5555-444433332222", titulo: "Timeout tras 30 ms" })!;
   assert.equal(await calcularHuella(a), await calcularHuella(b));
 });
 
-test("la huella separa errores distintos y plataformas distintas", async () => {
-  const android = extraerEvento(codificar(JSON.stringify(eventoAndroid)))!;
-  const rust = extraerEvento(codificar(JSON.stringify(eventoRust)))!;
-  const otroMensaje = extraerEvento(
-    codificar(JSON.stringify({ ...eventoRust, message: "sincronización automática falló: otra cosa" })),
-  )!;
+test("la huella separa errores, orígenes y plataformas distintos", async () => {
   const huellas = new Set([
-    await calcularHuella(android),
-    await calcularHuella(rust),
-    await calcularHuella(otroMensaje),
+    await calcularHuella(extraerReporte(reportePanico)!),
+    await calcularHuella(extraerReporte(reporteKotlin)!),
+    await calcularHuella(extraerReporte({ ...reportePanico, origen: "nucleo" })!),
+    await calcularHuella(extraerReporte({ ...reportePanico, titulo: "panic: otra cosa" })!),
   ]);
-  assert.equal(huellas.size, 3);
-  assert.equal((await calcularHuella(rust)).length, 16);
-});
-
-test("lee la clave del DSN del encabezado o de la query", () => {
-  const url = new URL("https://x.supabase.co/functions/v1/receptor-errores/api/1/envelope/");
-  const conEncabezado = new Headers({ "x-sentry-auth": "Sentry sentry_key=abc123, sentry_version=7" });
-  assert.equal(claveDeLaPeticion(conEncabezado, url), "abc123");
-  assert.equal(claveDeLaPeticion(new Headers(), new URL(`${url}?sentry_key=zzz`)), "zzz");
-  assert.equal(claveDeLaPeticion(new Headers(), url), null);
+  assert.equal(huellas.size, 4);
+  assert.equal((await calcularHuella(extraerReporte(reportePanico)!)).length, 16);
 });
 
 test("compara la clave sin aceptar vacíos ni largos distintos", () => {
