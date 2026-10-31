@@ -6,6 +6,9 @@
   comentarios ni documentación. Para referirse al puesto de control de acceso usar
   términos como "puesto de control", "portería" o "punto de acceso".
 - Comunicarse siempre en español.
+- **Horas siempre en hora de Costa Rica** (`America/Costa_Rica`, UTC−6, sin horario de
+  verano) en reportes y conversación, nunca en UTC. En SQL: `at time zone
+  'America/Costa_Rica'`.
 - Siempre que se complete un cambio exitoso, hacer un commit bien documentado y subirlo.
 - **Todos los commits van sólo a nombre de `Daniel Quintana <daniel.bleach1@gmail.com>`**,
   como autor y como committer (`git config user.name`/`user.email` antes del primer
