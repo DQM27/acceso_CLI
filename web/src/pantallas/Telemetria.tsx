@@ -1,7 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Activity, RotateCcw, Search, TriangleAlert } from "lucide-react";
+import { CircleDashed, FlaskConical, History, Layers, MonitorSmartphone, RotateCcw, TriangleAlert } from "lucide-react";
+import type { ColDef } from "ag-grid-community";
 import Modal from "../componentes/Modal";
+import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
 import { listarDispositivosYSitios } from "../api/dispositivos";
 import type { Dispositivo, Sitio } from "../api/dispositivos";
@@ -14,15 +18,18 @@ import {
   listarOrdenesTelemetria,
 } from "../api/telemetria";
 import type { CambioOrdenTelemetria, GrupoTelemetria, OrdenTelemetria } from "../api/telemetria";
+import type { EstadoEstudio } from "./Telemetria.logica";
 import {
   DESCRIPCION_GRUPO,
   OPCIONES_VENCIMIENTO,
-  coincideBusqueda,
+  contarPorEstado,
   esLoDeSiempre,
+  estadoEstudio,
   gruposVigentes,
   ordenVencida,
   ordenarGrupos,
   textoGrupos,
+  textoVence,
   venceEnDesde,
 } from "./Telemetria.logica";
 import { mensajeError } from "../mensajeError";
@@ -56,42 +63,32 @@ function textoFecha(iso: string): string {
 
 const TEXTO_TIPO: Record<Dispositivo["tipo"], string> = { pc: "PC", mobile: "Celular", visor: "Visor" };
 
-/** Una línea por equipo: qué mide ahora y hasta cuándo. */
-function FilaEquipo({
-  equipo,
-  orden,
-  ahora,
-  onCambiar,
-}: {
+/** Una fila de la grilla: el equipo y lo que mide ahora. */
+interface FilaTelemetria {
   equipo: Dispositivo;
+  unidad: string;
   orden: OrdenTelemetria | undefined;
-  ahora: Date;
-  onCambiar: () => void;
-}) {
-  const vencida = orden !== undefined && ordenVencida(orden, ahora);
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded border border-(--borde) p-2">
-      <div className="flex min-w-0 flex-col">
-        <span className="font-medium">
-          {equipo.etiqueta} <span className="text-sm font-normal text-(--muted)">· {TEXTO_TIPO[equipo.tipo]}</span>
-        </span>
-        <span className="text-sm">{textoGrupos(gruposVigentes(orden, ahora))}</span>
-        <span className="text-sm text-(--muted)">
-          {!orden
-            ? "Sin orden: lo de siempre"
-            : vencida && orden.vence_en
-              ? `La orden venció el ${textoFecha(orden.vence_en)}: volvió a lo de siempre`
-              : orden.vence_en
-                ? `Hasta el ${textoFecha(orden.vence_en)}`
-                : "Sin vencimiento"}
-          {orden?.nota ? ` · ${orden.nota}` : ""}
-        </span>
-      </div>
-      <button type="button" className="boton" onClick={onCambiar}>
-        Cambiar
-      </button>
-    </li>
-  );
+  estado: EstadoEstudio;
+  grupos: readonly GrupoTelemetria[];
+}
+
+type FiltroEstado = "todos" | EstadoEstudio;
+
+const TEXTO_ESTADO: Record<EstadoEstudio, string> = { con_orden: "Con orden", siempre: "Lo de siempre" };
+
+function opcionesFiltro(conteo: Record<EstadoEstudio, number> | null): OpcionSegmentada<FiltroEstado>[] {
+  const total = conteo ? conteo.con_orden + conteo.siempre : undefined;
+  return [
+    { valor: "todos", Icono: Layers, titulo: "Todos los equipos", cantidad: total },
+    { valor: "con_orden", Icono: FlaskConical, titulo: "Con una orden de estudios", cantidad: conteo?.con_orden },
+    { valor: "siempre", Icono: CircleDashed, titulo: "Midiendo lo de siempre", cantidad: conteo?.siempre },
+  ];
+}
+
+/** Color del punto de la columna "Estado": la depuración cuesta, se distingue. */
+function colorEstado(fila: FilaTelemetria): string {
+  if (fila.estado === "siempre") return "var(--muted)";
+  return fila.grupos.includes("depuracion") ? "var(--advertencia)" : "var(--exito)";
 }
 
 /** Formulario de la orden de un equipo. Arranca con lo que mide hoy. */
@@ -157,14 +154,18 @@ function EditarOrden({
             Estudios (base va siempre: equipos, versiones y caídas)
           </legend>
           {GRUPOS_TELEMETRIA.map((grupo) => (
-            <label key={grupo} className="flex items-center gap-2">
+            <label key={grupo} className="flex items-start gap-2">
               <input
                 type="checkbox"
+                className="mt-1"
                 checked={marcados.has(grupo)}
                 disabled={guardando}
                 onChange={() => alternar(grupo)}
               />
-              {DESCRIPCION_GRUPO[grupo]}
+              <span className="flex flex-col">
+                <span className="font-medium">{DESCRIPCION_GRUPO[grupo].split(": ")[0]}</span>
+                <span className="text-sm text-(--muted)">{DESCRIPCION_GRUPO[grupo].split(": ")[1]}</span>
+              </span>
             </label>
           ))}
         </fieldset>
@@ -235,37 +236,71 @@ function EditarOrden({
   );
 }
 
+type Vista = "equipos" | "cambios";
+
+const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
+  { valor: "equipos", Icono: MonitorSmartphone, titulo: "Equipos: qué mide cada uno" },
+  { valor: "cambios", Icono: History, titulo: "Cambios: quién cambió qué orden y cuándo" },
+];
+
 /** Quién cambió qué y cuándo: para cruzar un cambio en los datos con la orden
  * que lo causó. */
-function HistorialCambios({ cambios, cargando }: { cambios: CambioOrdenTelemetria[] | undefined; cargando: boolean }) {
-  return (
-    <section className="tarjeta flex flex-col gap-3 p-4">
-      <h2 className="text-base font-semibold">Cambios</h2>
-      {cargando && <p className="text-sm text-(--muted)">Cargando historial…</p>}
-      {cambios?.length === 0 && <p className="text-sm text-(--muted)">Todavía no se cambió ninguna orden.</p>}
-      {cambios && cambios.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {cambios.map((cambio) => (
-            <li key={cambio.id} className="flex flex-col gap-1 rounded border border-(--borde) p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-medium">{cambio.etiqueta ?? "Equipo que ya no existe"}</span>
-                <span className="text-sm text-(--muted)">{textoFecha(cambio.cambiado_en)}</span>
-              </div>
-              <p className="text-sm">
-                {textoGrupos(cambio.grupos)} ·{" "}
-                {cambio.vence_en ? `hasta el ${textoFecha(cambio.vence_en)}` : "sin vencimiento"}
-              </p>
-              <p className="text-sm text-(--muted)">
-                Versión {cambio.version} · {cambio.cambiado_por}
-                {cambio.nota ? ` · ${cambio.nota}` : ""}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
+const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
+  {
+    colId: "cuando",
+    headerName: "Cuándo",
+    flex: 1.1,
+    minWidth: 150,
+    sort: "desc",
+    valueGetter: ({ data }) => (data ? textoFecha(data.cambiado_en) : ""),
+    comparator: (_a, _b, nodoA, nodoB) =>
+      (nodoA.data?.cambiado_en ?? "").localeCompare(nodoB.data?.cambiado_en ?? ""),
+    filter: false,
+  },
+  {
+    colId: "equipo",
+    headerName: "Equipo",
+    flex: 1.4,
+    minWidth: 170,
+    valueGetter: ({ data }) => data?.etiqueta ?? "Equipo que ya no existe",
+    cellStyle: { textAlign: "left" },
+  },
+  {
+    colId: "estudios",
+    headerName: "Estudios",
+    flex: 1.6,
+    minWidth: 200,
+    valueGetter: ({ data }) => (data ? textoGrupos(data.grupos) : ""),
+    cellStyle: { textAlign: "left" },
+  },
+  {
+    colId: "vence",
+    headerName: "Vence",
+    flex: 1.1,
+    minWidth: 150,
+    valueGetter: ({ data }) => (data?.vence_en ? textoFecha(data.vence_en) : "Sin vencimiento"),
+    comparator: (_a, _b, nodoA, nodoB) =>
+      (nodoA.data?.vence_en ?? "9999").localeCompare(nodoB.data?.vence_en ?? "9999"),
+    filter: false,
+  },
+  { colId: "version", headerName: "Versión", flex: 0.6, minWidth: 90, valueGetter: ({ data }) => data?.version },
+  {
+    colId: "quien",
+    headerName: "Quién",
+    flex: 1.3,
+    minWidth: 170,
+    valueGetter: ({ data }) => data?.cambiado_por,
+    cellStyle: { textAlign: "left" },
+  },
+  {
+    colId: "nota",
+    headerName: "Nota",
+    flex: 1.4,
+    minWidth: 160,
+    valueGetter: ({ data }) => data?.nota || "—",
+    cellStyle: { textAlign: "left" },
+  },
+];
 
 /**
  * Estudios de telemetría por equipo (fase 3 del plan de telemetría). El
@@ -286,74 +321,182 @@ export default function Telemetria() {
   const historial = useLista(["telemetria-cambios"], listarCambiosTelemetria, { intervaloMs: 60_000, tablas: "" });
   const [editando, setEditando] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [filtro, setFiltro] = useState<FiltroEstado>("todos");
+  const [vista, setVista] = useState<Vista>("equipos");
 
   const equipoEditado = datos?.equipos.find((equipo) => equipo.id === editando);
-  const visibles = useMemo(() => {
+  const filas = useMemo<FilaTelemetria[]>(() => {
     if (!datos) return [];
     const nombreSitio = new Map(datos.sitios.map((sitio) => [sitio.id, sitio.nombre]));
-    return datos.equipos.filter((equipo) =>
-      coincideBusqueda([equipo.etiqueta, nombreSitio.get(equipo.sitio_id) ?? "", TEXTO_TIPO[equipo.tipo]], busqueda),
-    );
-  }, [datos, busqueda]);
+    return datos.equipos.map((equipo) => {
+      const orden = datos.ordenes.get(equipo.id);
+      return {
+        equipo,
+        unidad: nombreSitio.get(equipo.sitio_id) ?? "—",
+        orden,
+        estado: estadoEstudio(orden, datos.cargadoEn),
+        grupos: gruposVigentes(orden, datos.cargadoEn),
+      };
+    });
+  }, [datos]);
+  const conteo = datos ? contarPorEstado(filas.map((fila) => fila.estado)) : null;
+  const filasVisibles = filtro === "todos" ? filas : filas.filter((fila) => fila.estado === filtro);
+
+  const cambiar = useCallback((fila: FilaTelemetria) => setEditando(fila.equipo.id), []);
+  const ahora = datos?.cargadoEn;
+
+  const columnas = useMemo<ColDef<FilaTelemetria>[]>(
+    () => [
+      { colId: "unidad", headerName: "Unidad", flex: 1, minWidth: 130, valueGetter: ({ data }) => data?.unidad },
+      {
+        colId: "equipo",
+        headerName: "Equipo",
+        flex: 1.6,
+        minWidth: 190,
+        valueGetter: ({ data }) => data?.equipo.etiqueta,
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        colId: "tipo",
+        headerName: "Tipo",
+        flex: 0.7,
+        minWidth: 100,
+        valueGetter: ({ data }) => (data ? TEXTO_TIPO[data.equipo.tipo] : ""),
+      },
+      {
+        colId: "estado",
+        headerName: "Estado",
+        flex: 0.9,
+        minWidth: 130,
+        valueGetter: ({ data }) => (data ? TEXTO_ESTADO[data.estado] : ""),
+        cellRenderer: ({ data }: { data: FilaTelemetria }) => (
+          <span className="chip" style={{ ["--chip-color" as string]: colorEstado(data) }}>
+            {TEXTO_ESTADO[data.estado]}
+          </span>
+        ),
+      },
+      {
+        colId: "estudios",
+        headerName: "Estudios",
+        flex: 1.6,
+        minWidth: 200,
+        valueGetter: ({ data }) => (data ? textoGrupos(data.grupos) : ""),
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        colId: "vence",
+        headerName: "Vence",
+        flex: 1.3,
+        minWidth: 170,
+        filter: false,
+        valueGetter: ({ data }) => (data && ahora ? textoVence(data.orden, ahora, textoFecha) : ""),
+        // Por el instante, no por el texto; sin vencimiento al final.
+        comparator: (_a, _b, nodoA, nodoB) => {
+          const instante = (fila: FilaTelemetria | undefined) =>
+            fila?.orden?.vence_en ?? (fila?.orden ? "9999" : "");
+          return instante(nodoA.data).localeCompare(instante(nodoB.data));
+        },
+      },
+      {
+        colId: "nota",
+        headerName: "Nota",
+        flex: 1.4,
+        minWidth: 160,
+        valueGetter: ({ data }) => (data && data.estado === "con_orden" ? data.orden?.nota || "—" : "—"),
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        colId: "acciones",
+        headerName: "Acción",
+        flex: 0.8,
+        minWidth: 110,
+        sortable: false,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaTelemetria }) => (
+          <div className="flex h-full items-center justify-center">
+            <button type="button" className="boton boton-celda" onClick={() => cambiar(data)}>
+              Cambiar
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [ahora, cambiar],
+  );
+
+  const selectorVista = (
+    <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={setVista} etiqueta="Vista" />
+  );
+  const campoBusqueda = (
+    <div className="campo flex-[0_1_16rem]">
+      <input
+        placeholder={vista === "equipos" ? "Equipo, unidad, estudio…" : "Equipo, estudio, quién, nota…"}
+        value={busqueda}
+        onChange={(evento) => setBusqueda(evento.target.value)}
+      />
+    </div>
+  );
+  const cambios = historial.datos ?? [];
 
   return (
-    <div className="flex h-full flex-col overflow-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
-        <section className="tarjeta flex flex-col gap-3 p-4">
-          <h2 className="flex items-center gap-2 text-base font-semibold">
-            <Activity size={18} aria-hidden="true" />
-            Estudios por equipo
-          </h2>
-          <p className="text-sm text-(--muted)">
-            Sin orden, cada equipo mide {textoGrupos(GRUPOS_POR_DEFECTO)}. Los errores se reportan siempre y no se
-            controlan desde acá.
-          </p>
-
-          <label className="campo">
-            <span className="sr-only">Buscar equipo</span>
-            <span className="relative flex items-center">
-              <Search size={16} className="pointer-events-none absolute left-2 text-(--muted)" aria-hidden="true" />
-              <input
-                type="search"
-                className="w-full"
-                // `.campo input` (sin capa) le gana a una clase de Tailwind.
-                style={{ paddingLeft: "2rem" }}
-                value={busqueda}
-                placeholder="Buscar por equipo, unidad o tipo"
-                onChange={(evento) => setBusqueda(evento.target.value)}
-              />
-            </span>
-          </label>
-
-          {cargando && <p className="text-sm text-(--muted)">Cargando equipos…</p>}
-
-          {datos?.sitios.map((sitio) => {
-            const delSitio = visibles.filter((equipo) => equipo.sitio_id === sitio.id);
-            if (delSitio.length === 0) return null;
-            return (
-              <div key={sitio.id} className="flex flex-col gap-2">
-                <h3 className="font-medium">{sitio.nombre}</h3>
-                <ul className="flex flex-col gap-2">
-                  {delSitio.map((equipo) => (
-                    <FilaEquipo
-                      key={equipo.id}
-                      equipo={equipo}
-                      orden={datos.ordenes.get(equipo.id)}
-                      ahora={datos.cargadoEn}
-                      onCambiar={() => setEditando(equipo.id)}
-                    />
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-          {datos?.equipos.length === 0 && <p className="text-sm text-(--muted)">No hay equipos vigentes.</p>}
-          {datos && datos.equipos.length > 0 && visibles.length === 0 && (
-            <p className="text-sm text-(--muted)">Ningún equipo coincide con la búsqueda.</p>
+    <div className="flex h-full flex-col">
+      <div className="pantalla-cuerpo min-h-0 flex-1">
+        <div className="min-h-0 flex-1">
+          {/* Cada vista con su `key`: sin ella React reusa la misma grilla y por
+              un instante pinta las filas de una con las columnas de la otra. */}
+          {vista === "equipos" ? (
+            <Tabla<FilaTelemetria>
+              key="equipos"
+              id="telemetria"
+              columnas={columnas}
+              filas={filasVisibles}
+              busqueda={busqueda}
+              filtrosPorColumna
+              idFila={(fila) => fila.equipo.id}
+              onFilaDobleClic={cambiar}
+              controles={
+                <>
+                  {selectorVista}
+                  {campoBusqueda}
+                  <SegmentadoOpciones
+                    opciones={opcionesFiltro(conteo)}
+                    valor={filtro}
+                    onCambiar={setFiltro}
+                    etiqueta="Filtrar por estado"
+                  />
+                </>
+              }
+              accionesDerecha={
+                <span
+                  className="text-sm text-(--muted)"
+                  title="Los errores se reportan siempre y no se controlan desde acá"
+                >
+                  Sin orden: {textoGrupos(GRUPOS_POR_DEFECTO)}
+                </span>
+              }
+            />
+          ) : (
+            <Tabla<CambioOrdenTelemetria>
+              key="cambios"
+              id="telemetria-cambios"
+              columnas={COLUMNAS_CAMBIOS}
+              filas={cambios}
+              busqueda={busqueda}
+              filtrosPorColumna
+              idFila={(cambio) => String(cambio.id)}
+              controles={
+                <>
+                  {selectorVista}
+                  {campoBusqueda}
+                  <span role="status">{cambios.length.toLocaleString("es-CR")} cambios</span>
+                </>
+              }
+            />
           )}
-        </section>
-
-        <HistorialCambios cambios={historial.datos} cargando={historial.cargando} />
+        </div>
+        {(vista === "equipos" ? cargando && filas.length === 0 : historial.cargando && cambios.length === 0) && (
+          <p className="text-muted">Cargando…</p>
+        )}
       </div>
 
       {datos && equipoEditado && (

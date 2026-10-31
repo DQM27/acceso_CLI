@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { GRUPOS_TELEMETRIA } from "../api/telemetria";
 import {
-  coincideBusqueda,
+  contarPorEstado,
   esLoDeSiempre,
+  estadoEstudio,
   gruposVigentes,
   ordenVencida,
   ordenarGrupos,
   textoGrupos,
+  textoVence,
   venceEnDesde,
 } from "./Telemetria.logica";
 
@@ -68,23 +70,43 @@ describe("venceEnDesde", () => {
   });
 });
 
-describe("coincideBusqueda", () => {
-  const FILA = ["APK debug placa", "Brisas - Oficinas", "Celular"];
-
-  it("sin nada tecleado coincide todo", () => {
-    expect(coincideBusqueda(FILA, "")).toBe(true);
-    expect(coincideBusqueda(FILA, "   ")).toBe(true);
+describe("estadoEstudio", () => {
+  it("sin orden, vencida o pidiendo lo de siempre es lo de siempre", () => {
+    expect(estadoEstudio(undefined, AHORA)).toBe("siempre");
+    expect(estadoEstudio({ grupos: ["fluidez"], vence_en: "2026-10-19T12:00:00Z" }, AHORA)).toBe("siempre");
+    expect(estadoEstudio({ grupos: ["rendimiento"], vence_en: null }, AHORA)).toBe("siempre");
   });
 
-  it("ignora tildes y mayúsculas, y busca en etiqueta, unidad y tipo", () => {
-    expect(coincideBusqueda(FILA, "PLÁCA")).toBe(true);
-    expect(coincideBusqueda(FILA, "oficinas")).toBe(true);
-    expect(coincideBusqueda(FILA, "celular")).toBe(true);
+  it("más o menos estudios que lo de siempre es una orden", () => {
+    expect(estadoEstudio({ grupos: ["rendimiento", "fluidez"], vence_en: null }, AHORA)).toBe("con_orden");
+    expect(estadoEstudio({ grupos: [], vence_en: "2026-10-21T12:00:00Z" }, AHORA)).toBe("con_orden");
+  });
+});
+
+describe("contarPorEstado", () => {
+  it("cuenta cada estado, con cero si no hay", () => {
+    expect(contarPorEstado(["siempre", "con_orden", "siempre"])).toEqual({ con_orden: 1, siempre: 2 });
+    expect(contarPorEstado([])).toEqual({ con_orden: 0, siempre: 0 });
+  });
+});
+
+describe("textoVence", () => {
+  const fecha = (iso: string) => `[${iso}]`;
+
+  it("sin orden vigente no hay vencimiento que mostrar", () => {
+    expect(textoVence(undefined, AHORA, fecha)).toBe("—");
+    expect(textoVence({ grupos: [], vence_en: "2026-10-20T11:00:00Z" }, AHORA, fecha)).toBe("—");
   });
 
-  it("todas las palabras tienen que aparecer", () => {
-    expect(coincideBusqueda(FILA, "brisas debug")).toBe(true);
-    expect(coincideBusqueda(FILA, "brisas emulador")).toBe(false);
+  it("una orden sin vencimiento lo dice", () => {
+    expect(textoVence({ grupos: [], vence_en: null }, AHORA, fecha)).toBe("Sin vencimiento");
+  });
+
+  it("dice cuánto falta: menos de 1 h, en horas hasta 2 días y luego en días", () => {
+    const vence = (iso: string) => textoVence({ grupos: [], vence_en: iso }, AHORA, fecha);
+    expect(vence("2026-10-20T12:30:00Z")).toBe("[2026-10-20T12:30:00Z] (en menos de 1 h)");
+    expect(vence("2026-10-21T17:00:00Z")).toBe("[2026-10-21T17:00:00Z] (en 29 h)");
+    expect(vence("2026-10-27T12:00:00Z")).toBe("[2026-10-27T12:00:00Z] (en 7 d)");
   });
 });
 

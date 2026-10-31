@@ -1,4 +1,3 @@
-import { plegarTexto } from "../api/historialFiltros";
 import { GRUPOS_POR_DEFECTO } from "../api/telemetria";
 import type { GrupoTelemetria } from "../api/telemetria";
 
@@ -52,21 +51,45 @@ export function esLoDeSiempre(grupos: readonly GrupoTelemetria[]): boolean {
   return grupos.length === GRUPOS_POR_DEFECTO.length && GRUPOS_POR_DEFECTO.every((g) => grupos.includes(g));
 }
 
+/**
+ * "con_orden": el equipo mide algo distinto de lo de siempre (más estudios, o
+ * menos). "siempre": sin orden, con la orden vencida o con una orden que pide
+ * justo lo de siempre.
+ */
+export type EstadoEstudio = "con_orden" | "siempre";
+
+export function estadoEstudio(orden: OrdenVigente | undefined, ahora: Date): EstadoEstudio {
+  return esLoDeSiempre(gruposVigentes(orden, ahora)) ? "siempre" : "con_orden";
+}
+
+/** Cuántos equipos hay en cada estado, para el filtro del panel. */
+export function contarPorEstado(estados: readonly EstadoEstudio[]): Record<EstadoEstudio, number> {
+  const conteo: Record<EstadoEstudio, number> = { con_orden: 0, siempre: 0 };
+  for (const estado of estados) conteo[estado] += 1;
+  return conteo;
+}
+
+/**
+ * Hasta cuándo rige la orden, para la columna "Vence": "—" si no hay orden
+ * vigente, "Sin vencimiento", o la fecha con lo que falta ("en 5 h", "en 3 d").
+ * `fecha` da el texto de la fecha (la hora del navegador la pone la pantalla).
+ */
+export function textoVence(
+  orden: OrdenVigente | undefined,
+  ahora: Date,
+  fecha: (iso: string) => string,
+): string {
+  if (!orden || ordenVencida(orden, ahora)) return "—";
+  if (orden.vence_en === null) return "Sin vencimiento";
+  const horas = (new Date(orden.vence_en).getTime() - ahora.getTime()) / 3_600_000;
+  const falta = horas < 1 ? "menos de 1 h" : horas < 48 ? `${Math.floor(horas)} h` : `${Math.floor(horas / 24)} d`;
+  return `${fecha(orden.vence_en)} (en ${falta})`;
+}
+
 /** Hora de vencimiento de una orden guardada ahora; `null` = sin vencimiento. */
 export function venceEnDesde(horas: number | null, ahora: Date): string | null {
   if (horas === null) return null;
   return new Date(ahora.getTime() + horas * 3_600_000).toISOString();
-}
-
-/**
- * El buscador de equipos: cada palabra tecleada tiene que aparecer en alguno
- * de los textos (etiqueta, unidad, tipo), sin importar tildes ni mayúsculas.
- * Sin nada tecleado coincide todo.
- */
-export function coincideBusqueda(textos: readonly string[], busqueda: string): boolean {
-  const palabras = plegarTexto(busqueda).split(/\s+/).filter(Boolean);
-  const donde = plegarTexto(textos.join(" "));
-  return palabras.every((palabra) => donde.includes(palabra));
 }
 
 /** Grupos en el orden fijo de la lista, sin repetidos (el panel los marca en

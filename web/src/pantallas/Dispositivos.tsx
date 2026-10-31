@@ -2,7 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
+import { MonitorSmartphone, ShieldAlert } from "lucide-react";
 import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
@@ -32,6 +35,13 @@ const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
   mobile: "Celular",
   visor: "Visor web (solo lectura)",
 };
+
+type Vista = "dispositivos" | "eventos";
+
+const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
+  { valor: "dispositivos", Icono: MonitorSmartphone, titulo: "Dispositivos" },
+  { valor: "eventos", Icono: ShieldAlert, titulo: "Intentos y alertas" },
+];
 
 interface FilaDispositivo extends Dispositivo {
   sitio_nombre: string;
@@ -79,6 +89,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const clienteConsultas = useQueryClient();
   const [codigoMostrado, setCodigoMostrado] = useState<CodigoMostrado | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [vista, setVista] = useState<Vista>("dispositivos");
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
@@ -165,6 +176,48 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     const mapa = new Map(dispositivos.map((d) => [d.id, d.etiqueta]));
     return (id: string | null) => (id ? (mapa.get(id) ?? "Dispositivo borrado") : "—");
   }, [dispositivos]);
+
+  const columnasEventos = useMemo<ColDef<EventoSeguridad>[]>(
+    () => [
+      {
+        colId: "cuando",
+        headerName: "Cuándo",
+        flex: 1,
+        minWidth: 150,
+        sort: "desc",
+        filter: false,
+        valueGetter: ({ data }) => (data ? textoFechaHora(data.ocurrido_en) : ""),
+        comparator: (_a, _b, nodoA, nodoB) =>
+          (nodoA.data?.ocurrido_en ?? "").localeCompare(nodoB.data?.ocurrido_en ?? ""),
+      },
+      {
+        colId: "que_paso",
+        headerName: "Qué pasó",
+        flex: 1.2,
+        minWidth: 170,
+        valueGetter: ({ data }) => (data ? (TEXTO_EVENTO[data.tipo] ?? data.tipo) : ""),
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        colId: "detalle",
+        headerName: "Detalle",
+        flex: 2.2,
+        minWidth: 240,
+        valueGetter: ({ data }) => (data ? detalleEvento(data.tipo, data.detalle) || "—" : ""),
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        colId: "dispositivo",
+        headerName: "Dispositivo",
+        flex: 1.2,
+        minWidth: 160,
+        valueGetter: ({ data }) => (data ? etiquetaPorDispositivo(data.dispositivo_id) : ""),
+        cellStyle: { textAlign: "left" },
+      },
+      { colId: "ip", headerName: "IP", flex: 0.9, minWidth: 130, valueGetter: ({ data }) => data?.ip ?? "—" },
+    ],
+    [etiquetaPorDispositivo],
+  );
 
   function abrirModal() {
     setModalAbierto(true);
@@ -456,57 +509,54 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     [alRetirar, alEliminar, alAutorizarReconexion],
   );
 
+  const selectorVista = (
+    <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={setVista} etiqueta="Vista" />
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="pantalla-cuerpo min-h-0 flex-1">
         <div className="min-h-0 flex-1">
-          <Tabla<FilaDispositivo>
-            id="dispositivos"
-            columnas={columnas}
-            filas={filas}
-            filtrosPorColumna
-            controles={
-              <button type="button" className="boton" onClick={abrirModal}>
-                + Nuevo
-              </button>
-            }
-          />
+          {/* Cada vista con su `key`: sin ella React reusa la misma grilla y por
+              un instante pinta las filas de una con las columnas de la otra. */}
+          {vista === "dispositivos" ? (
+            <Tabla<FilaDispositivo>
+              key="dispositivos"
+              id="dispositivos"
+              columnas={columnas}
+              filas={filas}
+              filtrosPorColumna
+              controles={
+                <>
+                  {selectorVista}
+                  <button type="button" className="boton" onClick={abrirModal}>
+                    + Nuevo
+                  </button>
+                </>
+              }
+            />
+          ) : (
+            <Tabla<EventoSeguridad>
+              key="eventos"
+              id="dispositivos-eventos"
+              columnas={columnasEventos}
+              filas={eventos}
+              filtrosPorColumna
+              idFila={(evento) => String(evento.id)}
+              controles={
+                <>
+                  {selectorVista}
+                  <span role="status">
+                    {eventos.length === 0
+                      ? "Sin intentos rechazados ni alertas recientes"
+                      : `${eventos.length.toLocaleString("es-CR")} intentos y alertas`}
+                  </span>
+                </>
+              }
+            />
+          )}
         </div>
         {cargando && filas.length === 0 && <p className="text-muted">Cargando…</p>}
-        <details className="mt-3">
-          <summary className="cursor-pointer">
-            Intentos y alertas ({eventos.length})
-          </summary>
-          {eventos.length === 0 ? (
-            <p className="text-muted">Sin intentos rechazados ni alertas recientes.</p>
-          ) : (
-            <table className="tabla-eventos">
-              <thead>
-                <tr>
-                  <th>Cuándo</th>
-                  <th>Qué pasó</th>
-                  <th>Dispositivo</th>
-                  <th>IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {eventos.map((evento) => (
-                  <tr key={evento.id}>
-                    <td>{textoFechaHora(evento.ocurrido_en)}</td>
-                    <td>
-                      {TEXTO_EVENTO[evento.tipo] ?? evento.tipo}
-                      {detalleEvento(evento.tipo, evento.detalle) && (
-                        <span style={{ color: "var(--muted)" }}> — {detalleEvento(evento.tipo, evento.detalle)}</span>
-                      )}
-                    </td>
-                    <td>{etiquetaPorDispositivo(evento.dispositivo_id)}</td>
-                    <td>{evento.ip ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </details>
       </div>
 
       {modalAbierto && (
