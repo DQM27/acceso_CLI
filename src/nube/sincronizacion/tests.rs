@@ -5871,3 +5871,61 @@ fn el_estado_de_la_bandeja_cuenta_pendientes_el_mas_viejo_y_los_fallidos() {
         EstadoBandejaSalida::default()
     );
 }
+
+/// La purga del mantenimiento borra sólo los conflictos sin cambios hace más
+/// de `DIAS_CONSERVAR_CONFLICTOS` días; los conflictos recientes, los errores
+/// reales (también los de motivo nulo) y lo pendiente o enviado se quedan.
+#[test]
+fn la_purga_borra_solo_los_conflictos_viejos() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let insertar = |uuid: &str, estado: &str, motivo: Option<&str>, hace_dias: u32| {
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                     entidad, entidad_uuid, operacion, estado, motivo_fallo,
+                     creado_en, actualizado_en
+                 )
+                 VALUES (
+                     'ingreso_proveedor', ?1, 'crear', ?2, ?3,
+                     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?4),
+                     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?4)
+                 )",
+                params![uuid, estado, motivo, format!("-{hace_dias} days")],
+            )
+            .unwrap();
+    };
+    let viejo = DIAS_CONSERVAR_CONFLICTOS + 1;
+    insertar("conflicto-viejo", "fallido", Some("conflicto"), viejo);
+    insertar("conflicto-reciente", "fallido", Some("conflicto"), 1);
+    insertar("error-viejo", "fallido", Some("error"), viejo);
+    insertar("sin-motivo-viejo", "fallido", None, viejo);
+    insertar("pendiente-viejo", "pendiente", None, viejo);
+    insertar("enviado-viejo", "enviado", None, viejo);
+
+    let borradas = purgar_conflictos_viejos(&connection, DIAS_CONSERVAR_CONFLICTOS).unwrap();
+
+    assert_eq!(borradas, 1);
+    let quedan: Vec<String> = connection
+        .prepare("SELECT entidad_uuid FROM cola_salida ORDER BY entidad_uuid")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        quedan,
+        [
+            "conflicto-reciente",
+            "enviado-viejo",
+            "error-viejo",
+            "pendiente-viejo",
+            "sin-motivo-viejo"
+        ]
+    );
+    // Una segunda pasada no encuentra nada más.
+    assert_eq!(
+        purgar_conflictos_viejos(&connection, DIAS_CONSERVAR_CONFLICTOS).unwrap(),
+        0
+    );
+}

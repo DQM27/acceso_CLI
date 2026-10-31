@@ -587,6 +587,30 @@ pub fn contar_fallos_permanentes(connection: &Connection) -> Result<i64, Sincron
     )?)
 }
 
+/// Días que se conserva una fila rechazada por conflicto antes de borrarla.
+/// Da tiempo a que salga en `cola_fallidos` (telemetría) y a mirarla.
+pub const DIAS_CONSERVAR_CONFLICTOS: u32 = 7;
+
+/// Borra de la bandeja de salida las filas rechazadas por conflicto (gafete
+/// o persona ya activos en la nube) sin cambios desde hace más de `dias`.
+/// Esas filas son terminales: nada las reintenta y el choque ya se avisó al
+/// sincronizar; sólo ensucian la cola e inflan [`crate::database::cola_salida::sin_subir`].
+/// El registro local (el ingreso) no se toca. Los errores reales
+/// (`motivo_fallo = 'error'` o nulo) se conservan: alguien tiene que mirarlos.
+/// Devuelve cuántas filas borró.
+pub fn purgar_conflictos_viejos(
+    connection: &Connection,
+    dias: u32,
+) -> Result<usize, SincronizacionError> {
+    Ok(connection.execute(
+        "DELETE FROM cola_salida
+         WHERE estado = 'fallido'
+           AND motivo_fallo = 'conflicto'
+           AND actualizado_en < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?1)",
+        params![format!("-{dias} days")],
+    )?)
+}
+
 /// Una fila fallida de la cola, sólo con datos técnicos: sirve para estudiar
 /// desde la nube qué falló sin acceso al equipo. Nunca lleva el cuerpo de la
 /// respuesta (puede traer cédulas o nombres): de él sólo sale el código de

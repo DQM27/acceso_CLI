@@ -115,9 +115,18 @@ fn exigir_base_vigente(conexion: &Connection) -> Result<(), SincronizacionError>
 
 /// Mantenimiento al final de cada sincronización COMPLETA (el pulso y el
 /// botón; no cada aviso en vivo): retención del historial
-/// (sólo quien lo guarda, ver `retencion`) y `PRAGMA optimize`. Mejor
+/// (sólo quien lo guarda, ver `retencion`), conflictos viejos de la bandeja
+/// de salida (`purgar_conflictos_viejos`) y `PRAGMA optimize`. Mejor
 /// esfuerzo: si falla, la sincronización ya anduvo y no se tumba por esto.
 fn mantener_base_local(conexion: &Connection, perfil: PerfilDispositivo) {
+    match sincronizacion::purgar_conflictos_viejos(
+        conexion,
+        sincronizacion::DIAS_CONSERVAR_CONFLICTOS,
+    ) {
+        Ok(0) => {}
+        Ok(borradas) => log::info!("cola_salida: {borradas} conflictos viejos borrados"),
+        Err(error) => log::warn!("purga de conflictos de la cola: {error}"),
+    }
     if perfil.guarda_historiales() {
         let limite =
             retencion::limite_retencion(chrono::Utc::now(), retencion::MESES_HISTORIAL_ESCRITORIO);
