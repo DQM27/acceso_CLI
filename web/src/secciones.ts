@@ -7,6 +7,7 @@ export type Seccion =
   | "usuarios"
   | "sesiones"
   | "avisos"
+  | "telemetria"
   | "asistente"
   | "ayuda";
 

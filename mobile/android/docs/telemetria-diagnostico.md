@@ -2,31 +2,44 @@
 
 El teléfono de la portería (Samsung A25) tiene bloqueada la depuración USB,
 así que `adb logcat` y el profiler de Android Studio no están disponibles.
-Para medir cómo trabaja la app en el equipo real, el build `diagnostico`
-manda métricas técnicas a la tabla `telemetria_diagnostico` del proyecto de
-Supabase **staging**.
+Para medir cómo trabaja la app en el equipo real, la app manda métricas
+técnicas a la tabla `telemetria_diagnostico` del proyecto de Supabase
+**staging**.
 
 El escritorio manda a la misma tabla, con los mismos nombres de evento y de
 campo (`version_app` empieza con `desktop-`): ver
 `desktop/docs/telemetria-diagnostico.md`.
 
-## Qué build la tiene
+## Qué se mide
 
-| Build        | Paquete                    | Base      | Telemetría | Compilación                          |
-|--------------|----------------------------|-----------|------------|--------------------------------------|
-| `release`    | `com.dqm27.lattis`         | producción| no         | R8, llave real                       |
-| `debug`      | `com.dqm27.lattis.debug`   | staging   | no         | sin optimizar, depurable             |
-| `diagnostico`| `com.dqm27.lattis.diag`    | staging   | **sí**     | R8 como release, llave de debug, `profileable` |
+Un solo código para todos los builds, sin flags ni variantes (ya no existen
+`BuildConfig.TELEMETRIA`, `TELEMETRIA_LIGERA`, `-PtelemetriaEnProduccion` ni el
+build `diagnostico`). Cada tipo de evento pertenece a un grupo y sólo se mide
+si la orden vigente de este teléfono lo permite:
 
-`diagnostico` se compila igual que release porque un build de debug corre
-sin optimizaciones y daría tiempos peores que los reales. Los tres paquetes
-conviven en el mismo teléfono sin pisarse.
+- `base` (arranque, salidas anteriores, errores) va **siempre**;
+- `rendimiento` (`llamada_nucleo`, `transicion_ingreso`, `pantalla`) va **por
+  defecto**;
+- `fluidez`, `sincronizacion`, `recursos`, `escaneo` y `depuracion` los enciende
+  el administrador **por equipo** desde el panel, con vencimiento.
 
-Compilar: `./gradlew assembleDiagnostico`, o desde GitHub con el workflow
-manual **Build de prueba (mobile)** eligiendo la variante `diagnostico`.
+El catálogo evento -> grupo está en el núcleo
+(`control_acceso::telemetria::CATALOGO`, expuesto como `telemetriaCatalogo()`)
+y es el mismo del escritorio. Los grupos que rigen ahora salen de
+`Nucleo.telemetriaGruposVigentes()`, que sólo lee la copia en memoria; la app
+los vuelve a leer en cada muestra (30 s, así un vencimiento se nota solo), al
+llegar una orden y tras cada sincronización. La orden viaja panel → nube →
+teléfono (aviso en vivo `telemetria_config` o sincronización) y el núcleo la
+guarda: al abrir la app rige aunque no haya red.
 
-Con `BuildConfig.TELEMETRIA = false` (release y debug) no se inicializa
-nada: cada punto de medición es un chequeo de un booleano.
+- `depuracion` activa StrictMode y el vigilante de fugas, que cuestan: sólo por
+  poco tiempo. StrictMode, una vez activado, queda hasta reiniciar la app; lo
+  que detecta sólo se anota mientras rija el grupo.
+- Hasta que el núcleo abre rige el estado por defecto, y hasta que llega el
+  catálogo (unos milisegundos después de `Telemetria.iniciar`) no se mide
+  nada.
+- Los builds de prueba (`debug`, staging) y el de producción (`release`) miden
+  igual: lo que cambia es el ambiente (`ambiente` en `sesion_inicio`).
 
 ## Privacidad
 
@@ -51,6 +64,7 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `reloj`           | después de cada sincronización        | reloj confiable (hora del servidor + contador de arranque): `confiable`, `margen_ms`, `diferencia_equipo_ms` (reloj del teléfono menos la hora que usa la app; un salto grande sin conexión = alguien movió la hora) y `ancla_hace_ms` |
 | `sesion_unidad`   | en cada sincronización con sesión     | qué respondió la nube a la sesión única (`vigente`, `desplazada`, `sin_usuario` o `error`) y `transcurrido_ms` desde el ingreso; sin cédula ni nombre |
 | `arranque`        | primer frame dibujado                 | `ms_desde_creacion_actividad` (siempre); `en_frio` y, sólo en frío, `ms_desde_inicio_proceso` (si el proceso ya vivía -- lo despertó un push -- contaba las horas en segundo plano); `primero_de_la_version` (primer arranque tras instalar una versión, el más lento); estado del Baseline Profile (`perfil_compilado`, `perfil_en_cola`, `perfil_codigo`); en Android 15+ tipo y motivo del arranque (frío, tibio, caliente) |
+| `orden_telemetria` | al abrir el núcleo y cada vez que cambia la orden | confirmación de que la orden del panel llegó: `version` (`0` = sin orden) y `grupos` vigentes; grupo `base` |
 | `salida_anterior` | al arrancar, una vez por salida       | por qué murió el proceso antes (ANR, memoria, crash nativo/Java, usuario), PSS/RSS |
 | `pantalla`        | al entrar a cada pantalla             | ms hasta su primer frame |
 | `muestra_sistema` | cada 30 s en primer plano             | heap Java y nativo, PSS por tipo (Java, nativo, gráficos, código), memoria libre del sistema, hilos, descriptores abiertos, CPU (% de un núcleo y del total), red rx/tx, batería (%, corriente, temperatura, carga, ahorro), estado y margen térmico, pantalla visible |

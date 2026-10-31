@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 62;
+pub const SCHEMA_VERSION: i64 = 63;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -468,6 +468,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 61 {
         aplicar_migracion_62(connection)?;
         *version = 62;
+    }
+
+    if *version == 62 {
+        aplicar_migracion_63(connection)?;
+        *version = 63;
     }
 
     Ok(())
@@ -1075,6 +1080,15 @@ fn aplicar_migracion_62(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_62)?;
     transaction.execute_batch("PRAGMA user_version = 62")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Orden de telemetría de este equipo (`config_telemetria`, una sola fila).
+fn aplicar_migracion_63(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_63)?;
+    transaction.execute_batch("PRAGMA user_version = 63")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1759,3 +1773,4 @@ const MIGRACION_59: &str = include_str!("migraciones/migracion_59.sql");
 const MIGRACION_60: &str = include_str!("migraciones/migracion_60.sql");
 const MIGRACION_61: &str = include_str!("migraciones/migracion_61.sql");
 const MIGRACION_62: &str = include_str!("migraciones/migracion_62.sql");
+const MIGRACION_63: &str = include_str!("migraciones/migracion_63.sql");

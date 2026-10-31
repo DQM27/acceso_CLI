@@ -721,6 +721,8 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_control_acceso_mobile_checksum_func_telemetria_catalogo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_aviso_de_mensaje(
@@ -839,6 +841,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_orden_telemetria(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_bandeja_salida(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_correo_remoto(
@@ -892,6 +896,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_estado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial(
     ): Int
@@ -1072,6 +1078,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_orden_telemetria(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_bandeja_salida(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_correo_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1125,6 +1133,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios(`ptr`: Long,`tablas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_estado(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_vincular_dispositivo_inicial(`ptr`: Long,`codigo`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1244,6 +1254,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_reiniciar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_func_telemetria_catalogo(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_evaluar_manifiesto_actualizacion(`json`: RustBuffer.ByValue,`urlManifiesto`: RustBuffer.ByValue,`versionCodeInstalada`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_aviso_de_mensaje(`datos`: RustBuffer.ByValue,`tituloNotificacion`: RustBuffer.ByValue,`cuerpoNotificacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1435,6 +1447,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_telemetria_catalogo() and 0xFFFF) != 41630) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion() and 0xFFFF) != 54613) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1612,6 +1627,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube() and 0xFFFF) != 17317) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_orden_telemetria() and 0xFFFF) != 16781) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_bandeja_salida() and 0xFFFF) != 8427) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1691,6 +1709,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() and 0xFFFF) != 31261) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_telemetria_estado() and 0xFFFF) != 62463) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial() and 0xFFFF) != 3515) {
@@ -3891,6 +3912,18 @@ public interface NucleoInterface {
     fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean
     
     /**
+     * Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+     * la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+     * en la base local y la aplica a la copia en memoria, sólo si es para el
+     * dispositivo al que está vinculada la clave de este teléfono y más nueva
+     * que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+     * `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+     * es más nueva o el teléfono no está vinculado. Sobre la conexión
+     * secundaria: nunca toma el candado del núcleo.
+     */
+    fun `aplicarOrdenTelemetria`(`avisoJson`: kotlin.String): kotlin.Boolean
+    
+    /**
      * `None` si no hay nada de este teléfono pendiente de subir (o lo
      * pendiente está subiendo ahora mismo). Lectura local, sin red y sin
      * el candado del núcleo. Mismo aviso que la barra de estado del
@@ -4097,6 +4130,15 @@ public interface NucleoInterface {
      * Sincronización completa, autenticada con la clave del teléfono.
      */
     fun `sincronizarConNube`(): ResumenSincronizacion
+    
+    /**
+     * Qué rige de telemetría ahora en este teléfono: la versión de la orden
+     * aplicada y los grupos (`base` siempre; los demás según la orden del
+     * panel, que vuelve a `rendimiento` al vencer). Sólo lee la copia en
+     * memoria (sin tocar la base ni el candado del núcleo), así que Kotlin
+     * puede pedirla seguido.
+     */
+    fun `telemetriaEstado`(): EstadoTelemetria
     
     /**
      * Activación inicial de una base vacía: canjea el código de vinculación
@@ -4937,6 +4979,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+     * la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+     * en la base local y la aplica a la copia en memoria, sólo si es para el
+     * dispositivo al que está vinculada la clave de este teléfono y más nueva
+     * que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+     * `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+     * es más nueva o el teléfono no está vinculado. Sobre la conexión
+     * secundaria: nunca toma el candado del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `aplicarOrdenTelemetria`(`avisoJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_orden_telemetria(
+        it,
+        
+        FfiConverterString.lower(`avisoJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * `None` si no hay nada de este teléfono pendiente de subir (o lo
      * pendiente está subiendo ahora mismo). Lectura local, sin red y sin
      * el candado del núcleo. Mismo aviso que la barra de estado del
@@ -5456,6 +5523,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Qué rige de telemetría ahora en este teléfono: la versión de la orden
+     * aplicada y los grupos (`base` siempre; los demás según la orden del
+     * panel, que vuelve a `rendimiento` al vencer). Sólo lee la copia en
+     * memoria (sin tocar la base ni el candado del núcleo), así que Kotlin
+     * puede pedirla seguido.
+     */override fun `telemetriaEstado`(): EstadoTelemetria {
+            return FfiConverterTypeEstadoTelemetria.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_telemetria_estado(
         it,
         _status)
 }
@@ -7652,6 +7739,50 @@ public object FfiConverterTypeEstadoReloj: FfiConverterRustBuffer<EstadoReloj> {
             FfiConverterOptionalULong.write(value.`margenMs`, buf)
             FfiConverterLong.write(value.`diferenciaEquipoMs`, buf)
             FfiConverterOptionalULong.write(value.`anclaHaceMs`, buf)
+    }
+}
+
+
+
+/**
+ * Qué rige de telemetría en este teléfono: la versión de la orden aplicada
+ * (`0` = ninguna, el equipo mide lo de siempre) y los grupos vigentes (`base`
+ * incluido). El teléfono informa la versión en el evento `orden_telemetria`
+ * para que el panel confirme que la orden llegó.
+ */
+data class EstadoTelemetria (
+    var `version`: kotlin.Long
+    , 
+    var `grupos`: List<kotlin.String>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstadoTelemetria: FfiConverterRustBuffer<EstadoTelemetria> {
+    override fun read(buf: ByteBuffer): EstadoTelemetria {
+        return EstadoTelemetria(
+            FfiConverterLong.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EstadoTelemetria) = (
+            FfiConverterLong.allocationSize(value.`version`) +
+            FfiConverterSequenceString.allocationSize(value.`grupos`)
+    )
+
+    override fun write(value: EstadoTelemetria, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`version`, buf)
+            FfiConverterSequenceString.write(value.`grupos`, buf)
     }
 }
 
@@ -14170,6 +14301,22 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
         }
     }
 }
+        /**
+         * El grupo de telemetría de cada tipo de evento (`tipo` -> nombre del grupo),
+         * el mismo catálogo del escritorio: una sola definición en
+         * `control_acceso::telemetria`. Kotlin lo pide una vez y decide con él si un
+         * evento se mide (ver `Nucleo::telemetria_grupos_vigentes`).
+         */ fun `telemetriaCatalogo`(): Map<kotlin.String, kotlin.String> {
+            return FfiConverterMapStringString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_telemetria_catalogo(
+    
+        _status)
+}
+    )
+    }
+    
+
         /**
          * Valida el manifiesto descargado de `url_manifiesto` y lo compara con el
          * `versionCode` instalado.

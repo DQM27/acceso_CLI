@@ -6,7 +6,7 @@ const registrarLlamada = vi.fn();
 let activa = false;
 vi.mock("../telemetria", () => ({
   registrarLlamada,
-  telemetriaActiva: () => activa,
+  mide: () => activa,
 }));
 
 const { invoke } = await import("./invocar");

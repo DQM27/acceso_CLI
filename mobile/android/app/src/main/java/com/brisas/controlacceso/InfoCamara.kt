@@ -54,7 +54,7 @@ fun reportarCamaraInfo(
     preview: Preview,
     lifecycleOwner: LifecycleOwner,
 ) {
-    if (!Telemetria.activa) return
+    if (!Telemetria.permite("camara_info")) return
     val estado = camara.cameraInfo.cameraState
     var reportado = false
     lateinit var observador: Observer<CameraState>

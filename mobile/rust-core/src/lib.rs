@@ -71,10 +71,10 @@ use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, inter
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     AvisoAcceso, AvisoBandejaSalida, ContratistaResumen, DatosContratista, Empresa,
-    EmpresaProveedor, EncargadoRuta, EstadoReloj, FalloBandejaSalida, IdentidadEquipo,
-    IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
-    ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
-    PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
+    EmpresaProveedor, EncargadoRuta, EstadoReloj, EstadoTelemetria, FalloBandejaSalida,
+    IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
+    IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
+    PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
     ResultadoIngresoRegistrado, ResultadoReconexion, ResultadoRegistroEntrada,
     ResultadoRegistroSalidaRuta, ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta,
@@ -177,6 +177,18 @@ fn borrar_archivo_y_sidecars(ruta_base_datos: &str) {
         ruta_sidecar.push(sufijo);
         let _ = std::fs::remove_file(std::path::Path::new(&ruta_sidecar));
     }
+}
+
+/// El grupo de telemetría de cada tipo de evento (`tipo` -> nombre del grupo),
+/// el mismo catálogo del escritorio: una sola definición en
+/// `control_acceso::telemetria`. Kotlin lo pide una vez y decide con él si un
+/// evento se mide (ver `Nucleo::telemetria_grupos_vigentes`).
+#[uniffi::export]
+pub fn telemetria_catalogo() -> std::collections::HashMap<String, String> {
+    control_acceso::telemetria::CATALOGO
+        .iter()
+        .map(|(tipo, grupo)| ((*tipo).to_owned(), grupo.nombre().to_owned()))
+        .collect()
 }
 
 #[uniffi::export]

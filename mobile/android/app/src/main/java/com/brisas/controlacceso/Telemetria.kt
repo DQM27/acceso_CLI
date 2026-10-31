@@ -23,6 +23,9 @@ import android.os.SystemClock
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.profileinstaller.ProfileVerifier
+import uniffi.control_acceso_mobile.EstadoTelemetria
+import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.telemetriaCatalogo
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -32,11 +35,17 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-/// Telemetría de rendimiento para DIAGNÓSTICO (sólo el build
-/// `diagnostico`, ver app/build.gradle.kts): arranque, pantallas, frames
-/// trabados, memoria, posibles fugas, procesador, batería y temperatura,
-/// red, duración de las llamadas al núcleo Rust, por qué murió el proceso
-/// la vez anterior, violaciones de StrictMode y sesiones de escaneo OCR.
+/// Telemetría de rendimiento: arranque, pantallas, frames trabados, memoria,
+/// posibles fugas, procesador, batería y temperatura, red, duración de las
+/// llamadas al núcleo Rust, por qué murió el proceso la vez anterior,
+/// violaciones de StrictMode y sesiones de escaneo OCR.
+///
+/// Un solo código para todos los builds, sin flags: cada tipo de evento
+/// pertenece a un grupo (el catálogo vive en el núcleo, `telemetriaCatalogo`) y
+/// sólo se mide si la orden vigente de este teléfono lo permite
+/// (`Nucleo.telemetriaGruposVigentes`). `base` va siempre, `rendimiento` por
+/// defecto y el resto lo enciende el panel, con vencimiento (ver
+/// `docs/features-futuras/plan-telemetria-y-registro-de-errores.md`).
 ///
 /// Todo va a la tabla `telemetria_diagnostico` del SANDBOX (staging, ver
 /// `supabase/scripts/telemetria_diagnostico_staging.sql`), en lotes cada
@@ -44,8 +53,10 @@ import java.util.concurrent.TimeUnit
 /// guarda en un archivo y se reintenta. Sólo números y nombres técnicos:
 /// nunca texto leído, cédulas, nombres ni imágenes.
 ///
-/// Con `BuildConfig.TELEMETRIA = false` (release y debug) nada de esto se
-/// inicializa y cada punto de medición es un chequeo de un booleano.
+/// Lo que un grupo apagado cuesta en cada punto de medición es un chequeo de
+/// un conjunto. Hasta que el núcleo está abierto rige el estado por defecto
+/// (`base` y `rendimiento`) y, hasta que llega el catálogo (unos milisegundos
+/// tras `iniciar`, en el hilo de telemetría), no se mide nada.
 object Telemetria {
     @Volatile
     var activa: Boolean = false
@@ -53,11 +64,63 @@ object Telemetria {
 
     private var motor: MotorTelemetria? = null
 
+    /// Los grupos que rigen ahora (nombres), `base` incluido. Antes de abrir el
+    /// núcleo, el estado de un teléfono sin orden.
+    @Volatile
+    private var grupos: Set<String> = setOf("base", "rendimiento")
+
+    /// Tipo de evento -> grupo, del núcleo. Vacío hasta que `cargarCatalogo`
+    /// corre.
+    @Volatile
+    private var catalogo: Map<String, String> = emptyMap()
+
+    @Volatile
+    private var fuenteGrupos: (() -> EstadoTelemetria)? = null
+
+    /// La versión de la orden que ya se informó en `orden_telemetria` (`-1` =
+    /// ninguna todavía).
+    private var versionInformada = -1L
+
     fun iniciar(app: Application) {
-        if (!BuildConfig.TELEMETRIA || activa) return
+        if (activa) return
         motor = MotorTelemetria(app).also { it.arrancar() }
         activa = true
     }
+
+    /// Carga el catálogo de eventos del núcleo (una sola vez). Fuera del hilo
+    /// de la pantalla: la primera llamada carga la librería nativa. Si falla,
+    /// no se mide nada: medir nunca puede tirar la app.
+    internal fun cargarCatalogo() {
+        catalogo = runCatching { telemetriaCatalogo() }.getOrDefault(emptyMap())
+    }
+
+    /// El núcleo ya está abierto: de acá en más los grupos que rigen son los de
+    /// su orden vigente.
+    fun usarNucleo(nucleo: Nucleo) {
+        fuenteGrupos = { nucleo.telemetriaEstado() }
+        refrescarGrupos()
+    }
+
+    /// Vuelve a leer qué grupos rigen. Se llama al llegar una orden, tras cada
+    /// sincronización y en cada muestra (así un vencimiento se nota solo).
+    /// Barato: el núcleo sólo lee su copia en memoria. Nunca lanza. Informa la
+    /// versión de la orden la primera vez y cada vez que cambia, para que el
+    /// panel confirme que la orden llegó.
+    @Synchronized
+    fun refrescarGrupos() {
+        val fuente = fuenteGrupos ?: return
+        val estado = runCatching { fuente() }.getOrNull() ?: return
+        grupos = estado.grupos.toSet()
+        if (estado.version != versionInformada) {
+            versionInformada = estado.version
+            evento("orden_telemetria", mapOf("version" to estado.version, "grupos" to estado.grupos))
+        }
+        motor?.gruposCambiaron()
+    }
+
+    /// ¿Se mide este tipo de evento ahora? Un tipo fuera del catálogo no se
+    /// mide.
+    fun permite(tipo: String): Boolean = catalogo[tipo]?.let { it in grupos } == true
 
     /// Hora con que se sellan los eventos: la del reloj confiable del núcleo
     /// (la misma de los registros), una vez abierto. Antes, la del teléfono.
@@ -72,7 +135,7 @@ object Telemetria {
         horaConfiableMs?.let { hora -> runCatching { Instant.ofEpochMilli(hora()) }.getOrNull() } ?: Instant.now()
 
     fun evento(tipo: String, datos: Map<String, Any?> = emptyMap()) {
-        motor?.encolar(tipo, datos)
+        if (permite(tipo)) motor?.encolar(tipo, datos)
     }
 
     fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean, tipoError: String? = null) {
@@ -95,8 +158,8 @@ object Telemetria {
         motor?.enPrimerPlano(visible)
     }
 
-    /// Métricas de Realtime (`null` con la telemetría apagada).
-    val realtime: AgregadorRealtime? get() = motor?.realtime
+    /// Métricas de Realtime (`null` si no rige `sincronizacion`).
+    val realtime: AgregadorRealtime? get() = if (permite("realtime")) motor?.realtime else null
 
     fun pantallaActual(): String = motor?.pantallas?.actual() ?: PilaPantallas.SIN_PANTALLA
 
@@ -117,18 +180,18 @@ object Telemetria {
     /// `objeto` ya debería poder liberarse (su dueño lo soltó): si sigue
     /// vivo en unos segundos, se informa como posible fuga.
     fun vigilarRetencion(objeto: Any, descripcion: String) {
-        // En modo ligero (producción medida) no se vigila: el vigilante fuerza
-        // una recolección de basura para comprobar la fuga, y eso mismo puede
-        // causar un tirón en la app que se está midiendo.
-        if (BuildConfig.TELEMETRIA_LIGERA) return
+        // Sólo con `depuracion`: el vigilante fuerza una recolección de basura
+        // para comprobar la fuga, y eso mismo puede causar un tirón en la app
+        // que se está midiendo.
+        if (!permite("retencion")) return
         motor?.vigilante?.vigilar(objeto, descripcion)
     }
 }
 
-/// Mide una llamada al núcleo Rust y la suma a la telemetría. Con la
-/// telemetría apagada es sólo la llamada.
+/// Mide una llamada al núcleo Rust y la suma a la telemetría. Sin el grupo
+/// `rendimiento` es sólo la llamada.
 inline fun <T> medirNucleo(nombre: String, bloque: () -> T): T {
-    if (!Telemetria.activa) return bloque()
+    if (!Telemetria.permite("llamada_nucleo")) return bloque()
     val inicio = System.nanoTime()
     var ok = false
     var tipoError: String? = null
@@ -175,11 +238,13 @@ private class MotorTelemetria(private val app: Application) {
 
     fun arrancar() {
         cargarPendientes()
-        encolar("sesion_inicio", datosDispositivo())
-        ejecutor.execute { informarSalidasAnteriores() }
-        // StrictMode vigila disco y red en el hilo de la pantalla: es una
-        // herramienta de depuración que cuesta; en modo ligero se omite.
-        if (!BuildConfig.TELEMETRIA_LIGERA) activarStrictMode()
+        // El catálogo antes que los primeros eventos: sin él no se sabe a qué
+        // grupo pertenecen.
+        ejecutor.execute {
+            Telemetria.cargarCatalogo()
+            encolar("sesion_inicio", datosDispositivo())
+            informarSalidasAnteriores()
+        }
         app.registerComponentCallbacks(object : ComponentCallbacks2 {
             override fun onTrimMemory(nivel: Int) {
                 encolar("memoria_baja", mapOf("nivel" to nivel, "pantalla" to pantallas.actual()))
@@ -195,7 +260,9 @@ private class MotorTelemetria(private val app: Application) {
         ejecutor.scheduleWithFixedDelay(::enviar, SEGUNDOS_ENVIO, SEGUNDOS_ENVIO, TimeUnit.SECONDS)
     }
 
+    /// Sin el grupo del evento, no se encola.
     fun encolar(tipo: String, datos: Map<String, Any?>) {
+        if (!Telemetria.permite(tipo)) return
         cola.agregar(
             aJson(
                 mapOf(
@@ -308,6 +375,7 @@ private class MotorTelemetria(private val app: Application) {
         frames = agregador
         val hilo = hiloFrames ?: HandlerThread("telemetria-frames").also { it.start(); hiloFrames = it }
         ventana.addOnFrameMetricsAvailableListener({ _, metricas, _ ->
+            if (!Telemetria.permite("frames")) return@addOnFrameMetricsAvailableListener
             agregador.registrar(
                 pantallas.actual(),
                 duracionNanos = metricas.getMetric(FrameMetrics.TOTAL_DURATION),
@@ -323,12 +391,26 @@ private class MotorTelemetria(private val app: Application) {
         }, Handler(hilo.looper))
     }
 
+    /// StrictMode vigila disco y red en el hilo de la pantalla: es una
+    /// herramienta de depuración que cuesta, sólo con `depuracion`. Se activa
+    /// en el hilo principal (la política es del hilo que la fija) y queda hasta
+    /// que se reinicie la app: lo que detecte sólo se anota mientras rija el
+    /// grupo.
+    fun gruposCambiaron() {
+        if (strictModeActivo || !Telemetria.permite("strictmode")) return
+        strictModeActivo = true
+        Handler(android.os.Looper.getMainLooper()).post { activarStrictMode() }
+    }
+
+    @Volatile private var strictModeActivo = false
+
     private fun muestrear() {
         try {
+            Telemetria.refrescarGrupos()
             val vigiladosRetenidos = vigilante.revisar()
             vigiladosRetenidos.forEach { encolar("retencion", it) }
             if (!visible) return
-            encolar("muestra_sistema", muestraSistema())
+            if (Telemetria.permite("muestra_sistema")) encolar("muestra_sistema", muestraSistema())
             volcarAgregados()
         } catch (e: RuntimeException) {
             encolar("error_telemetria", mapOf("donde" to "muestrear", "error" to e.javaClass.simpleName))
@@ -444,11 +526,9 @@ private class MotorTelemetria(private val app: Application) {
             "ram_total_mb" to mb(sistema.totalMem),
             "clase_memoria_mb" to activityManager.memoryClass,
             "build" to BuildConfig.BUILD_TYPE,
-            // Con qué ambiente y en qué modo corre esta instalación: separa en los
-            // datos la app de pruebas (`diagnostico`, staging, completa) de la de
-            // producción medida (`release`, producción, ligera).
+            // Con qué ambiente corre esta instalación: separa en los datos la app
+            // de pruebas (`debug`, staging) de la de producción (`release`).
             "ambiente" to if (BuildConfig.AMBIENTE_STAGING) "staging" else "produccion",
-            "telemetria_ligera" to BuildConfig.TELEMETRIA_LIGERA,
         )
     }
 

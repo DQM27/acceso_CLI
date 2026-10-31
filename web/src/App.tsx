@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { Toaster } from "sonner";
 import {
+  Activity,
   BellRing,
   Building2,
   History,
@@ -41,6 +42,7 @@ const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
 const Asistente = lazy(() => import("./pantallas/Asistente"));
 const Ayuda = lazy(() => import("./pantallas/Ayuda"));
+const Telemetria = lazy(() => import("./pantallas/Telemetria"));
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
@@ -72,6 +74,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
   { id: "avisos", etiqueta: "Avisos", Icono: BellRing },
+  { id: "telemetria", etiqueta: "Telemetría", Icono: Activity },
   { id: "asistente", etiqueta: "Asistente", Icono: Sparkles },
   // El manual de uso de las tres apps (`docs/manual/`).
   { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
@@ -364,6 +367,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Sesiones />
                   ) : id === "avisos" ? (
                     <Avisos />
+                  ) : id === "telemetria" ? (
+                    <Telemetria />
                   ) : id === "asistente" ? (
                     <Asistente />
                   ) : id === "ayuda" ? (

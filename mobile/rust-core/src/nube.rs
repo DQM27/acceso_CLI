@@ -311,6 +311,49 @@ impl Nucleo {
         })
     }
 
+    /// Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+    /// la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+    /// en la base local y la aplica a la copia en memoria, sólo si es para el
+    /// dispositivo al que está vinculada la clave de este teléfono y más nueva
+    /// que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+    /// `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+    /// es más nueva o el teléfono no está vinculado. Sobre la conexión
+    /// secundaria: nunca toma el candado del núcleo.
+    pub fn aplicar_orden_telemetria(&self, aviso_json: String) -> Result<bool, NucleoError> {
+        let Some(dispositivo_id) = self.cache_token.dispositivo_vinculado() else {
+            return Ok(false);
+        };
+        let aviso: serde_json::Value =
+            serde_json::from_str(&aviso_json).map_err(|error| NucleoError::Interno {
+                mensaje: interno(error),
+            })?;
+        let conexion = self.conexion_secundaria()?;
+        Ok(control_acceso::nube::aplicar_aviso_telemetria(
+            &conexion,
+            &dispositivo_id,
+            &aviso,
+        ))
+    }
+
+    /// Qué rige de telemetría ahora en este teléfono: la versión de la orden
+    /// aplicada y los grupos (`base` siempre; los demás según la orden del
+    /// panel, que vuelve a `rendimiento` al vencer). Sólo lee la copia en
+    /// memoria (sin tocar la base ni el candado del núcleo), así que Kotlin
+    /// puede pedirla seguido.
+    pub fn telemetria_estado(&self) -> crate::EstadoTelemetria {
+        use control_acceso::telemetria::{Grupo, config};
+        let configuracion = config();
+        let vigentes = configuracion.grupos_vigentes(self.reloj.ahora_utc().timestamp());
+        crate::EstadoTelemetria {
+            version: configuracion.version(),
+            grupos: Grupo::TODOS
+                .into_iter()
+                .filter(|grupo| vigentes.contiene(*grupo))
+                .map(|grupo| grupo.nombre().to_owned())
+                .collect(),
+        }
+    }
+
     /// Sincronización disparada por avisos en vivo (`cambio_nube`, ver
     /// `NubeRealtime.kt`): corre sólo las etapas de las tablas que
     /// cambiaron (`payload.table`), ver

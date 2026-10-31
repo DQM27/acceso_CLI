@@ -81,6 +81,15 @@ jobs:
       # adjuntos — no un artifact de Actions, que necesitaría estar logueado
       # en el repo para encontrarlo. Ver desktop/docs/pendientes.md para el
       # setup de las llaves (no están acá, son secretos del repo).
+      - name: Avisar si falta el destino de los errores
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        shell: bash
+        run: |
+          if [ -z "$SENTRY_DSN" ]; then
+            echo "::warning::Falta el secreto SENTRY_DSN: esta versión saldrá sin reporte de errores."
+          fi
+
       - name: Build, firma y release (Tauri)
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
@@ -88,7 +97,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Destino de los errores (ver `SENTRY_DSN` en desktop/src-tauri/src/lib.rs).
-          # Sin el secreto llega vacío y se usa el DSN por defecto.
+          # Sin el secreto llega vacío y la app no reporta errores.
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         with:
           projectPath: desktop

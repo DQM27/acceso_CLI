@@ -366,10 +366,11 @@ test("Dispositivos carga sin violaciones de CSP", async ({ page }) => {
   await preparar(page);
   await page.goto("/dispositivos");
   await expect(page.getByRole("gridcell", { name: "Brisas" })).toBeVisible();
-  // El registro de intentos vive fuera de la grilla: se ve en cualquier
-  // ancho (las columnas de la grilla se virtualizan en pantallas angostas).
-  await page.getByText(/Intentos y alertas/).click();
-  await expect(page.getByText("203.0.113.7")).toBeVisible();
+  // Los intentos y alertas son la otra vista de la pantalla. Se busca "Qué
+  // pasó", la segunda columna: en pantallas angostas la grilla virtualiza las
+  // columnas y la IP (la última) puede no estar dibujada.
+  await page.getByRole("button", { name: "Intentos y alertas" }).click();
+  await expect(page.getByRole("gridcell", { name: "Código ya usado" })).toBeVisible();
 });
 
 test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", async ({

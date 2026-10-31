@@ -240,6 +240,14 @@ export function aplicarCambioNube(cambio: unknown): Promise<boolean> {
   return invoke("aplicar_cambio_nube", { cambio });
 }
 
+/** Aplica la orden de telemetría que trae un aviso `telemetria_config`
+ * (grupos, vencimiento y versión): el núcleo la guarda y la aplica sólo si es
+ * para `dispositivoId` y más nueva que la vigente. `true` si cambió lo que se
+ * mide. Nunca debe tumbar nada: un aviso perdido lo cubre la sincronización. */
+export function aplicarOrdenTelemetria(dispositivoId: string, aviso: unknown): Promise<boolean> {
+  return invoke("aplicar_orden_telemetria", { dispositivoId, aviso });
+}
+
 /** Sincronización de un aviso en vivo: sólo las etapas de las tablas que
  * cambiaron (`payload.table` de `cambio_nube`) -- ver
  * `nube::AlcanceSincronizacion` en el núcleo. Una tabla desconocida cae en

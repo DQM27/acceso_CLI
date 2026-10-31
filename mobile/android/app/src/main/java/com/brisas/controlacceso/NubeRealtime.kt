@@ -115,7 +115,7 @@ class NubeRealtime(
         // siguiente, así que la lectura de acá suele ser todavía la del
         // header `Date` (±1 s; en staging dio latencias de -950 ms).
         val desfaseRelojMs = java.util.concurrent.atomic.AtomicReference(
-            if (Telemetria.activa) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null,
+            if (Telemetria.permite("realtime")) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null,
         )
         Telemetria.realtime?.desfaseReloj(desfaseRelojMs.get())
         var desfaseLeidoEn = SystemClock.elapsedRealtime()
@@ -135,7 +135,7 @@ class NubeRealtime(
         try {
             coroutineScope {
                 fun refrescarDesfase() {
-                    if (!Telemetria.activa) return
+                    if (!Telemetria.permite("realtime")) return
                     val ahora = SystemClock.elapsedRealtime()
                     if (ahora - desfaseLeidoEn < INTERVALO_DESFASE_MS) return
                     desfaseLeidoEn = ahora
@@ -200,6 +200,24 @@ class NubeRealtime(
                     .onEach { aviso ->
                         if (ExpulsionNube.esCierreDeEstaSesion(aviso.texto("cedula"), usuarioCedula)) {
                             onCambio(null)
+                        }
+                    }
+                    .launchIn(this)
+                // La orden del panel sobre qué medir en este teléfono. El núcleo
+                // la guarda y la aplica (sólo si es de este equipo y más nueva);
+                // no hace falta sincronizar ni refrescar nada. Si falla, la
+                // sincronización completa la vuelve a pedir. Mismo criterio que
+                // `nubeRealtime.ts` en escritorio.
+                canal.broadcastFlow<JsonObject>("telemetria_config")
+                    .onEach { aviso ->
+                        if (!OrdenTelemetriaNube.esParaEsteEquipo(aviso.texto("dispositivo_id"), sesion.dispositivoId)) {
+                            return@onEach
+                        }
+                        try {
+                            val cambio = withContext(dispatcherIO) { nucleo.aplicarOrdenTelemetria(aviso.toString()) }
+                            if (cambio) Telemetria.refrescarGrupos()
+                        } catch (excepcion: NucleoException) {
+                            Log.w("SincronizacionNube", "No se pudo aplicar la orden de telemetría", excepcion)
                         }
                     }
                     .launchIn(this)

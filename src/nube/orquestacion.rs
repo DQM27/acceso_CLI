@@ -340,6 +340,16 @@ fn recibir_en_orden(
         .unwrap_or_default();
     }
 
+    // La orden de telemetría de este equipo, sólo en la sincronización completa
+    // (el pulso y el botón; un aviso en vivo ya trae la orden por su cuenta).
+    // De mejor esfuerzo: si falla, la sincronización ya anduvo y no se tumba
+    // por esto; la próxima la vuelve a pedir.
+    if alcance.es_completo()
+        && let Err(error) = sincronizacion::recibir_orden_telemetria_propia(conexion, contexto)
+    {
+        log::warn!("orden de telemetría: {error}");
+    }
+
     Ok(resumen)
 }
 
@@ -483,6 +493,25 @@ mod tests {
             "/movimientos_visita",
         ] {
             assert!(pidio(&pedidos, recurso), "no pidió {recurso}: {pedidos:#?}");
+        }
+    }
+
+    #[test]
+    fn la_sincronizacion_completa_pide_la_orden_de_telemetria_y_las_parciales_no() {
+        for perfil in [PerfilDispositivo::Escritorio, PerfilDispositivo::Movil] {
+            let (_, completa) = correr(AlcanceSincronizacion::completo(), perfil);
+            assert!(
+                pidio(&completa, "/telemetria_ordenes"),
+                "la completa no pidió la orden de telemetría ({perfil:?}): {completa:#?}"
+            );
+            let (_, parcial) = correr(
+                AlcanceSincronizacion::desde_tablas(&["ingresos".to_owned()]),
+                perfil,
+            );
+            assert!(
+                !pidio(&parcial, "/telemetria_ordenes"),
+                "una parcial pidió la orden de telemetría ({perfil:?}): {parcial:#?}"
+            );
         }
     }
 

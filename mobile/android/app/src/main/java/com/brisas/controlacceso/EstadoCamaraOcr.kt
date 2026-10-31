@@ -111,10 +111,10 @@ class EstadoCamaraOcr(contexto: Context) {
     }
 
     /// Números de rendimiento por sesión (sin datos personales): en debug
-    /// por `adb logcat -s OcrMetricas`; en el build `diagnostico` se mandan
-    /// a la telemetría al liberar la cámara.
+    /// por `adb logcat -s OcrMetricas`; con el grupo `escaneo` se mandan a la
+    /// telemetría al liberar la cámara.
     val metricas = MetricasOcr(
-        habilitadas = BuildConfig.DEBUG || Telemetria.activa,
+        habilitadas = BuildConfig.DEBUG || Telemetria.permite("ocr_sesion"),
         registrar = { if (BuildConfig.DEBUG) Log.d(TAG_METRICAS_OCR, it) },
     )
 
@@ -168,7 +168,7 @@ class EstadoCamaraOcr(contexto: Context) {
         // cerrada y no procesan nada) y se apaga.
         if (!ejecutor.isShutdown) ejecutor.shutdown()
         val finCierre = System.nanoTime()
-        if (Telemetria.activa) {
+        if (Telemetria.permite("ocr_sesion")) {
             Telemetria.evento(
                 "ocr_sesion",
                 metricas.datos() + mapOf(

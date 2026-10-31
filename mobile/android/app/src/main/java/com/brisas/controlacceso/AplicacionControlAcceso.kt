@@ -40,8 +40,7 @@ class AplicacionControlAcceso : Application(), CameraXConfig.Provider {
             Os.setenv("CONTROL_ACCESO_SUPABASE_URL", AmbienteStaging.URL, true)
             Os.setenv("CONTROL_ACCESO_SUPABASE_APIKEY", AmbienteStaging.APIKEY, true)
         }
-        // Sólo en el build `diagnostico` (ver Telemetria.kt); en los demás
-        // no hace nada.
+        // Qué se mide lo decide la orden de este teléfono (ver Telemetria.kt).
         Telemetria.iniciar(this)
         // Antes del primer mensaje push, que puede llegar con la app cerrada
         // (Android levanta el proceso sólo para ServicioMensajesPush).

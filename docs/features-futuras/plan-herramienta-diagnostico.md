@@ -1,5 +1,8 @@
 # Herramienta de diagnóstico y desarrollo (telemetría, errores y Grafana)
 
+> **Reemplazado** el 2026-10-19 por `plan-telemetria-y-registro-de-errores.md`.
+> Se conserva como historia; no es la guía de trabajo.
+
 Plan acordado el 2026-10-16. **No es una función del producto del cliente.** Es
 una herramienta de desarrollo para ver cómo anda la app y encontrar problemas.
 Este documento deja las decisiones tomadas, el estado de lo que ya existe y lo
