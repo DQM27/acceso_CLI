@@ -26,3 +26,26 @@
     `authenticated`). Única excepción: la telemetría de staging (`supabase/scripts/`).
 - Cada migración lleva su batería en `supabase/tests/`, probada en staging dentro de una
   transacción con `rollback`. Mergear a `main` aplica las migraciones en producción.
+
+## Entorno de pruebas en sesiones en la nube
+
+Lo que hace falta preparar en un contenedor nuevo para compilar y probar todo (nada
+de esto va al repo):
+
+- **Android (Kotlin, `testDebugUnitTest`)**: Java 21 ya viene. Bajar las
+  command-line tools de `https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip`
+  a `/opt/android-sdk/cmdline-tools/latest`, aceptar licencias y
+  `sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"`. Correr
+  Gradle con `ANDROID_HOME=/opt/android-sdk` (sin crear `local.properties`). Maven
+  Central responde 429 a las IPs de la nube: un init script en
+  `~/.gradle/init.d/` que cambie `repo.maven.apache.org`/`repo1.maven.org` por el
+  espejo de Google `https://maven-central.storage-download.googleapis.com/maven2/`.
+  No hace falta `google-services.json` ni el NDK para compilar Kotlin y correr las
+  pruebas unitarias.
+- **Escritorio (`cargo check` en Linux)**: faltan las librerías GTK. Con archivos
+  `.pc` falsos (Version 99, sin Libs) en un directorio y `PKG_CONFIG_PATH` apuntando
+  ahí, `cargo check` compila el código de la app; quedan 4 errores de código sólo de
+  Windows (`zeroize`, `intentar_abrir_nucleo`), que no son del cambio.
+- **Deno (Edge Functions)**: descargarlo lo bloquea el clasificador de seguridad
+  del entorno; lo valida el workflow `reglas.yml`. La lógica que sólo usa
+  `node:zlib`/`node:buffer` se puede correr con Node 22 (`--experimental-strip-types`).
