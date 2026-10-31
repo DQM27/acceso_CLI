@@ -517,6 +517,9 @@ fn preparar_nucleo() -> (
     let firmante: Arc<dyn FirmanteDispositivo> =
         Arc::new(FirmanteArchivo::en(&directorio_credenciales));
     core.establecer_firmante_dispositivo(Arc::clone(&firmante));
+    // Versión, nombre y sistema en cada renovación del token, no sólo al
+    // vincular: si no, el panel muestra la versión del día de la vinculación.
+    core.establecer_metadata_dispositivo(comandos::nube::metadata_de_esta_maquina());
 
     (ruta_base_datos, instancia, clave_base_datos, core, firmante)
 }

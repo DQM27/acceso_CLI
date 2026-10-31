@@ -58,6 +58,7 @@ impl GuiState {
     ) -> Self {
         let cache_token = CacheTokenDispositivo::new();
         cache_token.establecer_firmante(firmante);
+        cache_token.establecer_metadata(crate::comandos::nube::metadata_de_esta_maquina());
         Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),

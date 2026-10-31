@@ -81,12 +81,22 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
             // Android Keystore (ver AlmacenClaveKeystore.kt). Antes de
             // cualquier operación de nube.
             abierto.establecerAlmacenClave(AlmacenClaveKeystore(context))
+            // Versión, modelo y sistema en cada renovación del token, no sólo
+            // al vincular: si no, el panel muestra la versión de ese día.
+            val metadata = MetadatosDispositivoLocal.capturar(context, identificador)
+            abierto.establecerMetadataDispositivo(
+                identificadorHardware = metadata.identificadorHardware,
+                nombreDispositivo = metadata.nombreDispositivo,
+                plataforma = metadata.plataforma,
+                versionBuild = metadata.versionBuild,
+                appVersion = metadata.appVersion,
+            )
             CierreSesionAlSalir.registrar(abierto)
             EstadoAplicacion.Lista(
                 EntornoAplicacion(
                     nucleo = abierto,
                     directorio = directorio,
-                    metadata = MetadatosDispositivoLocal.capturar(context, identificador),
+                    metadata = metadata,
                     requiereConfiguracionInicial = abierto.requiereConfiguracionInicial(),
                 ),
             )

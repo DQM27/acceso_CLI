@@ -18,7 +18,7 @@ use crate::estado::GuiState;
 /// `fabricante`/`fingerprint` el sistema operativo y su arquitectura.
 /// Nada de esto es secreto en sí mismo -- viaja igual que el resto de esta
 /// metadata, en texto plano en el body de `device-vincular`/`device-auth`.
-fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
+pub(crate) fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
     nube::MetadatosDispositivo {
         identificador_hardware: control_acceso::nube::credenciales::identificador_de_esta_maquina(),
         nombre_dispositivo: std::env::var("COMPUTERNAME").ok(),

@@ -113,6 +113,10 @@ pub struct CacheTokenDispositivo {
     /// Ya está quemado en el servidor, así que guardarlo en memoria no
     /// expone nada; sirve para reconocer un reintento (ver [`Self::vincular`]).
     ultimo_codigo_canjeado: Mutex<Option<String>>,
+    /// Metadata del equipo (versión de la app, modelo, sistema) que viaja en
+    /// cada autenticación que no trae la suya. Sin esto sólo se informaba al
+    /// vincular, y el panel mostraba la versión de ese día para siempre.
+    metadata: Mutex<Option<MetadatosDispositivo>>,
 }
 
 impl Default for CacheTokenDispositivo {
@@ -128,7 +132,33 @@ impl CacheTokenDispositivo {
             firmante: Mutex::new(None),
             desfase_pendiente: Arc::new(Mutex::new(None)),
             ultimo_codigo_canjeado: Mutex::new(None),
+            metadata: Mutex::new(None),
         }
+    }
+
+    /// Configura la metadata que acompaña a cada autenticación (ver
+    /// `device-auth`, que actualiza versión, modelo e IP del equipo). Se
+    /// llama una vez al arrancar; una metadata explícita (vincular,
+    /// reconectar) tiene prioridad sobre ésta.
+    pub fn establecer_metadata(&self, metadata: MetadatosDispositivo) {
+        *self
+            .metadata
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(metadata);
+    }
+
+    /// La metadata que viaja al autenticarse: la explícita si la hay, si no
+    /// la configurada al arrancar ([`Self::establecer_metadata`]).
+    fn metadata_de_autenticacion(
+        &self,
+        explicita: Option<&MetadatosDispositivo>,
+    ) -> Option<MetadatosDispositivo> {
+        explicita.cloned().or_else(|| {
+            self.metadata
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        })
     }
 
     /// Configura quién firma por este equipo. Se llama una vez al arrancar
@@ -335,8 +365,13 @@ impl CacheTokenDispositivo {
             }
         }
 
-        let token =
-            autenticar_con_firmante(cliente, super::base_url(), firmante.as_ref(), metadata)?;
+        let metadata = self.metadata_de_autenticacion(metadata);
+        let token = autenticar_con_firmante(
+            cliente,
+            super::base_url(),
+            firmante.as_ref(),
+            metadata.as_ref(),
+        )?;
         self.guardar(super::base_url(), &token);
         Ok(token)
     }
@@ -653,6 +688,32 @@ mod pruebas_vincular {
         let cache = CacheTokenDispositivo::new();
         cache.establecer_firmante(Arc::clone(firmante) as Arc<dyn FirmanteDispositivo>);
         cache
+    }
+
+    /// Cada renovación del token informa la versión configurada al
+    /// arrancar; una metadata explícita (vincular, reconectar) manda.
+    #[test]
+    fn la_autenticacion_lleva_la_metadata_configurada_al_arrancar() {
+        use crate::nube::MetadatosDispositivo;
+
+        let cache = CacheTokenDispositivo::new();
+        assert_eq!(cache.metadata_de_autenticacion(None), None);
+
+        let del_arranque = MetadatosDispositivo {
+            app_version: Some("1.8.14".to_string()),
+            ..Default::default()
+        };
+        cache.establecer_metadata(del_arranque.clone());
+        assert_eq!(cache.metadata_de_autenticacion(None), Some(del_arranque));
+
+        let explicita = MetadatosDispositivo {
+            app_version: Some("9.9.9".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            cache.metadata_de_autenticacion(Some(&explicita)),
+            Some(explicita)
+        );
     }
 
     #[test]

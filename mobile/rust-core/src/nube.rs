@@ -154,6 +154,26 @@ impl Nucleo {
         self.recibir_catalogo_inicial(token)
     }
 
+    /// Metadata del teléfono que viaja en cada renovación del token (no sólo
+    /// al vincular), para que el panel vea la versión instalada hoy. Se llama
+    /// una vez al abrir; mismos parámetros que [`Self::vincular_dispositivo_inicial`].
+    pub fn establecer_metadata_dispositivo(
+        &self,
+        identificador_hardware: String,
+        nombre_dispositivo: String,
+        plataforma: String,
+        version_build: String,
+        app_version: String,
+    ) {
+        self.cache_token.establecer_metadata(metadata_del_telefono(
+            identificador_hardware,
+            nombre_dispositivo,
+            plataforma,
+            version_build,
+            app_version,
+        ));
+    }
+
     /// Base vacía de un teléfono que YA está vinculado (su clave sigue en
     /// Android Keystore): baja el catálogo de su unidad sin pedir código.
     /// Pasa después de que un teléfono reconectado en otra unidad borra la

@@ -877,6 +877,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_metadata_dispositivo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_hora_confiable_ms(
@@ -1113,6 +1115,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_equipo_retirado(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_establecer_almacen_clave(`ptr`: Long,`almacen`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_establecer_metadata_dispositivo(`ptr`: Long,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1699,6 +1703,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave() and 0xFFFF) != 60535) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_metadata_dispositivo() and 0xFFFF) != 18008) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj() and 0xFFFF) != 56993) {
@@ -4055,6 +4062,13 @@ public interface NucleoInterface {
     fun `establecerAlmacenClave`(`almacen`: AlmacenClaveDispositivo)
     
     /**
+     * Metadata del teléfono que viaja en cada renovación del token (no sólo
+     * al vincular), para que el panel vea la versión instalada hoy. Se llama
+     * una vez al abrir; mismos parámetros que [`Self::vincular_dispositivo_inicial`].
+     */
+    fun `establecerMetadataDispositivo`(`identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String)
+    
+    /**
      * Estado del reloj confiable, para la telemetría de diagnóstico (ver
      * [`crate::EstadoReloj`]).
      */
@@ -5267,6 +5281,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterTypeAlmacenClaveDispositivo.lower(`almacen`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Metadata del teléfono que viaja en cada renovación del token (no sólo
+     * al vincular), para que el panel vea la versión instalada hoy. Se llama
+     * una vez al abrir; mismos parámetros que [`Self::vincular_dispositivo_inicial`].
+     */override fun `establecerMetadataDispositivo`(`identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_establecer_metadata_dispositivo(
+        it,
+        
+        FfiConverterString.lower(`identificadorHardware`),
+        FfiConverterString.lower(`nombreDispositivo`),
+        FfiConverterString.lower(`plataforma`),
+        FfiConverterString.lower(`versionBuild`),
+        FfiConverterString.lower(`appVersion`),_status)
 }
     }
     

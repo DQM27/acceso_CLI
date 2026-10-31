@@ -292,7 +292,7 @@ impl std::fmt::Debug for TokenDispositivo {
 /// cada campo). Ninguno es secreto en sí mismo -- todos observables por
 /// cualquier app en el propio dispositivo -- así que viajan en texto plano
 /// en el body.
-#[derive(Default, serde::Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 pub struct MetadatosDispositivo {
     /// Identificador estable de hardware: `Settings.Secure.ANDROID_ID` en
     /// móvil, Machine GUID de Windows en escritorio.

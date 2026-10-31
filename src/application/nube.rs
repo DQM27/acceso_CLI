@@ -210,6 +210,14 @@ impl AppCore {
         self.cache_token.establecer_firmante(firmante);
     }
 
+    /// Metadata del equipo (versión, modelo, sistema) que viaja en cada
+    /// renovación del token, para que el panel vea la versión instalada hoy
+    /// y `device-auth` pueda aplicar `VERSION_MINIMA_ACEPTADA` (ver
+    /// [`crate::nube::CacheTokenDispositivo::establecer_metadata`]).
+    pub fn establecer_metadata_dispositivo(&self, metadata: crate::nube::MetadatosDispositivo) {
+        self.cache_token.establecer_metadata(metadata);
+    }
+
     /// Base vacía recién vinculada: nada propio que mandar, sólo el catálogo
     /// para que el primer login tenga con quién autenticar.
     fn recibir_catalogo_inicial(
