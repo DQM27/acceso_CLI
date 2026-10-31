@@ -1,7 +1,8 @@
-//! Telemetría técnica del escritorio: el mismo esquema que la app Android
-//! (`Telemetria.kt`, ver `mobile/android/docs/telemetria-diagnostico.md`) y
-//! la misma tabla `telemetria_diagnostico` del proyecto de STAGING.
-//! Documentada en `desktop/docs/telemetria-diagnostico.md`.
+//! Telemetría técnica del escritorio, con el mismo catálogo que la app
+//! Android. Va a PRODUCCIÓN, al esquema `observabilidad`, por la receptora
+//! `observabilidad` (ver
+//! `docs/features-futuras/plan-observabilidad-en-produccion.md`). Documentada
+//! en `desktop/docs/telemetria-diagnostico.md`.
 //!
 //! Un solo código para todos los builds, sin flags: cada evento pertenece a
 //! un grupo (`control_acceso::telemetria::grupo_de_evento`) y sólo se mide si
@@ -10,17 +11,18 @@
 //! por defecto y el resto lo enciende el panel, con vencimiento (ver
 //! `docs/features-futuras/plan-telemetria-y-registro-de-errores.md`).
 //!
-//! La app nunca manda datos de operación a staging, sólo telemetría: la
-//! dirección de staging está fija acá. Producción no recibe telemetría.
+//! Identidad: el token del propio equipo (el mismo de la operación). La nube
+//! pone el equipo y la unidad desde el token; nada de eso viaja en el lote.
 //!
 //! Qué se manda: sólo números y nombres técnicos (comandos, pantallas,
 //! tipos de error, tiempos, memoria). Nunca cédulas, nombres, placas,
 //! contenido de formularios ni mensajes de error (pueden traer datos).
 //!
-//! Cómo: cola en memoria (con tope) que un hilo propio manda en lotes cada
-//! minuto; lo que no se pudo mandar se guarda en un archivo y se reintenta
-//! en el próximo arranque. Un hilo más toma una muestra del proceso cada
-//! 2 minutos.
+//! Cómo: cola en memoria (con tope) que un hilo propio pasa cada minuto a la
+//! cola en disco del núcleo (`control_acceso::telemetria::cola`) y manda con
+//! `telemetria::envio`: lote columnar, brotli, HTTP/2 y el token del equipo.
+//! Lo que no sale queda en disco, sin pérdidas ni duplicados, y se reintenta.
+//! Un hilo más toma una muestra del proceso cada 2 minutos.
 
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -29,18 +31,17 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use control_acceso::telemetria::cola::ColaTelemetria;
+use control_acceso::telemetria::lote::EventoTelemetria;
 use control_acceso::telemetria::{Grupo, config, grupo_de_evento};
 
-/// Proyecto de STAGING (sandbox): la telemetría nunca va a producción. La
-/// llave es la publicable (rol `anon`), que en esta tabla sólo puede
-/// insertar (ver `supabase/scripts/telemetria_diagnostico_staging.sql`).
+/// Proyecto de STAGING: sólo para saber en qué ambiente corre este build
+/// (`ambiente` de la sesión y del registro de errores).
 pub const URL_STAGING: &str = "https://pmrytjktlyiuikxuuxpr.supabase.co";
-const APIKEY_STAGING: &str = "sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4";
 
-/// Tope de la cola: sin red por mucho tiempo, lo más viejo se descarta
-/// (y se cuenta) en vez de crecer sin límite.
+/// Tope de la cola en memoria entre dos pasadas a disco (un minuto): lo más
+/// viejo se descarta (y se cuenta) en vez de crecer sin límite.
 const MAXIMO_EN_COLA: usize = 5_000;
-const FILAS_POR_LOTE: usize = 200;
 const SEGUNDOS_ENVIO: u64 = 60;
 /// La memoria y el CPU de una PC en reposo cambian despacio: con 30 s la muestra
 /// era más de la mitad de las filas de un equipo parado.
@@ -51,7 +52,9 @@ const ESPERA_ENVIO_AL_CERRAR: std::time::Duration = std::time::Duration::from_se
 const MAXIMO_BYTES_EVENTO: usize = 16 * 1024;
 
 const ARCHIVO_DISPOSITIVO: &str = "telemetria_dispositivo";
-const ARCHIVO_PENDIENTE: &str = "telemetria_pendiente.jsonl";
+/// La cola del formato anterior (filas para staging). Se borra al arrancar:
+/// el formato no sirve para la receptora nueva.
+const ARCHIVO_PENDIENTE_ANTERIOR: &str = "telemetria_pendiente.jsonl";
 /// Existe mientras la app está abierta; si al arrancar sigue ahí, la vez
 /// anterior terminó sin pasar por el cierre normal (cuelgue, crash, "Finalizar
 /// tarea", apagón).
@@ -90,46 +93,46 @@ fn grupos_vigentes() -> Vec<&'static str> {
         .collect()
 }
 
-/// Cola de filas JSON ya armadas, con tope.
+/// Eventos medidos desde la última pasada a disco, con tope. Encolar es sólo
+/// tomar un candado y empujar: lo caro (disco, red) lo hace el hilo de envío.
 #[derive(Debug, Default)]
 struct Cola {
-    filas: VecDeque<String>,
+    filas: VecDeque<EventoTelemetria>,
     descartadas: u64,
 }
 
 impl Cola {
-    fn agregar(&mut self, fila: String) {
+    fn agregar(&mut self, evento: EventoTelemetria) {
         if self.filas.len() >= MAXIMO_EN_COLA {
             self.filas.pop_front();
             self.descartadas += 1;
         }
-        self.filas.push_back(fila);
+        self.filas.push_back(evento);
     }
 
-    fn tomar(&mut self, cuantas: usize) -> Vec<String> {
-        let cuantas = cuantas.min(self.filas.len());
-        self.filas.drain(..cuantas).collect()
-    }
-
-    /// Devuelve un lote que no se pudo mandar, adelante y en orden.
-    fn devolver(&mut self, lote: Vec<String>) {
-        for fila in lote.into_iter().rev() {
-            self.filas.push_front(fila);
-        }
-        while self.filas.len() > MAXIMO_EN_COLA {
-            self.filas.pop_front();
-            self.descartadas += 1;
-        }
+    fn tomar_todo(&mut self) -> Vec<EventoTelemetria> {
+        self.filas.drain(..).collect()
     }
 }
 
 struct Telemetria {
-    dispositivo: String,
-    sesion: String,
-    version: String,
+    /// La cabecera de la sesión que viaja en cada lote (ver [`cabecera_sesion`]).
+    sesion: serde_json::Value,
     directorio: PathBuf,
     inicio: Instant,
     cola: Mutex<Cola>,
+    disco: ColaTelemetria,
+}
+
+/// Token del equipo para mandar: lo da el estado de la app (la misma caché de
+/// la operación). `None` = todavía no hay (equipo sin vincular, sin red).
+type ProveedorToken = Box<dyn Fn() -> Option<String> + Send + Sync>;
+
+static TOKEN: OnceLock<ProveedorToken> = OnceLock::new();
+
+/// Fija de dónde sale el token. Una sola vez, al arrancar la app.
+pub fn usar_token(proveedor: ProveedorToken) {
+    let _ = TOKEN.set(proveedor);
 }
 
 static TELEMETRIA: OnceLock<Telemetria> = OnceLock::new();
@@ -152,35 +155,54 @@ fn ahora() -> chrono::DateTime<chrono::Utc> {
         .map_or_else(chrono::Utc::now, |reloj| reloj.ahora_utc())
 }
 
-/// Versión del formato de las filas (`datos.esquema`), la misma que
-/// `ESQUEMA_TELEMETRIA` del teléfono. Ver `docs/telemetria-contrato.md`.
-const ESQUEMA_TELEMETRIA: u32 = 2;
-
-/// Agrega a `datos` la versión del formato y la plataforma, sin pisar lo que
-/// el evento ya traiga. Un `datos` que no es un objeto se deja como está.
-fn con_esquema_y_plataforma(mut datos: serde_json::Value) -> serde_json::Value {
-    if let Some(objeto) = datos.as_object_mut() {
-        objeto
-            .entry("esquema")
-            .or_insert_with(|| serde_json::json!(ESQUEMA_TELEMETRIA));
-        objeto
-            .entry("plataforma")
-            .or_insert_with(|| serde_json::json!("escritorio"));
+/// Un evento con la hora del reloj del núcleo. `esquema` y `plataforma` ya no
+/// van en cada evento: viajan una vez, en la cabecera de la sesión. Un `datos`
+/// que no es un objeto se guarda como `{"valor": ...}` para no perderlo.
+fn evento_de(tipo: &str, datos: serde_json::Value) -> EventoTelemetria {
+    let datos = match datos {
+        serde_json::Value::Object(mut objeto) => {
+            objeto.remove("esquema");
+            objeto.remove("plataforma");
+            objeto
+        }
+        otro => serde_json::Map::from_iter([("valor".to_owned(), otro)]),
+    };
+    EventoTelemetria {
+        ocurrido_ms: ahora().timestamp_millis(),
+        tipo: tipo.to_owned(),
+        datos,
     }
-    datos
 }
 
-/// Una fila de `telemetria_diagnostico`, como la arma la app Android.
-fn fila(t: &Telemetria, tipo: &str, datos: serde_json::Value) -> String {
+/// La cabecera de la sesión de esta app, que la nube guarda una vez
+/// (`observabilidad.sesiones`). La versión va en semver y el commit aparte;
+/// un commit que no es un hash (`sinhash`) no se manda.
+fn cabecera_sesion(sesion_id: &str, instalacion: &str) -> serde_json::Value {
+    let commit = env!("BUILD_COMMIT_HASH");
+    let commit_valido =
+        (7..=40).contains(&commit.len()) && commit.chars().all(|c| c.is_ascii_hexdigit());
+    let ambiente = if control_acceso::nube::base_url() == URL_STAGING {
+        "staging"
+    } else {
+        "produccion"
+    };
     serde_json::json!({
-        "ocurrido_en": ahora().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-        "dispositivo": t.dispositivo,
-        "sesion": t.sesion,
-        "version_app": t.version,
-        "tipo": tipo,
-        "datos": con_esquema_y_plataforma(datos),
+        "id": sesion_id,
+        "plataforma": "escritorio",
+        "version_app": env!("CARGO_PKG_VERSION"),
+        "commit": commit_valido.then_some(commit),
+        "ambiente": ambiente,
+        "iniciada_en": ahora().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        "sistema": std::env::consts::OS,
+        "ram_total_mb": sistema::ram_total_mb(),
+        "detalle": {
+            "arquitectura": std::env::consts::ARCH,
+            "nucleos_cpu": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
+            "build": if cfg!(debug_assertions) { "debug" } else { "release" },
+            // Una reinstalación cambia este número: sirve para verla.
+            "instalacion": instalacion,
+        },
     })
-    .to_string()
 }
 
 /// ¿`tipo` es un nombre técnico razonable (minúsculas, dígitos y `_`)?
@@ -201,11 +223,10 @@ pub fn evento(tipo: &str, datos: serde_json::Value) {
     let Some(t) = TELEMETRIA.get() else {
         return;
     };
-    let fila = fila(t, tipo, datos);
     t.cola
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .agregar(fila);
+        .agregar(evento_de(tipo, datos));
 }
 
 /// Toma el candado del núcleo (`tomar`) y suma a `acumulado` lo que esperó
@@ -303,21 +324,6 @@ fn revisar_cierre_anterior(directorio: &Path) -> Option<bool> {
     ya_habia_arrancado.then_some(!quedo_abierta)
 }
 
-fn cargar_pendientes(t: &Telemetria) {
-    let ruta = t.directorio.join(ARCHIVO_PENDIENTE);
-    if let Ok(texto) = std::fs::read_to_string(&ruta) {
-        let mut cola = t
-            .cola
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        texto
-            .lines()
-            .filter(|linea| !linea.trim().is_empty())
-            .for_each(|linea| cola.agregar(linea.to_owned()));
-    }
-    let _ = std::fs::remove_file(ruta);
-}
-
 /// Lo que `version_app` dice de este build: `desktop-1.8.12+abc1234`.
 pub fn version_app() -> String {
     format!(
@@ -342,15 +348,18 @@ fn arrancar(directorio: &Path) {
         return;
     }
     let cierre_anterior_limpio = revisar_cierre_anterior(directorio);
+    let instalacion = identificador_de_instalacion(directorio);
+    let _ = std::fs::remove_file(directorio.join(ARCHIVO_PENDIENTE_ANTERIOR));
     let t = Telemetria {
-        dispositivo: identificador_de_instalacion(directorio),
-        sesion: control_acceso::database::identificador::generar_uuid_v4(),
-        version: version_app(),
+        sesion: cabecera_sesion(
+            &control_acceso::database::identificador::generar_uuid_v4(),
+            &instalacion,
+        ),
         directorio: directorio.to_path_buf(),
         inicio: Instant::now(),
         cola: Mutex::new(Cola::default()),
+        disco: ColaTelemetria::en(directorio),
     };
-    cargar_pendientes(&t);
     if TELEMETRIA.set(t).is_err() {
         return;
     }
@@ -378,11 +387,11 @@ fn arrancar(directorio: &Path) {
     envio::lanzar_hilos();
 }
 
-/// Anota el panic (sólo dónde ocurrió, nunca el mensaje) y guarda la cola
-/// en el archivo de pendientes antes de seguir con el gancho anterior (el del
-/// registro de errores, que sí guarda el mensaje y la traza). No manda nada por la red acá: el panic puede ocurrir dentro de
-/// un hilo de tokio, donde el cliente HTTP bloqueante entra en pánico a su
-/// vez. Lo guardado sale en el próximo arranque.
+/// Anota el panic (sólo dónde ocurrió, nunca el mensaje) y pasa la cola a
+/// disco antes de seguir con el gancho anterior (el del registro de errores,
+/// que sí guarda el mensaje y la traza). No manda nada por la red acá: el panic
+/// puede ocurrir dentro de un hilo de tokio, donde el cliente HTTP bloqueante
+/// entra en pánico a su vez. Lo guardado sale en el próximo envío.
 fn instalar_gancho_de_panic() {
     let anterior = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -395,35 +404,46 @@ fn instalar_gancho_de_panic() {
         if let Some(t) = TELEMETRIA.get()
             && let Ok(mut cola) = t.cola.try_lock()
         {
-            cola.agregar(fila(
-                t,
+            cola.agregar(evento_de(
                 "panic",
                 serde_json::json!({ "donde": donde, "hilo": hilo }),
             ));
-            let todo = cola.filas.iter().cloned().collect::<Vec<_>>().join("\n");
+            let todo = cola.tomar_todo();
             drop(cola);
-            let _ = std::fs::write(t.directorio.join(ARCHIVO_PENDIENTE), todo);
+            let _ = t.disco.agregar(&todo);
         }
         anterior(info);
     }));
 }
 
-/// Escribe TODA la cola en el archivo de pendientes (sin vaciarla): lo que
-/// no llegue a mandarse sale en el próximo arranque.
-fn guardar_pendientes(t: &Telemetria) {
-    let todo = t
-        .cola
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .filas
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n");
-    let _ = std::fs::write(t.directorio.join(ARCHIVO_PENDIENTE), todo);
+/// Pasa lo medido a la cola en disco del núcleo (de ahí sale, y ahí sobrevive
+/// a un cierre). Informa lo que se descartó por los topes.
+fn pasar_a_disco(t: &Telemetria) {
+    let (eventos, descartadas_memoria) = {
+        let mut cola = t
+            .cola
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (cola.tomar_todo(), std::mem::take(&mut cola.descartadas))
+    };
+    let descartadas_disco = match t.disco.agregar(&eventos) {
+        Ok(descartados) => descartados as u64,
+        Err(error) => {
+            log::warn!("telemetría: no se pudo guardar la cola en disco: {error}");
+            eventos.len() as u64
+        }
+    };
+    let descartadas = descartadas_memoria + descartadas_disco;
+    if descartadas > 0 {
+        // Va a la cola en memoria: sale en la próxima pasada.
+        evento(
+            "telemetria_descartada",
+            serde_json::json!({ "filas": descartadas }),
+        );
+    }
 }
 
-/// ¿No hay filas esperando para mandarse?
+/// ¿No hay nada esperando para mandarse (ni en memoria ni en disco)?
 fn cola_vacia() -> bool {
     TELEMETRIA.get().is_none_or(|t| {
         t.cola
@@ -431,12 +451,14 @@ fn cola_vacia() -> bool {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .filas
             .is_empty()
+            && !t.disco.hay_pendientes()
     })
 }
 
-/// Cierre normal de la app: borra la marca de sesión abierta, guarda la
-/// cola y la intenta mandar (desde un hilo propio, nunca desde el de
-/// quien llama, y esperando como mucho `ESPERA_ENVIO_AL_CERRAR`).
+/// Cierre normal de la app: borra la marca de sesión abierta, pasa la cola a
+/// disco y la intenta mandar (desde un hilo propio, nunca desde el de quien
+/// llama, y esperando como mucho `ESPERA_ENVIO_AL_CERRAR`). Lo que no salga
+/// queda en disco para el próximo arranque.
 pub fn cerrar() {
     let Some(t) = TELEMETRIA.get() else {
         return;
@@ -446,11 +468,11 @@ pub fn cerrar() {
         serde_json::json!({ "minutos_abierta": t.inicio.elapsed().as_secs() / 60 }),
     );
     let _ = std::fs::remove_file(t.directorio.join(ARCHIVO_SESION_ABIERTA));
-    // Sin nada pendiente: ni archivo ni petición.
+    pasar_a_disco(t);
+    // Sin nada pendiente: ni petición.
     if cola_vacia() {
         return;
     }
-    guardar_pendientes(t);
     let (listo, esperar) = std::sync::mpsc::channel();
     let lanzado = std::thread::Builder::new()
         .name("telemetria-cierre".into())
@@ -458,15 +480,8 @@ pub fn cerrar() {
             envio::enviar_todo();
             let _ = listo.send(());
         });
-    let termino = lanzado.is_ok() && esperar.recv_timeout(ESPERA_ENVIO_AL_CERRAR).is_ok();
-    let vacia = t
-        .cola
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .filas
-        .is_empty();
-    if termino && vacia {
-        let _ = std::fs::remove_file(t.directorio.join(ARCHIVO_PENDIENTE));
+    if lanzado.is_ok() {
+        let _ = esperar.recv_timeout(ESPERA_ENVIO_AL_CERRAR);
     }
 }
 
@@ -474,8 +489,8 @@ mod envio {
     use std::time::Duration;
 
     use super::{
-        APIKEY_STAGING, FILAS_POR_LOTE, SEGUNDOS_ENVIO, SEGUNDOS_MUESTREO, TELEMETRIA, URL_STAGING,
-        cola_vacia, evento, guardar_pendientes, informar_orden_si_cambio, permite, sistema,
+        SEGUNDOS_ENVIO, SEGUNDOS_MUESTREO, TELEMETRIA, TOKEN, cola_vacia, evento,
+        informar_orden_si_cambio, pasar_a_disco, permite, sistema,
     };
 
     pub fn lanzar_hilos() {
@@ -506,62 +521,40 @@ mod envio {
             });
     }
 
-    /// Manda la cola en lotes; si un lote falla, lo devuelve y guarda todo
-    /// lo pendiente en el archivo para el próximo arranque. Sólo desde
-    /// hilos propios (fuera de tokio): usa el cliente HTTP bloqueante.
+    /// Pasa lo medido a disco y manda la cola del núcleo hasta vaciarla o hasta
+    /// que la nube no pueda recibir más (lo que quede se reintenta en la
+    /// próxima vuelta, con el mismo `lote_id`). Sólo desde hilos propios
+    /// (fuera de tokio): usa el cliente HTTP bloqueante del núcleo, el mismo
+    /// de la operación (HTTP/2, conexión ya abierta).
     pub fn enviar_todo() {
         let Some(t) = TELEMETRIA.get() else {
             return;
         };
-        let cliente = match reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-        {
-            Ok(cliente) => cliente,
-            Err(error) => {
-                log::warn!("telemetría: no se pudo crear el cliente HTTP: {error}");
-                return;
-            }
+        pasar_a_disco(t);
+        if !t.disco.hay_pendientes() {
+            return;
+        }
+        // Sin token (equipo sin vincular, sin red) queda todo en disco.
+        let Some(token) = TOKEN.get().and_then(|proveedor| proveedor()) else {
+            return;
         };
-        let descartadas = std::mem::take(
-            &mut t
-                .cola
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .descartadas,
+        let resumen = control_acceso::telemetria::envio::vaciar_cola(
+            &t.disco,
+            &t.sesion,
+            &control_acceso::nube::cliente_http(),
+            control_acceso::nube::base_url(),
+            control_acceso::nube::apikey(),
+            &token,
+            control_acceso::database::identificador::generar_uuid_v4,
         );
-        if descartadas > 0 {
+        if resumen.descartadas > 0 {
             evento(
                 "telemetria_descartada",
-                serde_json::json!({ "filas": descartadas }),
+                serde_json::json!({ "filas": resumen.descartadas }),
             );
         }
-        loop {
-            let lote = t
-                .cola
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .tomar(FILAS_POR_LOTE);
-            if lote.is_empty() {
-                return;
-            }
-            let cuerpo = format!("[{}]", lote.join(","));
-            let enviado = cliente
-                .post(format!("{URL_STAGING}/rest/v1/telemetria_diagnostico"))
-                .header("apikey", APIKEY_STAGING)
-                .header("Content-Type", "application/json")
-                .header("Prefer", "return=minimal")
-                .body(cuerpo)
-                .send()
-                .is_ok_and(|respuesta| respuesta.status().is_success());
-            if !enviado {
-                t.cola
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .devolver(lote);
-                guardar_pendientes(t);
-                return;
-            }
+        if let Some(motivo) = resumen.pendiente {
+            log::debug!("telemetría: quedó pendiente ({motivo})");
         }
     }
 }
@@ -777,31 +770,60 @@ mod tests {
     }
 
     #[test]
-    fn todo_evento_lleva_el_esquema_y_la_plataforma() {
-        let datos = con_esquema_y_plataforma(serde_json::json!({ "nombre": "login" }));
-        assert_eq!(datos["esquema"], ESQUEMA_TELEMETRIA);
-        assert_eq!(datos["plataforma"], "escritorio");
-        assert_eq!(datos["nombre"], "login");
+    fn el_evento_no_repite_esquema_ni_plataforma() {
+        let evento = evento_de(
+            "llamada_nucleo",
+            serde_json::json!({ "nombre": "login", "esquema": 2, "plataforma": "escritorio" }),
+        );
+        assert_eq!(evento.tipo, "llamada_nucleo");
+        assert_eq!(
+            serde_json::Value::Object(evento.datos),
+            serde_json::json!({ "nombre": "login" })
+        );
+        assert!(
+            evento.ocurrido_ms > 1_700_000_000_000,
+            "hora en ms desde la época"
+        );
     }
 
     #[test]
-    fn lo_que_ya_trae_el_evento_manda_sobre_el_esquema_y_la_plataforma() {
-        let datos =
-            con_esquema_y_plataforma(serde_json::json!({ "plataforma": "otra", "esquema": 99 }));
-        assert_eq!(datos["plataforma"], "otra");
-        assert_eq!(datos["esquema"], 99);
+    fn un_dato_que_no_es_objeto_no_se_pierde() {
+        let evento = evento_de("reloj", serde_json::json!(5));
+        assert_eq!(
+            serde_json::Value::Object(evento.datos),
+            serde_json::json!({ "valor": 5 })
+        );
     }
 
     #[test]
-    fn un_dato_que_no_es_objeto_se_deja_como_esta() {
-        assert_eq!(
-            con_esquema_y_plataforma(serde_json::json!(5)),
-            serde_json::json!(5)
-        );
-        assert_eq!(
-            con_esquema_y_plataforma(serde_json::json!(null)),
-            serde_json::json!(null)
-        );
+    fn la_cabecera_de_la_sesion_va_en_semver_y_sin_hash_falso() {
+        let cabecera = cabecera_sesion("dddddddd-0000-0000-0000-000000000001", "instalacion-1");
+        assert_eq!(cabecera["id"], "dddddddd-0000-0000-0000-000000000001");
+        assert_eq!(cabecera["plataforma"], "escritorio");
+        let version = cabecera["version_app"].as_str().unwrap();
+        assert_eq!(version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(version.split('.').count(), 3, "semver, como exige la nube");
+        assert!(!version.contains("desktop") && !version.contains('+'));
+        match cabecera["commit"].as_str() {
+            Some(commit) => {
+                assert!(commit.chars().all(|c| c.is_ascii_hexdigit()) && commit.len() >= 7)
+            }
+            None => assert_eq!(env!("BUILD_COMMIT_HASH"), "sinhash"),
+        }
+        assert!(["produccion", "staging"].contains(&cabecera["ambiente"].as_str().unwrap()));
+        assert_eq!(cabecera["detalle"]["instalacion"], "instalacion-1");
+    }
+
+    #[test]
+    fn la_cola_en_memoria_respeta_el_tope_y_cuenta_lo_descartado() {
+        let mut cola = Cola::default();
+        for _ in 0..MAXIMO_EN_COLA + 3 {
+            cola.agregar(evento_de("reloj", serde_json::json!({})));
+        }
+        assert_eq!(cola.filas.len(), MAXIMO_EN_COLA);
+        assert_eq!(cola.descartadas, 3);
+        assert_eq!(cola.tomar_todo().len(), MAXIMO_EN_COLA);
+        assert!(cola.filas.is_empty());
     }
 
     #[test]

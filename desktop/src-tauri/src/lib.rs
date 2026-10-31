@@ -553,6 +553,16 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
 /// `configurar_plugins_condicionales`).
 fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     configurar_plugins_condicionales(app.handle())?;
+    // La telemetría manda con el token del equipo, de la misma caché que la
+    // operación: si está vigente no toca la red.
+    let para_telemetria = app.handle().clone();
+    telemetria::usar_token(Box::new(move || {
+        para_telemetria
+            .state::<GuiState>()
+            .autenticar_con_cache()
+            .ok()
+            .map(|token| token.access_token)
+    }));
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
     // Conexiones con la nube siempre calientes: la primera salida o ingreso

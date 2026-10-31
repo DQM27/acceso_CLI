@@ -88,7 +88,7 @@ static CLIENTE_HTTP: std::sync::LazyLock<reqwest::blocking::Client> =
 /// Clon barato del cliente compartido -- `reqwest::blocking::Client` envuelve
 /// su estado (pool de conexiones, config TLS) en un `Arc` por dentro, así que
 /// clonarlo no repite ninguno de los dos trabajos.
-pub(crate) fn cliente_http() -> reqwest::blocking::Client {
+pub fn cliente_http() -> reqwest::blocking::Client {
     CLIENTE_HTTP.clone()
 }
 

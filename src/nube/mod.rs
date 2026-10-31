@@ -30,7 +30,7 @@ pub use aviso_bandeja::{AvisoBandejaSalida, aviso_bandeja_salida};
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{
     DestinoReconexion, DetalleReconexion, MetadatosDispositivo, NubeError, TokenDispositivo,
-    mantener_conexiones_vivas, precalentar_conexiones_de_verificacion,
+    cliente_http, mantener_conexiones_vivas, precalentar_conexiones_de_verificacion,
 };
 pub use en_vivo::aplicar_cambio_en_vivo;
 pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};

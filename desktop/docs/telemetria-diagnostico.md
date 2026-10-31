@@ -1,10 +1,14 @@
 # Telemetría de diagnóstico del escritorio
 
 Es la contraparte de la del teléfono (`mobile/android/docs/telemetria-diagnostico.md`).
-Usa la misma tabla `telemetria_diagnostico` del proyecto de **staging** y los
-mismos nombres de evento y de campo, así una consulta sirve para las dos
-plataformas. Las filas del escritorio se reconocen por `version_app`, que
-empieza con `desktop-` (por ejemplo `desktop-1.8.15+abc1234`, con el hash corto del commit).
+Desde la versión que trae este cambio va a **producción**, al esquema
+`observabilidad`, por la receptora `observabilidad`
+(`docs/features-futuras/plan-observabilidad-en-produccion.md`). Usa los mismos
+nombres de evento y de campo que el teléfono. Cada sesión lleva la plataforma
+(`escritorio`), la versión en semver (`1.10.8`) y el commit aparte; el equipo y
+la unidad los pone la nube desde el token. Las versiones anteriores siguen
+mandando a `telemetria_diagnostico` de staging, con `version_app` que empieza
+con `desktop-`.
 
 ## Cuándo mide
 
@@ -28,11 +32,9 @@ a `base` y `rendimiento` sin consultar a nadie. Diseño completo en
   llamada local, sin red) al abrir y cada 30 s, y sólo arma lo que rige. El
   backend vuelve a filtrar por grupo y descarta los tipos que no están en el
   catálogo.
-- Sólo se manda **telemetría** a staging, nunca datos de operación. La base y la
-  nube de la app siguen siendo las de producción. La dirección de staging está
-  fija en `src-tauri/src/telemetria.rs`; producción nunca recibe telemetría. La
-  llave es la publicable y en esa tabla sólo puede insertar (ver
-  `supabase/scripts/telemetria_diagnostico_staging.sql`).
+- Se manda con el **token del propio equipo** (la misma caché que la
+  operación), nunca con la llave publicable: la nube sabe qué equipo es y un
+  equipo retirado deja de poder mandar.
 - Ya no hay build de diagnóstico, ni la feature `telemetria`, ni
   `telemetria_reglas` / `reglas_telemetria_vigentes`.
 
@@ -79,14 +81,20 @@ pesa como máximo 16 KB.
 
 ## Envío
 
-- Cola en memoria. Un hilo propio la envía en lotes de 200 cada minuto.
-- Si un lote no se puede enviar, la cola se guarda en
-  `telemetria_pendiente.jsonl`, junto a la base local, y se reintenta al
-  siguiente arranque.
-- Al cerrar la app se guarda la cola y se intenta enviar durante 3 s como
+- Cola en memoria. Cada minuto un hilo propio la pasa a la cola en disco del
+  núcleo (`telemetria_cola/`, junto a la base local; ver
+  `control_acceso::telemetria::cola`) y la manda con
+  `control_acceso::telemetria::envio`: lotes columnar de hasta 500 filas,
+  comprimidos con brotli, por el cliente HTTP/2 del núcleo.
+- Si un lote no se puede enviar queda en disco y se reintenta con el mismo
+  `lote_id` (la nube no lo duplica). Sin token (equipo sin vincular o sin red)
+  también queda en disco.
+- Al cerrar la app la cola pasa a disco y se intenta enviar durante 3 s como
   máximo.
 - En un panic solo se guarda en disco. El cliente HTTP bloqueante no puede
   usarse desde un hilo de tokio.
+- El archivo del formato anterior (`telemetria_pendiente.jsonl`) se borra al
+  arrancar: era para staging y no sirve para la receptora nueva.
 - `telemetria_dispositivo` guarda un UUID aleatorio por instalación. No es
   el identificador de la máquina ni el del dispositivo en la nube.
 
