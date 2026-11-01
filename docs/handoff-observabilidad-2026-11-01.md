@@ -1,5 +1,15 @@
 # Traspaso: telemetría y errores a producción (2026-11-01)
 
+> **Actualización (2026-11-01, tarde):** el estado al día (qué se probó, las
+> dos correcciones de esta rama y lo que falta) está en
+> `docs/handoff-observabilidad-errores.md`, en la rama
+> `feat/observabilidad-fase1b-errores`. Resumen para esta rama: migraciones
+> probadas en staging (también la primera instalación de `pg_cron`), Deno,
+> núcleo, panel y escritorio en verde; corregidos `least`/`greatest` con
+> prefijo y las pruebas del escritorio que no compilaban. Falta repetir
+> `testDebugUnitTest` del móvil, abrir el PR, desplegar la Edge Function y
+> mergear.
+
 Para retomar en la sesión de la PC sin el contexto de la anterior. Horas en hora
 de Costa Rica. Reglas del proyecto en `AGENTS.md` (español, commits sólo a nombre
 de Daniel Quintana, sin atribuciones, el término prohibido del puesto de control).
