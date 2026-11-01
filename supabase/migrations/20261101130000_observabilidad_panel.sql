@@ -120,7 +120,7 @@ begin
       join observabilidad.sesiones s on s.id = l.sesion_id
       left join public.dispositivos d on d.id = l.dispositivo_id
      where l.ocurrido_en >= pg_catalog.now()
-                            - pg_catalog.make_interval(days => pg_catalog.least(pg_catalog.greatest(coalesce(p_dias, 1), 1), 30))
+                            - pg_catalog.make_interval(days => least(greatest(coalesce(p_dias, 1), 1), 30))
      group by l.dispositivo_id, d.etiqueta, s.plataforma, s.version_app, l.operacion
      order by l.operacion, s.version_app desc, d.etiqueta;
 end;
@@ -162,7 +162,7 @@ begin
       from observabilidad.resumen_llamadas_diario r
      where r.operacion = p_operacion
        and r.dia >= (pg_catalog.now() at time zone 'America/Costa_Rica')::date
-                    - pg_catalog.least(pg_catalog.greatest(coalesce(p_dias, 90), 1), 3650)
+                    - least(greatest(coalesce(p_dias, 90), 1), 3650)
      group by r.plataforma, r.version_app
      order by r.plataforma, pg_catalog.min(r.dia);
 end;

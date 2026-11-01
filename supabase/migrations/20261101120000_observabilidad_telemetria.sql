@@ -585,7 +585,7 @@ begin
     into v_filas;
   if v_filas > v_cfg.tope_filas_detalle then
     perform observabilidad.resumir_desde((
-      select (pg_catalog.least(
+      select (least(
                 (select pg_catalog.min(ocurrido_en) from observabilidad.eventos),
                 (select pg_catalog.min(ocurrido_en) from observabilidad.llamadas)
               ) at time zone 'America/Costa_Rica')::date));
@@ -598,7 +598,7 @@ begin
     exit when v_filas <= v_cfg.tope_filas_detalle or v_vueltas >= 400;
     v_vueltas := v_vueltas + 1;
 
-    select pg_catalog.least(
+    select least(
              (select pg_catalog.min(ocurrido_en) from observabilidad.eventos),
              (select pg_catalog.min(ocurrido_en) from observabilidad.llamadas)
            ) + interval '1 day'
