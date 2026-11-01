@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { GRUPOS_TELEMETRIA } from "../api/telemetria";
 import {
   contarPorEstado,
+  estadoEnvioTelemetria,
+  textoMs,
+  textoPorcentajeErrores,
   esLoDeSiempre,
   estadoEstudio,
   gruposVigentes,
@@ -117,5 +120,36 @@ describe("ordenarGrupos", () => {
       "fluidez",
       "escaneo",
     ]);
+  });
+});
+
+describe("estadoEnvioTelemetria", () => {
+  const ahora = new Date("2026-11-01T12:00:00-06:00");
+  const hace = (minutos: number) => new Date(ahora.getTime() - minutos * 60_000).toISOString();
+
+  it("al día hasta 20 minutos, atrasado hasta 2 horas, después sin señal", () => {
+    expect(estadoEnvioTelemetria(hace(1), ahora)).toBe("al_dia");
+    expect(estadoEnvioTelemetria(hace(20), ahora)).toBe("al_dia");
+    expect(estadoEnvioTelemetria(hace(21), ahora)).toBe("atrasado");
+    expect(estadoEnvioTelemetria(hace(120), ahora)).toBe("atrasado");
+    expect(estadoEnvioTelemetria(hace(121), ahora)).toBe("sin_senal");
+  });
+
+  it("sin ningún lote es sin señal", () => {
+    expect(estadoEnvioTelemetria(null, ahora)).toBe("sin_senal");
+  });
+});
+
+describe("textos de rendimiento", () => {
+  it("porcentaje de errores con un decimal y guion sin llamadas", () => {
+    expect(textoPorcentajeErrores(12, 1)).toBe("8,3 %");
+    expect(textoPorcentajeErrores(10, 0)).toBe("0 %");
+    expect(textoPorcentajeErrores(0, 0)).toBe("—");
+  });
+
+  it("milisegundos con un decimal por debajo de 100 y sin decimales desde 100", () => {
+    expect(textoMs(38.5)).toBe("38,5 ms");
+    expect(textoMs(276.4)).toBe("276 ms");
+    expect(textoMs(null)).toBe("—");
   });
 });

@@ -1,6 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CircleDashed, FlaskConical, History, Layers, MonitorSmartphone, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  Activity,
+  CircleDashed,
+  FlaskConical,
+  Gauge,
+  History,
+  Layers,
+  MonitorSmartphone,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Modal from "../componentes/Modal";
 import Tabla from "../componentes/Tabla";
@@ -33,6 +43,7 @@ import {
   venceEnDesde,
 } from "./Telemetria.logica";
 import { mensajeError } from "../mensajeError";
+import { VistaFlota, VistaRendimiento } from "./TelemetriaDatos";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 interface DatosTelemetria {
@@ -236,12 +247,21 @@ function EditarOrden({
   );
 }
 
-type Vista = "equipos" | "cambios";
+type Vista = "equipos" | "cambios" | "flota" | "rendimiento";
 
 const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
   { valor: "equipos", Icono: MonitorSmartphone, titulo: "Equipos: qué mide cada uno" },
   { valor: "cambios", Icono: History, titulo: "Cambios: quién cambió qué orden y cuándo" },
+  { valor: "flota", Icono: Activity, titulo: "Flota: si cada equipo está mandando y con qué versión" },
+  { valor: "rendimiento", Icono: Gauge, titulo: "Rendimiento: cuánto tarda cada operación, por equipo y versión" },
 ];
+
+const PISTA_BUSQUEDA: Record<Vista, string> = {
+  equipos: "Equipo, unidad, estudio…",
+  cambios: "Equipo, estudio, quién, nota…",
+  flota: "Equipo, versión, sistema…",
+  rendimiento: "Operación, equipo, versión…",
+};
 
 /** Quién cambió qué y cuándo: para cruzar un cambio en los datos con la orden
  * que lo causó. */
@@ -308,9 +328,8 @@ const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
  * vencimiento y nota. La nube le avisa al equipo al instante por Realtime, y
  * el equipo además la lee al sincronizar si estaba apagado o sin red.
  *
- * Qué versión de la orden aplicó cada equipo no se ve acá: lo informa el
- * propio equipo en su evento `orden_telemetria`, que va a la telemetría de
- * staging (Grafana), no a esta base.
+ * Las vistas Flota y Rendimiento muestran los datos que mandan los equipos a
+ * producción (`TelemetriaDatos.tsx`).
  */
 export default function Telemetria() {
   // Sin Realtime: las órdenes sólo las escribe este panel, que recarga al guardar.
@@ -430,7 +449,7 @@ export default function Telemetria() {
   const campoBusqueda = (
     <div className="campo flex-[0_1_16rem]">
       <input
-        placeholder={vista === "equipos" ? "Equipo, unidad, estudio…" : "Equipo, estudio, quién, nota…"}
+        placeholder={PISTA_BUSQUEDA[vista]}
         value={busqueda}
         onChange={(evento) => setBusqueda(evento.target.value)}
       />
@@ -444,7 +463,27 @@ export default function Telemetria() {
         <div className="min-h-0 flex-1">
           {/* Cada vista con su `key`: sin ella React reusa la misma grilla y por
               un instante pinta las filas de una con las columnas de la otra. */}
-          {vista === "equipos" ? (
+          {vista === "flota" ? (
+            <VistaFlota
+              controles={
+                <>
+                  {selectorVista}
+                  {campoBusqueda}
+                </>
+              }
+              busqueda={busqueda}
+            />
+          ) : vista === "rendimiento" ? (
+            <VistaRendimiento
+              controles={
+                <>
+                  {selectorVista}
+                  {campoBusqueda}
+                </>
+              }
+              busqueda={busqueda}
+            />
+          ) : vista === "equipos" ? (
             <Tabla<FilaTelemetria>
               key="equipos"
               id="telemetria"
@@ -494,7 +533,9 @@ export default function Telemetria() {
             />
           )}
         </div>
-        {(vista === "equipos" ? cargando && filas.length === 0 : historial.cargando && cambios.length === 0) && (
+        {(vista === "equipos"
+          ? cargando && filas.length === 0
+          : vista === "cambios" && historial.cargando && cambios.length === 0) && (
           <p className="text-muted">Cargando…</p>
         )}
       </div>

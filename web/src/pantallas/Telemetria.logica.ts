@@ -100,3 +100,37 @@ export function ordenarGrupos(
 ): GrupoTelemetria[] {
   return todos.filter((grupo) => marcados.has(grupo));
 }
+
+/**
+ * Si un equipo está mandando su telemetría. El móvil manda "a caballo" de otro
+ * tráfico y, sin actividad, como mucho cada 15 minutos
+ * (`telemetria::disparador`): pasados 20 sin un lote está atrasado, y pasadas
+ * 2 horas, sin señal (apagado, sin red o con la app cerrada).
+ */
+export type EstadoEnvioTelemetria = "al_dia" | "atrasado" | "sin_senal";
+
+export function estadoEnvioTelemetria(ultimoLoteEn: string | null, ahora: Date): EstadoEnvioTelemetria {
+  if (!ultimoLoteEn) return "sin_senal";
+  const minutos = (ahora.getTime() - new Date(ultimoLoteEn).getTime()) / 60_000;
+  if (minutos <= 20) return "al_dia";
+  if (minutos <= 120) return "atrasado";
+  return "sin_senal";
+}
+
+export const TEXTO_ESTADO_ENVIO: Record<EstadoEnvioTelemetria, string> = {
+  al_dia: "Al día",
+  atrasado: "Atrasado",
+  sin_senal: "Sin señal",
+};
+
+/** Errores sobre llamadas, en porcentaje con un decimal; `—` sin llamadas. */
+export function textoPorcentajeErrores(llamadas: number, errores: number): string {
+  if (llamadas <= 0) return "—";
+  return `${((errores * 100) / llamadas).toLocaleString("es-CR", { maximumFractionDigits: 1 })} %`;
+}
+
+/** Milisegundos para la grilla: sin decimales desde 100 ms; `—` si no hay dato. */
+export function textoMs(ms: number | null): string {
+  if (ms === null) return "—";
+  return `${ms.toLocaleString("es-CR", { maximumFractionDigits: ms < 100 ? 1 : 0 })} ms`;
+}
