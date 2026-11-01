@@ -114,7 +114,10 @@ pub struct Nucleo {
     /// candado mientras tanto -- se sentía como que la app se congelaba al
     /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
     /// la sincronización periódica estaba en curso al mismo tiempo.
-    cache_token: control_acceso::nube::CacheTokenDispositivo,
+    ///
+    /// En un `Arc` para compartirla con el registro de errores, que manda con
+    /// el mismo token (ver [`Self::desde_core`]).
+    cache_token: std::sync::Arc<control_acceso::nube::CacheTokenDispositivo>,
     /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
@@ -315,12 +318,25 @@ impl Nucleo {
     /// 2026-09-26: `conexion_secundaria()` pasaba `None` siempre, sin
     /// importar con qué clave se hubiera abierto la principal) para que
     /// `conexion_secundaria()` pueda aplicar la misma clave.
+    ///
+    /// El registro de errores manda con el token de esta misma caché. Se le
+    /// pasa una referencia débil: si el núcleo se cierra (o se vuelve a
+    /// abrir, que reemplaza la anterior), los errores esperan en disco.
     fn desde_core(ruta_base_datos: &str, core: AppCore, clave: Option<[u8; 32]>) -> Self {
+        let cache_token = std::sync::Arc::new(control_acceso::nube::CacheTokenDispositivo::new());
+        let para_errores = std::sync::Arc::downgrade(&cache_token);
+        control_acceso::errores::usar_token(std::sync::Arc::new(move || {
+            para_errores
+                .upgrade()?
+                .autenticar_con_cache()
+                .ok()
+                .map(|token| token.access_token)
+        }));
         Self {
             reloj: core.reloj(),
             core: Mutex::new(core),
             sesion: Mutex::new(None),
-            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
+            cache_token,
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(ruta_base_datos),
             clave,

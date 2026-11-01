@@ -5,8 +5,9 @@
 //! - Siempre encendido: no depende de la orden de telemetría ni se apaga
 //!   desde internet.
 //! - Cada error se escribe a disco en el momento ([`cola`]) y un hilo propio
-//!   lo manda al receptor (`supabase/functions-staging/receptor-errores`)
-//!   cada minuto ([`envio`]). Sin destino configurado, quedan en disco.
+//!   lo manda cada minuto a la receptora `observabilidad` de la nube, con el
+//!   token del equipo ([`envio`], [`usar_token`]). Sin token (equipo sin
+//!   vincular, sin red), quedan en disco.
 //! - Lleva la plataforma, la versión, la traza (marcando el código propio),
 //!   la pantalla actual y las últimas 20 operaciones ([`rastro`]): nombre,
 //!   resultado y hora, nunca datos. Todo el texto pasa por
@@ -18,7 +19,6 @@
 //!   reporta más de 100: un error en un bucle no inunda nada.
 
 mod cola;
-mod destino;
 mod envio;
 mod formato;
 mod limpieza;
@@ -29,10 +29,9 @@ mod traza;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
-pub use destino::Destino;
 pub use formato::{ESQUEMA, Marco, Operacion, Origen, Reporte};
 pub use limpieza::{limpiar_ruta, limpiar_texto};
 pub use traza::{hilo_principal_de_anr, marcos_de_backtrace, marcos_de_texto};
@@ -56,8 +55,6 @@ pub struct Configuracion {
     /// `escritorio` o `movil`.
     pub plataforma: String,
     pub version_app: String,
-    /// El DSN de siempre (ver [`Destino::desde_dsn`]); vacío = sin envío.
-    pub dsn: String,
     /// Prefijos del código propio en las trazas (`control_acceso`,
     /// `com.brisas.controlacceso`…).
     pub propios: Vec<String>,
@@ -119,7 +116,6 @@ struct Registro {
     propios: Vec<String>,
     contexto: BTreeMap<String, String>,
     cola: Cola,
-    destino: Option<Destino>,
     rastro: Mutex<Rastro>,
     pantalla: Mutex<Option<String>>,
     limitador: Mutex<Limitador>,
@@ -128,7 +124,6 @@ struct Registro {
 impl Registro {
     fn nuevo(configuracion: Configuracion) -> Self {
         Self {
-            destino: Destino::desde_dsn(&configuracion.dsn),
             cola: Cola::en(&configuracion.directorio),
             plataforma: configuracion.plataforma,
             version_app: configuracion.version_app,
@@ -250,38 +245,72 @@ impl Registro {
         )
     }
 
-    fn enviar(&self) -> Result<usize, String> {
-        self.destino
-            .as_ref()
-            .map_or(Ok(0), |destino| envio::enviar(destino, &self.cola))
+    /// Manda lo pendiente a la nube. El token se pide sólo si hay algo que
+    /// mandar; sin token, todo queda en disco para la próxima vuelta.
+    fn enviar(&self, token: impl FnOnce() -> Option<String>) -> Result<usize, String> {
+        if self.cola.pendientes().is_empty() {
+            return Ok(0);
+        }
+        let Some(token) = token() else {
+            return Ok(0);
+        };
+        let cliente = crate::nube::cliente_http();
+        envio::enviar(
+            &envio::Destino {
+                cliente: &cliente,
+                base_url: crate::nube::base_url(),
+                apikey: crate::nube::apikey(),
+                token: &token,
+            },
+            &self.cola,
+        )
     }
 }
 
 static REGISTRO: OnceLock<Registro> = OnceLock::new();
 
-/// Pone en marcha el registro: gancho de pánicos y, si hay destino, el hilo
-/// de envío. Una sola vez por proceso (devuelve `false` si ya estaba).
+/// De dónde sale el token del equipo: lo da cada app (la misma caché de la
+/// operación). `None` = todavía no hay (equipo sin vincular, sin red).
+pub type ProveedorToken = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+static TOKEN: Mutex<Option<ProveedorToken>> = Mutex::new(None);
+
+/// Fija de dónde sale el token para mandar los errores. Se puede llamar
+/// antes o después de [`instalar`], y otra vez si la app vuelve a abrir el
+/// núcleo (reemplaza al anterior).
+pub fn usar_token(proveedor: ProveedorToken) {
+    *TOKEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(proveedor);
+}
+
+fn token_actual() -> Option<String> {
+    let proveedor = TOKEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()?;
+    // Fuera del candado: pedir el token puede tocar la red.
+    proveedor()
+}
+
+/// Pone en marcha el registro: gancho de pánicos y el hilo de envío. Una
+/// sola vez por proceso (devuelve `false` si ya estaba).
 pub fn instalar(configuracion: Configuracion) -> bool {
     if REGISTRO.set(Registro::nuevo(configuracion)).is_err() {
         return false;
     }
     panico::instalar_gancho();
-    if REGISTRO
-        .get()
-        .is_some_and(|registro| registro.destino.is_some())
-    {
-        let _ = std::thread::Builder::new()
-            .name("errores-envio".into())
-            .spawn(|| {
-                std::thread::sleep(ESPERA_INICIAL_ENVIO);
-                loop {
-                    if let Err(error) = enviar_pendientes() {
-                        log::warn!("no se pudieron mandar los errores pendientes: {error}");
-                    }
-                    std::thread::sleep(INTERVALO_ENVIO);
+    let _ = std::thread::Builder::new()
+        .name("errores-envio".into())
+        .spawn(|| {
+            std::thread::sleep(ESPERA_INICIAL_ENVIO);
+            loop {
+                if let Err(error) = enviar_pendientes() {
+                    log::warn!("no se pudieron mandar los errores pendientes: {error}");
                 }
-            });
-    }
+                std::thread::sleep(INTERVALO_ENVIO);
+            }
+        });
     true
 }
 
@@ -329,7 +358,9 @@ pub fn reportar_inesperado(error: &dyn Display) -> bool {
 /// Manda ya lo pendiente (bloqueante). Lo hace solo el hilo de envío; las
 /// plataformas lo pueden pedir antes de cerrar.
 pub fn enviar_pendientes() -> Result<usize, String> {
-    REGISTRO.get().map_or(Ok(0), Registro::enviar)
+    REGISTRO
+        .get()
+        .map_or(Ok(0), |registro| registro.enviar(token_actual))
 }
 
 #[cfg(test)]
@@ -344,7 +375,6 @@ mod tests {
             directorio: dir.to_path_buf(),
             plataforma: "movil".into(),
             version_app: "1.8.12 (57)".into(),
-            dsn: String::new(),
             propios: vec!["com.brisas.controlacceso".into(), "control_acceso".into()],
             contexto: BTreeMap::from([("modelo".into(), "SM-A256E".into())]),
         })
@@ -445,11 +475,21 @@ mod tests {
     }
 
     #[test]
-    fn sin_destino_no_se_manda_nada() {
+    fn sin_token_no_se_manda_nada_y_queda_en_disco() {
         let dir = tempfile::tempdir().unwrap();
         let registro = registro(dir.path());
         registro.reportar(Origen::Js, "x", Vec::new());
-        assert_eq!(registro.enviar(), Ok(0));
+        assert_eq!(registro.enviar(|| None), Ok(0));
         assert_eq!(guardados(&registro).len(), 1, "queda en disco");
+    }
+
+    #[test]
+    fn sin_pendientes_ni_se_pide_el_token() {
+        let dir = tempfile::tempdir().unwrap();
+        let registro = registro(dir.path());
+        assert_eq!(
+            registro.enviar(|| panic!("no debía pedir el token")),
+            Ok(0)
+        );
     }
 }

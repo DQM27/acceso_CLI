@@ -44,20 +44,19 @@ fn origen_de_kotlin(nombre: &str) -> Option<Origen> {
 }
 
 /// Pone en marcha el registro. Se llama al crear la `Application`, antes de
-/// abrir la base. `dsn`: el de siempre (`BuildConfig.DSN_ERRORES`); vacío =
-/// los errores quedan en el teléfono. Devuelve `false` si ya estaba.
+/// abrir la base. Los errores van a la nube con el token del teléfono, que
+/// el núcleo le pasa al registro al abrirse (`Nucleo::desde_core`); hasta
+/// entonces esperan en disco. Devuelve `false` si ya estaba.
 #[uniffi::export]
 pub fn instalar_registro_errores(
     directorio: String,
     version_app: String,
-    dsn: String,
     contexto: HashMap<String, String>,
 ) -> bool {
     errores::instalar(Configuracion {
         directorio: directorio.into(),
         plataforma: "movil".into(),
         version_app,
-        dsn,
         // Kotlin de la app, los bindings y el núcleo en Rust.
         propios: vec![
             "com.brisas.controlacceso".into(),

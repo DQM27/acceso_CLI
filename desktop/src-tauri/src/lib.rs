@@ -563,6 +563,15 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
             .ok()
             .map(|token| token.access_token)
     }));
+    // Los errores, igual: a la receptora de la nube con el token del equipo.
+    let para_errores = app.handle().clone();
+    control_acceso::errores::usar_token(std::sync::Arc::new(move || {
+        para_errores
+            .state::<GuiState>()
+            .autenticar_con_cache()
+            .ok()
+            .map(|token| token.access_token)
+    }));
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
     // Conexiones con la nube siempre calientes: la primera salida o ingreso

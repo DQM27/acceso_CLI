@@ -1,37 +1,44 @@
-//! Manda los errores en disco al receptor, en lotes. Bloqueante: sólo desde
-//! un hilo propio, nunca desde un runtime de tokio.
-
-use std::time::Duration;
+//! Manda los errores en disco a la receptora `observabilidad` de la nube
+//! (`/functions/v1/observabilidad/errores`), en lotes comprimidos con brotli y
+//! con el token del equipo, como la telemetría
+//! (`docs/features-futuras/plan-observabilidad-en-produccion.md`). La
+//! receptora limpia otra vez el texto, calcula la huella y llama a
+//! `registrar_errores` con ese mismo token: la nube pone el equipo y la
+//! unidad.
+//!
+//! Bloqueante: sólo desde un hilo propio, nunca desde un runtime de tokio.
 
 use reqwest::StatusCode;
 
 use super::cola::Cola;
-use super::destino::Destino;
+use crate::telemetria::lote;
 
+/// Ruta de la receptora, relativa a la URL base del proyecto.
+pub const RUTA_RECEPTORA: &str = "/functions/v1/observabilidad/errores";
 /// Errores por petición.
 pub const POR_LOTE: usize = 10;
-const ESPERA_MAXIMA: Duration = Duration::from_secs(10);
 
-/// Manda todo lo pendiente y borra lo que el receptor recibió. Devuelve
-/// cuántos errores salieron. Si el receptor no está disponible (red,
-/// límite, 5xx), corta y deja el resto para la próxima vuelta.
+/// A dónde y con qué se manda.
+pub struct Destino<'a> {
+    pub cliente: &'a reqwest::blocking::Client,
+    pub base_url: &'a str,
+    pub apikey: &'a str,
+    pub token: &'a str,
+}
+
+/// Manda todo lo pendiente y borra lo que la nube recibió. Devuelve cuántos
+/// errores salieron. Si la nube no puede recibir (red, token, ritmo, 5xx),
+/// corta y deja el resto para la próxima vuelta.
 ///
-/// Un lote que el receptor rechaza por mal formado (400) también se borra:
-/// reintentarlo daría siempre lo mismo.
-pub fn enviar(destino: &Destino, cola: &Cola) -> Result<usize, String> {
+/// Un lote que la nube rechaza por mal formado (400, 413, 422) también se
+/// borra: reintentarlo daría siempre lo mismo.
+pub fn enviar(destino: &Destino<'_>, cola: &Cola) -> Result<usize, String> {
     let pendientes = cola.pendientes();
-    if pendientes.is_empty() {
-        return Ok(0);
-    }
-    let cliente = reqwest::blocking::Client::builder()
-        .timeout(ESPERA_MAXIMA)
-        .build()
-        .map_err(|error| error.to_string())?;
     let mut enviados = 0;
-    for lote in pendientes.chunks(POR_LOTE) {
-        let mut reportes = Vec::with_capacity(lote.len());
-        let mut rutas = Vec::with_capacity(lote.len());
-        for ruta in lote {
+    for lote_rutas in pendientes.chunks(POR_LOTE) {
+        let mut reportes = Vec::with_capacity(lote_rutas.len());
+        let mut rutas = Vec::with_capacity(lote_rutas.len());
+        for ruta in lote_rutas {
             let leido = std::fs::read(ruta)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
@@ -46,20 +53,29 @@ pub fn enviar(destino: &Destino, cola: &Cola) -> Result<usize, String> {
         if reportes.is_empty() {
             continue;
         }
-        let estado = cliente
-            .post(&destino.url)
-            .header("x-clave-errores", &destino.clave)
-            .json(&serde_json::json!({ "reportes": reportes }))
+        let cuerpo = lote::comprimir(&serde_json::json!({ "reportes": reportes }));
+        let estado = destino
+            .cliente
+            .post(format!("{}{RUTA_RECEPTORA}", destino.base_url))
+            .header("apikey", destino.apikey)
+            .bearer_auth(destino.token)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(reqwest::header::CONTENT_ENCODING, "br")
+            .body(cuerpo)
             .send()
             .map_err(|error| error.to_string())?
             .status();
-        if !estado.is_success() && estado != StatusCode::BAD_REQUEST {
-            return Err(format!("receptor-errores respondió {estado}"));
-        }
-        if estado == StatusCode::BAD_REQUEST {
-            log::warn!("receptor-errores rechazó un lote de errores por mal formado: se descarta");
-        } else {
-            enviados += rutas.len();
+        match estado {
+            _ if estado.is_success() => enviados += rutas.len(),
+            StatusCode::BAD_REQUEST
+            | StatusCode::PAYLOAD_TOO_LARGE
+            | StatusCode::UNPROCESSABLE_ENTITY => {
+                log::warn!("la nube rechazó un lote de errores ({estado}): se descarta");
+            }
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                return Err("sin autorización para mandar errores".to_owned());
+            }
+            _ => return Err(format!("la receptora de errores respondió {estado}")),
         }
         for ruta in rutas {
             Cola::borrar(ruta);
@@ -75,15 +91,15 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::mpsc;
 
-    use super::{POR_LOTE, enviar};
+    use super::{Destino, POR_LOTE, RUTA_RECEPTORA, enviar};
     use crate::errores::cola::Cola;
-    use crate::errores::destino::Destino;
     use crate::errores::formato::{ESQUEMA, Reporte};
+    use crate::telemetria::lote;
 
     fn reporte(i: usize) -> Reporte {
         Reporte {
             esquema: ESQUEMA,
-            id: format!("id-{i:03}"),
+            id: format!("id-{i:03}-de-prueba"),
             ocurrido_en: format!("2026-10-31T12:00:{i:02}.000Z"),
             plataforma: "movil".into(),
             version_app: "1.8.12 (57)".into(),
@@ -96,17 +112,50 @@ mod tests {
         }
     }
 
-    /// Un receptor de prueba: responde `estados` en orden, una petición por
-    /// estado, y pasa lo que recibió (clave y cuerpo).
-    fn receptor(estados: Vec<u16>) -> (String, mpsc::Receiver<(String, String)>) {
+    /// Lo que la receptora de prueba vio en una petición.
+    struct Peticion {
+        ruta: String,
+        cabeceras: Vec<(String, String)>,
+        cuerpo: Vec<u8>,
+    }
+
+    impl Peticion {
+        fn cabecera(&self, nombre: &str) -> Option<&str> {
+            self.cabeceras
+                .iter()
+                .find(|(n, _)| n == nombre)
+                .map(|(_, v)| v.as_str())
+        }
+
+        fn reportes(&self) -> serde_json::Value {
+            serde_json::from_slice::<serde_json::Value>(
+                &lote::descomprimir(&self.cuerpo, 1 << 20).unwrap(),
+            )
+            .unwrap()["reportes"]
+                .clone()
+        }
+    }
+
+    /// Una receptora de prueba: responde `estados` en orden, una petición por
+    /// estado, y pasa lo que recibió.
+    fn receptora(estados: Vec<u16>) -> (String, mpsc::Receiver<Peticion>) {
         let escucha = TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/v1/errores", escucha.local_addr().unwrap());
+        let url = format!("http://{}", escucha.local_addr().unwrap());
         let (enviar, recibir) = mpsc::channel();
         std::thread::spawn(move || {
             for estado in estados {
-                let (conexion, _) = escucha.accept().unwrap();
+                let Ok((conexion, _)) = escucha.accept() else {
+                    return;
+                };
                 let mut lector = BufReader::new(conexion);
-                let mut clave = String::new();
+                let mut primera = String::new();
+                lector.read_line(&mut primera).unwrap();
+                let ruta = primera
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .to_owned();
+                let mut cabeceras = Vec::new();
                 let mut largo = 0;
                 loop {
                     let mut linea = String::new();
@@ -116,16 +165,20 @@ mod tests {
                         break;
                     }
                     let (nombre, valor) = linea.split_once(": ").unwrap_or_default();
-                    match nombre.to_ascii_lowercase().as_str() {
-                        "x-clave-errores" => valor.clone_into(&mut clave),
-                        "content-length" => largo = valor.parse().unwrap(),
-                        _ => {}
+                    let nombre = nombre.to_ascii_lowercase();
+                    if nombre == "content-length" {
+                        largo = valor.parse().unwrap();
                     }
+                    cabeceras.push((nombre, valor.to_owned()));
                 }
                 let mut cuerpo = vec![0; largo];
                 lector.read_exact(&mut cuerpo).unwrap();
                 enviar
-                    .send((clave, String::from_utf8(cuerpo).unwrap()))
+                    .send(Peticion {
+                        ruta,
+                        cabeceras,
+                        cuerpo,
+                    })
                     .unwrap();
                 write!(
                     lector.get_mut(),
@@ -137,41 +190,67 @@ mod tests {
         (url, recibir)
     }
 
+    fn destino<'a>(cliente: &'a reqwest::blocking::Client, url: &'a str) -> Destino<'a> {
+        Destino {
+            cliente,
+            base_url: url,
+            apikey: "clave-publica",
+            token: "jwt-del-equipo",
+        }
+    }
+
     #[test]
-    fn manda_en_lotes_con_la_clave_y_borra_lo_recibido() {
+    fn manda_en_lotes_brotli_con_el_token_y_borra_lo_recibido() {
         let dir = tempfile::tempdir().unwrap();
         let cola = Cola::en(dir.path());
         for i in 0..POR_LOTE + 2 {
             cola.guardar(&reporte(i)).unwrap();
         }
-        let (url, recibido) = receptor(vec![200, 200]);
-        let destino = Destino {
-            url,
-            clave: "clave-1".into(),
-        };
+        let (url, peticiones) = receptora(vec![200, 200]);
+        let cliente = reqwest::blocking::Client::new();
 
-        assert_eq!(enviar(&destino, &cola), Ok(POR_LOTE + 2));
+        assert_eq!(enviar(&destino(&cliente, &url), &cola), Ok(POR_LOTE + 2));
         assert!(cola.pendientes().is_empty());
-        let (clave, cuerpo) = recibido.recv().unwrap();
-        assert_eq!(clave, "clave-1");
-        let cuerpo: serde_json::Value = serde_json::from_str(&cuerpo).unwrap();
-        assert_eq!(cuerpo["reportes"].as_array().unwrap().len(), POR_LOTE);
-        assert_eq!(cuerpo["reportes"][0]["id"], "id-000", "del más viejo");
-        assert_eq!(cuerpo["reportes"][0]["pantalla"], "Ingreso");
+
+        let peticion = peticiones.recv().unwrap();
+        assert_eq!(peticion.ruta, RUTA_RECEPTORA);
+        assert_eq!(
+            peticion.cabecera("authorization"),
+            Some("Bearer jwt-del-equipo")
+        );
+        assert_eq!(peticion.cabecera("apikey"), Some("clave-publica"));
+        assert_eq!(peticion.cabecera("content-encoding"), Some("br"));
+        let reportes = peticion.reportes();
+        assert_eq!(reportes.as_array().unwrap().len(), POR_LOTE);
+        assert_eq!(reportes[0]["id"], "id-000-de-prueba", "del más viejo");
+        assert_eq!(reportes[0]["pantalla"], "Ingreso");
+        assert_eq!(peticiones.recv().unwrap().reportes().as_array().unwrap().len(), 2);
     }
 
     #[test]
-    fn si_el_receptor_no_esta_disponible_deja_todo_para_despues() {
+    fn si_la_nube_no_esta_disponible_deja_todo_para_despues() {
         let dir = tempfile::tempdir().unwrap();
         let cola = Cola::en(dir.path());
         cola.guardar(&reporte(1)).unwrap();
-        let (url, _recibido) = receptor(vec![503]);
-        let destino = Destino {
-            url,
-            clave: "c".into(),
-        };
+        let (url, _peticiones) = receptora(vec![503]);
+        let cliente = reqwest::blocking::Client::new();
 
-        assert!(enviar(&destino, &cola).is_err());
+        assert!(enviar(&destino(&cliente, &url), &cola).is_err());
+        assert_eq!(cola.pendientes().len(), 1);
+    }
+
+    #[test]
+    fn sin_autorizacion_corta_y_deja_todo() {
+        let dir = tempfile::tempdir().unwrap();
+        let cola = Cola::en(dir.path());
+        cola.guardar(&reporte(1)).unwrap();
+        let (url, _peticiones) = receptora(vec![401]);
+        let cliente = reqwest::blocking::Client::new();
+
+        assert_eq!(
+            enviar(&destino(&cliente, &url), &cola),
+            Err("sin autorización para mandar errores".to_owned())
+        );
         assert_eq!(cola.pendientes().len(), 1);
     }
 
@@ -185,22 +264,27 @@ mod tests {
             "{no",
         )
         .unwrap();
-        let (url, _recibido) = receptor(vec![400]);
-        let destino = Destino {
-            url,
-            clave: "c".into(),
-        };
+        let (url, peticiones) = receptora(vec![400]);
+        let cliente = reqwest::blocking::Client::new();
 
-        assert_eq!(enviar(&destino, &cola), Ok(0));
+        assert_eq!(enviar(&destino(&cliente, &url), &cola), Ok(0));
         assert!(cola.pendientes().is_empty());
+        assert_eq!(
+            peticiones.recv().unwrap().reportes().as_array().unwrap().len(),
+            1,
+            "el dañado no viajó"
+        );
     }
 
     #[test]
     fn sin_pendientes_no_hace_ninguna_peticion() {
         let dir = tempfile::tempdir().unwrap();
+        let cliente = reqwest::blocking::Client::new();
         let destino = Destino {
-            url: "http://127.0.0.1:9/nadie".into(),
-            clave: "c".into(),
+            cliente: &cliente,
+            base_url: "http://127.0.0.1:9",
+            apikey: "k",
+            token: "t",
         };
         assert_eq!(enviar(&destino, &Cola::en(dir.path())), Ok(0));
     }

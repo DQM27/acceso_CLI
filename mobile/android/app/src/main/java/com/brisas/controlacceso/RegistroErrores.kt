@@ -16,7 +16,8 @@ import uniffi.control_acceso_mobile.reportarError
 /// SDK de Sentry. Siempre encendido: no depende de la orden de telemetría.
 ///
 /// El registro vive en el núcleo (`control_acceso::errores`): guarda cada
-/// error en disco en el momento y lo manda al receptor propio cada minuto.
+/// error en disco en el momento y lo manda a la nube cada minuto, con el
+/// token del teléfono (en cuanto el núcleo está abierto y vinculado).
 /// Kotlin sólo le pasa lo que el núcleo no ve:
 /// - excepciones que nadie atrapó (`Thread.setDefaultUncaughtExceptionHandler`,
 ///   que también recibe las de las corrutinas);
@@ -39,7 +40,6 @@ object RegistroErrores {
             instalarRegistroErrores(
                 directorio = app.filesDir.absolutePath,
                 versionApp = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                dsn = BuildConfig.DSN_ERRORES,
                 contexto = mapOf(
                     "os" to "android",
                     "os_version" to Build.VERSION.RELEASE,

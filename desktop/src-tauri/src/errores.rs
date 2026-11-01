@@ -18,18 +18,6 @@ use std::path::Path;
 
 use control_acceso::errores::{self, Configuracion, Origen};
 
-/// A dónde van los errores: el receptor propio
-/// (`supabase/functions-staging/receptor-errores`). Llega por la variable
-/// `SENTRY_DSN` al compilar (el CI la toma del secreto del mismo nombre; el
-/// nombre quedó del SDK de Sentry). No es un secreto: va dentro de la app.
-///
-/// Sin variable, o vacía, no se manda nada: los errores quedan en disco
-/// (`errores_pendientes/`) y en el registro local.
-const DSN: &str = match option_env!("SENTRY_DSN") {
-    Some(dsn) => dsn,
-    None => "",
-};
-
 /// Largo máximo de lo que manda el frontend (título y traza de un error de
 /// JavaScript): un mensaje gigante no llena el disco.
 const MAXIMO_TITULO_JS: usize = 2_000;
@@ -37,6 +25,9 @@ const MAXIMO_TRAZA_JS: usize = 16 * 1024;
 
 /// Pone en marcha el registro. `directorio` es donde vive la base de datos
 /// local; se llama antes de abrirla, así un fallo al abrir también se reporta.
+/// Los errores van a la nube con el token del equipo (lo entrega
+/// `configurar_arranque` en `lib.rs` con `errores::usar_token`); hasta que
+/// lo haya, esperan en disco (`errores_pendientes/`).
 pub fn instalar(directorio: &Path) {
     let ambiente = if control_acceso::nube::base_url() == crate::telemetria::URL_STAGING {
         "staging"
@@ -49,7 +40,6 @@ pub fn instalar(directorio: &Path) {
         directorio: directorio.to_path_buf(),
         plataforma: "escritorio".into(),
         version_app: crate::telemetria::version_app(),
-        dsn: DSN.into(),
         // Rust (`control_acceso`, `control_acceso_desktop_lib`) y el frontend
         // empaquetado (`http://tauri.localhost/assets/…`).
         propios: vec!["control_acceso".into(), "tauri.localhost".into()],
