@@ -34,7 +34,7 @@ Viene después de `docs/handoff-observabilidad-2026-11-01.md` (telemetría, fase
 |---|---|---|
 | Migración | `supabase/migrations/20261101140000_observabilidad_errores.sql` | ✅ Probada en staging con `rollback` (2026-11-01) |
 | Batería | `supabase/tests/observabilidad_errores.sql` | ✅ Pasa (pasos 1 a 9) |
-| Edge Function, ruta `/errores` | `supabase/functions/observabilidad/` | Pendiente |
+| Edge Function, ruta `/errores` | `supabase/functions/observabilidad/{index,errores,errores.test}.ts` | ✅ Deno check/lint/test (102 pruebas); contrato TS→SQL probado en staging. **Sin desplegar** |
 | Núcleo | `src/errores/envio.rs`, `destino.rs` | Pendiente |
 | Escritorio y móvil | cablear el envío nuevo | Pendiente |
 | Panel | vista Errores | Pendiente |
@@ -50,15 +50,11 @@ usar la CLI con `--linked` para pruebas.
 
 ## Próximos pasos, en orden
 
-1. **Edge Function:** ruta `POST .../observabilidad/errores` en `index.ts`.
-   Mismo camino que `/telemetria` (Bearer obligatorio, `leerConTope`,
-   `descomprimir`), cuerpo `{"reportes": [...]}` (formato
-   `control_acceso::errores::Reporte`, esquema 1). Portar `extraerReporte`,
-   `limpiarTexto`, `limpiarRuta` y `calcularHuella` a
-   `observabilidad/errores.ts` con sus pruebas (las de
-   `functions-staging/receptor-errores/logica.test.ts`), y llamar a
-   `registrar_errores` con `{p_reportes: [...{...evento, huella}]}`
-   reenviando el token. Traducir la respuesta como `traducirRespuestaRpc`.
+1. ✅ **Edge Function** (hecho): `POST .../observabilidad/errores` con
+   `{"reportes": [...]}` (`Reporte`, esquema 1), comprimido y con el token del
+   equipo. Responde 200 con `{estado, guardados, repetidos, grupos_nuevos,
+   regresiones, descartados}`; 400/413 descartar; 401/403 renovar token;
+   429/502/503 reintentar (igual que `/telemetria`).
 2. **Núcleo:** `errores::envio` manda a `/functions/v1/observabilidad/errores`
    con brotli y el token del equipo (como `telemetria::envio`), con las
    mismas respuestas (`Recibido`/`Rechazado`/`SinAutorizacion`/`Reintentar`).
