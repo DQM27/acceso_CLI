@@ -37,10 +37,10 @@ chrono-tz = "0.10.4"
 # plano -- lo vigila el test `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
 # (`src/database/connection.rs`). Se elimina `backup` de
 # rusqlite deliberadamente (Brisas no usa el mecanismo propio de la crate).
-rusqlite = { version = "0.40.2", default-features = false, features = ["functions"] }
+rusqlite = { version = "0.41.1", default-features = false, features = ["functions"] }
 argon2 = "0.6"
 rand_core = { version = "0.6", features = ["getrandom"] }
-rust_xlsxwriter = { version = "0.99.1", features = ["chrono", "constant_memory"] }
+rust_xlsxwriter = { version = "0.102.0", features = ["chrono", "constant_memory"] }
 tempfile = "3"
 thiserror = "2"
 # Fachada de logging, compartida por escritorio (tauri-plugin-log) y mobile
