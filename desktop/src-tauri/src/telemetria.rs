@@ -715,18 +715,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_cola_descarta_lo_mas_viejo_y_devuelve_en_orden() {
+    fn la_cola_descarta_lo_mas_viejo_y_entrega_en_orden() {
         let mut cola = Cola::default();
         for i in 0..MAXIMO_EN_COLA + 2 {
-            cola.agregar(i.to_string());
+            cola.agregar(EventoTelemetria {
+                ocurrido_ms: i64::try_from(i).unwrap(),
+                tipo: "reloj".to_owned(),
+                datos: serde_json::Map::new(),
+            });
         }
         assert_eq!(cola.descartadas, 2);
-        assert_eq!(cola.filas.front().map(String::as_str), Some("2"));
 
-        let lote = cola.tomar(3);
-        assert_eq!(lote, ["2", "3", "4"]);
-        cola.devolver(lote);
-        assert_eq!(cola.tomar(3), ["2", "3", "4"], "vuelve adelante y en orden");
+        let todo = cola.tomar_todo();
+        assert_eq!(todo.len(), MAXIMO_EN_COLA);
+        let horas: Vec<i64> = todo.iter().take(3).map(|e| e.ocurrido_ms).collect();
+        assert_eq!(horas, [2, 3, 4], "sin los dos más viejos, en orden");
+        assert!(cola.tomar_todo().is_empty(), "queda vacía");
     }
 
     #[test]
@@ -806,7 +810,7 @@ mod tests {
         assert!(!version.contains("desktop") && !version.contains('+'));
         match cabecera["commit"].as_str() {
             Some(commit) => {
-                assert!(commit.chars().all(|c| c.is_ascii_hexdigit()) && commit.len() >= 7)
+                assert!(commit.chars().all(|c| c.is_ascii_hexdigit()) && commit.len() >= 7);
             }
             None => assert_eq!(env!("BUILD_COMMIT_HASH"), "sinhash"),
         }
