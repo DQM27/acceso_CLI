@@ -739,6 +739,13 @@ function TablaBase<T>(
           loading={cargando === true && filas.length === 0 && !primeraCargaHecha}
           tooltipShowMode="whenTruncated"
           tooltipShowDelay={400}
+          // Sin la "×" de borrar dentro de los inputs de filtro: AG Grid 36 le
+          // reserva SIEMPRE 32px a la derecha (`--ag-icon-size` + 2 *
+          // `--ag-spacing`), esté vacío o no, y en columnas angostas como
+          // GAFETE eso dejaba ~8px de texto -- el "11" escrito no se veía
+          // (hallazgo del usuario, 2026-11-13). Se borra igual con Retroceso
+          // o desde el menú del filtro.
+          suppressInputClearButton
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
           // AG Grid reordene según el orden literal del array en vez de
