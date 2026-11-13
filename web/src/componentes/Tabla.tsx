@@ -113,8 +113,10 @@ const columnaPorDefecto: ColDef = {
 const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
 /** `type: "fecha"` / `type: "numero"` en la definición de una columna: filtro de
- * fecha (antes, después, entre...) o de número (mayor que, menor que...) en vez
- * del de texto. Sólo aplica con los filtros por columna visibles. */
+ * fecha o de número en vez del de texto -- compara "igual a" (fecha exacta,
+ * número exacto) en vez de "contiene". Sin menú avanzado (antes, después,
+ * mayor que...), ver `columnaPorDefectoConFiltro`. Sólo aplica con los filtros
+ * por columna visibles. */
 const FILTRO_FECHA: ColDef = {
   filter: "agDateColumnFilter",
   dateComponent: FiltroFechaTabla,
@@ -134,6 +136,15 @@ const columnaPorDefectoConFiltro: ColDef = {
   filter: true,
   floatingFilter: true,
   filterParams: { textMatcher },
+  // Sólo la caja de texto, sin el botón del embudo que abría el menú
+  // avanzado (Contiene / No contiene / Igual a / Empieza con / En blanco...):
+  // el cliente no lo usa y le quitaba ~28px al input (pedido del usuario,
+  // 2026-11-13, mismo cambio que en escritorio). Se filtra con la opción por
+  // defecto de cada tipo: "contiene" en texto, "igual a" en número y fecha.
+  // Sin `suppressHeaderFilterButton`, AG Grid muda el mismo botón al
+  // encabezado de la columna; el indicador de "filtro activo" sí queda.
+  suppressFloatingFilterButton: true,
+  suppressHeaderFilterButton: true,
 };
 
 export interface EstadoGuardado {
@@ -670,6 +681,13 @@ function TablaBase<T>(
           columnHoverHighlight
           tooltipShowMode="whenTruncated"
           tooltipShowDelay={400}
+          // Sin la "×" de borrar dentro de los inputs de filtro: AG Grid 36 le
+          // reserva SIEMPRE 32px a la derecha (`--ag-icon-size` + 2 *
+          // `--ag-spacing`), esté vacío o no, y en columnas angostas como
+          // GAFETE eso dejaba ~16px de texto (0px en una de 90px) -- lo
+          // escrito no se veía (hallazgo del usuario, 2026-11-13, mismo
+          // arreglo que en escritorio). Se borra con Retroceso.
+          suppressInputClearButton
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
           // AG Grid reordene según el orden literal del array en vez de

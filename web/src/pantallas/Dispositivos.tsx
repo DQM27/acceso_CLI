@@ -244,12 +244,13 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       const resultado = await provisionarDispositivo({
         sitio_id: sitio.id,
         tipo,
-        etiqueta: etiqueta.trim(),
+        // En mayúscula como se ve al escribir (regla global de `input`).
+        etiqueta: etiqueta.trim().toUpperCase(),
       });
       cerrarModal();
       setCodigoMostrado({
         clase: "vinculacion",
-        titulo: `${etiqueta.trim()} (${resultado.sitio_nombre})`,
+        titulo: `${etiqueta.trim().toUpperCase()} (${resultado.sitio_nombre})`,
         codigo: resultado.codigo,
         expira_en: resultado.expira_en,
       });
@@ -276,7 +277,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setCreandoSitio(true);
     setErrorSitio(null);
     try {
-      const nuevo = await crearSitio({ nombre: nuevoSitioNombre.trim() });
+      // En mayúscula como se ve al escribir (regla global de `input`).
+      const nuevo = await crearSitio({ nombre: nuevoSitioNombre.trim().toUpperCase() });
       // La unidad nueva aparece en la lista sin esperar a otra consulta.
       clienteConsultas.setQueryData<typeof datos>(["dispositivos-y-sitios"], (actual) =>
         actual && !actual.sitios.some((s) => s.id === nuevo.id)
@@ -343,7 +345,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     evento.preventDefault();
     const fila = reconectando;
     const sitio = sitios.find((s) => s.id === sitioReconexion);
-    const nuevaEtiqueta = etiquetaReconexion.trim();
+    // En mayúscula como se ve al escribir (regla global de `input`).
+    const nuevaEtiqueta = etiquetaReconexion.trim().toUpperCase();
     if (!fila || !sitio || !nuevaEtiqueta || autorizandoReconexion) return;
     setAutorizandoReconexion(true);
     try {

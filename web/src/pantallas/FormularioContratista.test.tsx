@@ -188,7 +188,8 @@ describe("FormularioContratista", () => {
     fireEvent.change(screen.getByPlaceholderText("Nombre de la empresa"), { target: { value: "nueva sa" } });
     fireEvent.click(screen.getByRole("button", { name: "Crear" }));
 
-    await waitFor(() => expect(mocks.crearEmpresa).toHaveBeenCalledWith("nueva sa"));
+    // El nombre de empresa sigue la regla de mayúscula de los nombres.
+    await waitFor(() => expect(mocks.crearEmpresa).toHaveBeenCalledWith("NUEVA SA"));
     await waitFor(() => expect((screen.getByLabelText(/^Empresa/) as HTMLSelectElement).value).toBe("e3"));
   });
 

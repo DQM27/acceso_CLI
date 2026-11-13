@@ -274,6 +274,9 @@ function PanelChat({
         <form className="asistente-entrada" onSubmit={enviar}>
           <textarea
             ref={caja}
+            // Lo que se le pide al asistente es una frase: sin la mayúscula
+            // global de los campos (index.css).
+            className="sin-mayuscula"
             rows={1}
             placeholder="Escriba lo que quiere ver…"
             aria-label="Mensaje para el asistente"
@@ -472,6 +475,7 @@ function VistaDocumento({
           <label htmlFor="nombre-vista">Nombre de la vista</label>
           <input
             id="nombre-vista"
+            className="sin-mayuscula"
             value={guardando}
             maxLength={80}
             autoFocus

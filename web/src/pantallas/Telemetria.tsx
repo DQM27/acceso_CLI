@@ -199,6 +199,8 @@ function EditarOrden({
             </span>
           </span>
           <input
+            // Nota de soporte redactada: sin la mayúscula global (index.css).
+            className="sin-mayuscula"
             value={nota}
             maxLength={LARGO_MAXIMO_NOTA}
             disabled={guardando}

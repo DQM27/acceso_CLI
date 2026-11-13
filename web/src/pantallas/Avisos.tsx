@@ -193,6 +193,9 @@ export default function Avisos() {
           <label className="campo">
             Título
             <input
+              // Texto redactado para el teléfono: se ve y se manda tal cual,
+              // sin la mayúscula global de los campos (index.css).
+              className="sin-mayuscula"
               value={titulo}
               maxLength={LARGO_MAXIMO_TITULO}
               disabled={enviando}
@@ -209,6 +212,7 @@ export default function Avisos() {
               </span>
             </span>
             <textarea
+              className="sin-mayuscula"
               rows={4}
               value={cuerpo}
               maxLength={LARGO_MAXIMO_CUERPO}

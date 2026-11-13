@@ -18,7 +18,7 @@ Administradores del panel. Es sólo de consulta.
 
 Junto al buscador hay un selector con cuatro clases, como en el
 escritorio: **Contratistas**, **Proveedores**, **Visitas por correo** y
-**Gafetes KOF**. Cada clase tiene su propia lista, sus columnas y su
+**Provisionales KOF**. Cada clase tiene su propia lista, sus columnas y su
 exportación. Al cambiar de clase y volver, la lista queda como la dejó
 (página, orden y filtros).
 
@@ -31,7 +31,7 @@ El **período** y las **unidades** son los mismos para las cuatro clases.
 | Contratistas | Unidad operativa, Cédula, Nombre, Empresa, Dispositivo (PC o celular), Tipo, Medio, Gafete, Fecha y hora de ingreso, Fecha y hora de salida (**Activo** si sigue adentro), Dio ingreso y Dio salida. |
 | Proveedores | Unidad operativa, Cédula, Nombre, Empresa, Dispositivo, Placa, Gafete, Fecha y hora de ingreso y de salida (**Activo** si sigue adentro), Dio ingreso y Dio salida. |
 | Visitas por correo | Las mismas que proveedores, con **Motivo** en lugar de Empresa. |
-| Gafetes KOF | Unidad operativa, Código empleado, Encargado, Dispositivo, Gafete, Fecha y hora de **Entrega**, Fecha y hora de **Devolución** (**Prestado** si no lo devolvió), **Entregó** y **Recibió**. |
+| Provisionales KOF | Unidad operativa, Código empleado, Encargado, Dispositivo, Gafete, Fecha y hora de **Entrega**, Fecha y hora de **Devolución** (**Prestado** si no lo devolvió), **Entregó** y **Recibió**. |
 
 Se muestran de a **100 filas por página**.
 

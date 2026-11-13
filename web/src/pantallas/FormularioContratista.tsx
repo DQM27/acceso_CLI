@@ -196,7 +196,8 @@ function FormularioConReglas({ contratista, onGuardado, onCerrar }: Props) {
                 placeholder="Nombre de la empresa"
                 value={nombreEmpresa}
                 disabled={guardandoEmpresa}
-                onChange={(evento) => setNombreEmpresa(evento.target.value)}
+                // Nombre de empresa: misma regla de mayúscula que el de persona.
+                onChange={(evento) => setNombreEmpresa(reglas.nombreMientrasSeEscribe(evento.target.value))}
               />
               <button
                 type="button"
