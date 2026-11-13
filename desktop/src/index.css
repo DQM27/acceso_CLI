@@ -442,6 +442,22 @@ input {
   padding-inline: 3px;
 }
 
+/* Buscadores de la barra de cada grilla y filtros por columna: lo escrito se
+   ve en mayúscula, como los datos (pedido del usuario, 2026-11-13). Sólo a
+   la vista (`text-transform`): el valor que se busca no cambia, así que
+   ninguna búsqueda se comporta distinto; los filtros de la grilla además ya
+   ignoran mayúsculas y tildes (`plegar` en Tabla.tsx). El ejemplo
+   (placeholder) queda en texto normal, mismo criterio que en los modales. */
+.tabla-barra input,
+.ag-floating-filter input {
+  text-transform: uppercase;
+}
+
+.tabla-barra input::placeholder,
+.ag-floating-filter input::placeholder {
+  text-transform: none;
+}
+
 /* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
    mismo alto, borde y fondo que `.boton`, con las opciones unidas y la
    elegida rellena con el acento (`aria-pressed`). */

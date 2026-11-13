@@ -584,7 +584,9 @@ function TablaBase<T>(
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* `tabla-barra`: los buscadores de acá se ven en mayúscula (index.css). */}
       <div
+        className="tabla-barra"
         style={{
           display: "flex",
           alignItems: accionesCentro ? "center" : "flex-end",
