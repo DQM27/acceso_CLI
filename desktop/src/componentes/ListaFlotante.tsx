@@ -34,9 +34,11 @@ export function ListaFlotante({
    * el borde superior a su misma altura (ej. `SelectorRangoFecha`, para no
    * tapar la grilla debajo del botón); ahí `alinear` no aplica. */
   direccion?: "abajo" | "arriba" | "izquierda" | "derecha";
-  /** Entrada y salida deslizando desde el disparador (la que usa el menú de
-   * cuenta, `direccion="derecha"`); sin esto, aparece de golpe como siempre. */
-  animacion?: "lateral";
+  /** Entrada y salida deslizando desde el disparador: "lateral" hacia el
+   * costado (el menú de cuenta, `direccion="derecha"`), "caida" hacia abajo
+   * (los menús de acciones, ej. "Ingreso"). Sin esto, aparece de golpe.
+   * Abrir/cerrar con `useAperturaAnimada`. */
+  animacion?: "lateral" | "caida";
   /** Con `animacion`, la salida: el que la monta lo deja en pantalla el
    * tiempo justo para que termine antes de desmontarla. */
   saliendo?: boolean;
@@ -62,6 +64,10 @@ export function ListaFlotante({
         ...ubicacion,
         width: ancho ?? posicion.width,
         zIndex: 1000,
+        // La caída crece desde la esquina pegada al disparador.
+        ...(animacion === "caida"
+          ? { transformOrigin: `${direccion === "arriba" ? "bottom" : "top"} ${alinear === "derecha" ? "right" : "left"}` }
+          : {}),
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
