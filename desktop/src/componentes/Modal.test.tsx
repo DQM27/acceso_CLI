@@ -51,6 +51,18 @@ describe("Modal", () => {
     expect(onCerrar).toHaveBeenCalledOnce();
   });
 
+  it("si la pantalla no lo desmonta al cerrar, el modal vuelve a verse", async () => {
+    const { container } = render(
+      <Modal titulo="T" onCerrar={() => {}}>
+        <p>x</p>
+      </Modal>,
+    );
+    const velo = container.firstChild as Element;
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(velo.classList.contains("modal-velo-saliendo")).toBe(true);
+    await waitFor(() => expect(velo.classList.contains("modal-velo-saliendo")).toBe(false));
+  });
+
   it("click en el backdrop NO cierra -- decisión explícita, no accidental", () => {
     const onCerrar = vi.fn();
     const { container } = render(

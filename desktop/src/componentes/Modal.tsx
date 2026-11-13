@@ -54,7 +54,14 @@ export default function Modal({
     if (saliendoRef.current) return;
     saliendoRef.current = true;
     setSaliendo(true);
-    esperaSalida.current = setTimeout(() => onCerrarRef.current(), DURACION_SALIDA_MODAL_MS);
+    esperaSalida.current = setTimeout(() => {
+      onCerrarRef.current();
+      // Si la pantalla no lo desmontó (ej. un `onCerrar` que no deja cerrar
+      // mientras guarda), el modal vuelve a verse en vez de quedar invisible
+      // y sin recibir clics.
+      saliendoRef.current = false;
+      setSaliendo(false);
+    }, DURACION_SALIDA_MODAL_MS);
   }, []);
 
   useEffect(
