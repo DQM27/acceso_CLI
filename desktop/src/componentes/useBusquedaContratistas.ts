@@ -7,6 +7,10 @@ export const ESPERA_BUSQUEDA_MS = 120;
 /** Cuántos contratistas muestra la lista del buscador. */
 export const MAX_RESULTADOS_BUSQUEDA = 4;
 
+/** Siempre el mismo arreglo vacío: uno nuevo en cada render hace que quien
+ * lo compare por identidad crea que la lista cambió. */
+const SIN_RESULTADOS: ContratistaResumen[] = [];
+
 interface Busqueda {
   /** Contratistas encontrados. Mientras llega la respuesta de lo nuevo que
    * se tecleó, se quedan los anteriores (no parpadea a vacío). */
@@ -61,6 +65,6 @@ export function useBusquedaContratistas(
     };
   }, [consulta]);
 
-  if (!consulta) return { resultados: [], buscando: false };
+  if (!consulta) return { resultados: SIN_RESULTADOS, buscando: false };
   return { resultados: respuesta.filas, buscando: respuesta.texto !== consulta };
 }
