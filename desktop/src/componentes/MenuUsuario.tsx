@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
 import type { UsuarioSesion } from "../api";
 import CambiarPasswordModal from "./CambiarPasswordModal";
@@ -47,23 +48,7 @@ export default function MenuUsuario({
   const { campoRef, posicion } = useListaFlotante(visible);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!abierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (campoRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      cerrar();
-    }
-    function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") cerrar();
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    document.addEventListener("keydown", alTeclear);
-    return () => {
-      document.removeEventListener("mousedown", alHacerClicAfuera);
-      document.removeEventListener("keydown", alTeclear);
-    };
-  }, [abierto, campoRef, cerrar]);
+  useCerrarAlClicAfuera(abierto, [campoRef, popoverRef], cerrar);
 
   const IconoTema = tema === "tokyo-night" ? Moon : Sun;
 

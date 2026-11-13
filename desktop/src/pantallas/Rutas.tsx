@@ -7,7 +7,8 @@ import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import { useRecargaVisible } from "../componentes/useRecargaVisible";
 import { listarRutasActivas, registrarRetornoRuta } from "../api";
 import type { SalidaRutaActivaResumen } from "../api";
-import { textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaDDMMYYYY } from "../tiempo";
+import { columnaHora } from "../componentes/columnasComunes";
 
 const SalidaRutaModal = lazy(() => import("./SalidaRutaModal"));
 
@@ -96,13 +97,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
         minWidth: 100,
         valueGetter: (p) => (p.data ? textoFechaDDMMYYYY(p.data.fecha_documento) : ""),
       },
-      {
-        colId: "hora_salida",
-        headerName: "Hora salida",
-        flex: 0.8,
-        minWidth: 90,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_salida) : ""),
-      },
+      columnaHora("hora_salida", (fila) => fila.fecha_hora_salida, { headerName: "Hora salida", flex: 0.8 }),
       { field: "usuario_salida_nombre", headerName: "Registró", flex: 1.1, minWidth: 120 },
       {
         headerName: "Acción",

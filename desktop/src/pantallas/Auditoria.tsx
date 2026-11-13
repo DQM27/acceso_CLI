@@ -12,7 +12,7 @@ import {
   valorPresentable,
 } from "../api";
 import type { IncidenteGafete } from "../api";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { columnaFecha, columnaHora } from "../componentes/columnasComunes";
 import { nombresActuales } from "./Auditoria.logica";
 
 /** Una fila de la grilla — de `auditoria_cambios` (Contratista/Empresa/
@@ -110,22 +110,8 @@ export default function Auditoria() {
   // literales de acá encima del layout que el usuario ya acomodó.
   const columnas: ColDef<FilaAuditoria>[] = useMemo(
     () => [
-      {
-        colId: "fecha",
-        type: "fecha",
-        headerName: "Fecha",
-        flex: 1.1,
-        minWidth: 110,
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        colId: "hora",
-        headerName: "Hora",
-        flex: 0.9,
-        minWidth: 90,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora) : ""),
-      },
+      columnaFecha("fecha", (fila) => fila.fecha_hora),
+      columnaHora("hora", (fila) => fila.fecha_hora),
       {
         field: "entidad_actual",
         headerName: "Entidad",

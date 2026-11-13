@@ -4,6 +4,7 @@ import { avisos } from "../avisos/avisos";
 import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import { idPorUuid } from "../componentes/Tabla.logica";
 import type { TablaHandle } from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
@@ -19,6 +20,7 @@ import {
   textoTipoIngreso,
 } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
 import { textoDispositivo, remotosSinDuplicarLocales, filaDesdeRemoto } from "./Historial.logica";
 import type { FilaHistorial, PropsHistorialClase } from "./Historial.logica";
 
@@ -42,10 +44,6 @@ const CLAVES_COLUMNA: Record<string, string> = {
   usuario_ingreso_nombre: "ingreso",
   usuario_salida_nombre: "egreso",
 };
-
-/** Identidad de fila para el destello de celdas cambiadas (`idFila` de
- * `Tabla`) -- a nivel de módulo para que sea una función estable. */
-const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
 /** Historial de contratistas -- una de las clases de `Historial.tsx`, que le
  * pasa el selector de clase (`selector`, va al centro de la barra) y el rango
@@ -252,36 +250,22 @@ export default function HistorialContratistas({
             : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.9,
-        minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-        getQuickFilterText: () => "",
-      },
-      {
-        colId: "fecha_ingreso",
-        type: "fecha",
+      columnaGafete({ getQuickFilterText: () => "" }),
+      // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el resto
+      // de encabezados entraba completo — 140 es lo que necesita "FECHA
+      // INGRESO" para no cortarse.
+      columnaFecha("fecha_ingreso", (fila) => fila.fecha_hora_ingreso, {
         headerName: "Fecha ingreso",
-        // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el
-        // resto de encabezados entraba completo — 140 es lo que necesita
-        // "FECHA INGRESO" para no cortarse.
         flex: 1.4,
         minWidth: 140,
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
         getQuickFilterText: () => "",
-      },
-      {
-        colId: "hora_ingreso",
+      }),
+      columnaHora("hora_ingreso", (fila) => fila.fecha_hora_ingreso, {
         headerName: "Hora ingreso",
         flex: 1.3,
         minWidth: 130,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
         getQuickFilterText: () => "",
-      },
+      }),
       {
         // "Activo" (no sólo vacío) cuando no hay salida — mismo texto que
         // ya escribe la exportación a Excel (`escribir_movimiento`,

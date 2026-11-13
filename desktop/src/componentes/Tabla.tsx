@@ -1,6 +1,7 @@
 import "./modulosTabla";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
@@ -333,19 +334,12 @@ function TablaBase<T>(
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Mismo mecanismo que `SelectorRangoFecha`: cierra al clickear afuera del
-  // botón y del popover (el popover vive en un portal a `document.body`, así
-  // que un click "afuera" del árbol de este componente no lo cierra solo).
-  useEffect(() => {
-    if (!selectorAbierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (selectorRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setSelectorAbierto(false);
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
-  }, [selectorAbierto, selectorRef]);
+  // Cierra al clickear afuera del botón y del popover (el popover vive en un
+  // portal a `document.body`, así que un click "afuera" del árbol de este
+  // componente no lo cierra solo).
+  useCerrarAlClicAfuera(selectorAbierto, [selectorRef, popoverRef], () => setSelectorAbierto(false), {
+    conEscape: false,
+  });
 
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
 

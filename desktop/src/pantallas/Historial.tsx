@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import type { ReactNode } from "react";
 import { BadgeCheck, Boxes, HardHat, Mail } from "lucide-react";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import { claseCapaVista } from "../componentes/capaVista";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { SeccionActivaProvider, useSeccionActiva } from "../contexto/BarraEstadoContexto";
 import { fechaHaceMeses } from "../tiempo";
@@ -26,13 +27,6 @@ const VISTAS: Record<ClaseHistorial, (props: PropsHistorialClase) => ReactNode> 
   kof: (props) => <HistorialKof {...props} />,
 };
 
-/** Capa de cada clase: las que ya se abrieron quedan montadas una encima de
- * la otra y sólo se muestra la elegida, así cambiar de clase no destruye la
- * grilla ni pierde scroll y filtros (mismo criterio que `.capa-vista` en
- * index.css, que usaban Proveedores y KOF para Activos/Historial). */
-function claseCapaVista(visible: boolean): string {
-  return visible ? "capa-vista" : "capa-vista capa-vista-oculta";
-}
 
 /**
  * Historial de todos los ingresos, con un selector de clase en el centro de

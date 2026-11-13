@@ -11,10 +11,11 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import MenuAcciones from "../componentes/MenuAcciones";
 import { useRecargaVisible } from "../componentes/useRecargaVisible";
+import { idPorClave } from "../componentes/Tabla.logica";
 import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, cerrarActivos, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
 import {
   CLASE_SINGULAR,
   contarPorClase,
@@ -110,11 +111,6 @@ function opcionesFiltroClase(
     })),
   ];
 }
-
-/** Fuera del componente a propósito: una función nueva en cada render hacía
- * que la grilla se reconstruyera y perdiera los anchos ajustados (ver
- * `columnaBase` en Tabla.tsx). */
-const idPorClave = (fila: ActivoUnificado) => fila.clave;
 
 /** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
  * contratistas lo tienen). */
@@ -321,46 +317,9 @@ export default function Activos({
         minWidth: 100,
         getQuickFilterText: () => "",
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.9,
-        minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-        getQuickFilterText: () => "",
-      },
-      {
-        colId: "fecha_ingreso",
-        type: "fecha",
-        headerName: "Fecha",
-        flex: 1.1,
-        minWidth: 110,
-        // `valueGetter` (no `field`) a propósito, igual que Hora: si la
-        // columna lee el string ISO crudo, AG Grid la infiere como fecha y
-        // el filtro flotante termina siendo el selector nativo de
-        // fecha+hora del navegador (`datetime-local`) en vez de un texto
-        // simple — igual que le pasaba a Hora. `fechaLocalYMD` mantiene el
-        // orden cronológico correcto como texto ("2026-08-28" ordena bien
-        // sin volver a pasar por `Date`); `valueFormatter` sólo reacomoda
-        // ese mismo string a DD/MM/AAAA para mostrar, sin re-parsearlo.
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-        getQuickFilterText: () => "",
-      },
-      {
-        colId: "hora_ingreso",
-        headerName: "Hora",
-        flex: 0.9,
-        minWidth: 90,
-        // `valueGetter` (no `field`+`valueFormatter`) a propósito: si lee
-        // el string ISO crudo, AG Grid vuelve a inferirla como fecha (con
-        // el mismo problema de la columna Fecha). Devolviendo ya el texto
-        // "HH:MM", la columna se filtra/ordena como texto plano — mismo
-        // comportamiento que el resto de columnas de texto, sin ícono raro.
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
-        getQuickFilterText: () => "",
-      },
+      columnaGafete({ getQuickFilterText: () => "" }),
+      columnaFecha("fecha_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
+      columnaHora("hora_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
       {
         field: "usuario_ingreso_nombre",
         headerName: "Dio ingreso",
