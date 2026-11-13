@@ -17,6 +17,7 @@ import type {
   ColumnPinnedEvent,
   ColumnResizedEvent,
   GridReadyEvent,
+  NewColumnsLoadedEvent,
   SortChangedEvent,
   TextMatcherParams,
 } from "ag-grid-community";
@@ -373,6 +374,14 @@ function TablaBase<T>(
         // que dependa de si los filtros están visibles.
         const { type, ...resto } = original;
         let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        // Columna sin dato (botón "Salida" de Activos): AG Grid 36 la
+        // refresca a la fuerza en CADA actualización de filas -- no tiene un
+        // valor que comparar -- y con `enableCellChangeFlash` la hacía
+        // destellar en cada recarga (Realtime, pulso de sincronización) aunque
+        // nada hubiera cambiado (hallazgo del usuario, 2026-11-13).
+        if (resto.field === undefined && resto.valueGetter === undefined) {
+          columna = { ...columna, enableCellChangeFlash: false };
+        }
         if (type === "fecha" && conFiltro) columna = { ...columna, ...(FILTRO_FECHA as ColDef<T>) };
         if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
         return columna;
@@ -380,12 +389,17 @@ function TablaBase<T>(
     [columnas, ocultas, conFiltro],
   );
 
+  // Depende de SI hay `idFila`, no de su identidad: un `defaultColDef` nuevo
+  // hace que AG Grid reconstruya las columnas y les reaplique el `flex`/orden
+  // del código, borrando los anchos que el usuario ajustó. Con
+  // `idFila={(f) => ...}` inline eso pasaba en cada recarga de datos.
+  const conIdFila = idFila !== undefined;
   const columnaBase = useMemo<ColDef>(
     () => ({
       ...(conFiltro ? columnaPorDefectoConFiltro : columnaPorDefecto),
-      ...(idFila ? { enableCellChangeFlash: true } : {}),
+      ...(conIdFila ? { enableCellChangeFlash: true } : {}),
     }),
-    [conFiltro, idFila],
+    [conFiltro, conIdFila],
   );
 
   async function exportarCsv(nombre: string) {
@@ -565,6 +579,19 @@ function TablaBase<T>(
       apiRef.current.applyColumnState({ state: guardado.columnas, applyOrder: true });
     }
   }, [seccionActiva, idGrilla]);
+
+  /** AG Grid reconstruye las columnas cada vez que cambian `columnDefs` o
+   * `defaultColDef` (ocultar una columna, mostrar/ocultar filtros...) y en
+   * esa reconstrucción les vuelve a poner el `flex`, el orden y el sort del
+   * código -- el layout que el usuario acomodó se perdía. Se reaplica el
+   * guardado (siempre al día: se guarda en cada cambio) justo después. No
+   * entra en bucle: `applyColumnState` no reconstruye columnas. */
+  function alCargarColumnas(evento: NewColumnsLoadedEvent<T>) {
+    const guardado = leerEstadoGuardado(idGrilla);
+    if (guardado?.columnas?.length) {
+      evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
+    }
+  }
 
   function alMoverColumna(evento: ColumnMovedEvent<T>) {
     if (evento.finished) guardarLayout(ocultas);
@@ -776,6 +803,7 @@ function TablaBase<T>(
               : undefined
           }
           onGridReady={alListo}
+          onNewColumnsLoaded={alCargarColumnas}
           onColumnMoved={alMoverColumna}
           onColumnResized={alRedimensionarColumna}
           onSortChanged={alOrdenar}
