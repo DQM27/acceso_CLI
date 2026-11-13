@@ -116,7 +116,8 @@ describe("Dispositivos -- autorizar reconexión", () => {
     expect(mocks.autorizarReconexion).toHaveBeenCalledWith({
       dispositivo_id: "d1",
       sitio_id: "s1",
-      etiqueta: "Celular Brisas",
+      // La etiqueta se guarda en mayúscula, como se ve al escribir.
+      etiqueta: "CELULAR BRISAS",
     });
     expect(screen.queryByRole("dialog", { name: "Verificación por correo" })).toBeNull();
     expect(await screen.findByText("Código: K7QMR4XT2P")).toBeTruthy();

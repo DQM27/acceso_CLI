@@ -55,6 +55,8 @@ export default function Ayuda() {
         <div className="campo">
           <input
             type="search"
+            // Se pega el mensaje de error tal cual: sin la mayúscula global.
+            className="sin-mayuscula"
             placeholder="Buscar, o pegar un mensaje…"
             aria-label="Buscar en la ayuda"
             value={consulta}
