@@ -11,6 +11,7 @@ import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
+import { useRecargaVisible } from "../componentes/useRecargaVisible";
 import {
   cerrarVisitaRemota,
   listarAgendaVisitas,
@@ -149,6 +150,10 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const recargarVista =
     vista === "esperadas" ? recargarEsperadas : vista === "adentro" ? recargarAdentro : recargarHistorial;
 
+  // `refrescarSenal` sube en cada sincronización (Realtime, pulso periódico
+  // o manual) -- ver `App.tsx`/`Shell`. Con Visitas oculta no recarga: queda
+  // pendiente hasta volver (`useRecargaVisible`).
+  const versionDatos = useRecargaVisible(refrescarSenal);
   useEffect(() => {
     let vigente = true;
     const recargar =
@@ -157,9 +162,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     return () => {
       vigente = false;
     };
-    // `refrescarSenal` sube en cada sincronización (Realtime, pulso
-    // periódico o manual) -- ver `App.tsx`/`Shell`.
-  }, [vista, refrescarSenal, recargarEsperadas, recargarAdentro, recargarHistorial]);
+  }, [vista, versionDatos, recargarEsperadas, recargarAdentro, recargarHistorial]);
 
   const darSalida = useCallback(
     async (fila: FilaVisitaAdentro) => {

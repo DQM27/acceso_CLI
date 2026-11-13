@@ -1,5 +1,6 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { avisos } from "../avisos/avisos";
+import { EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCargaAlCambiar } from "./useCargaAlCambiar";
 
@@ -41,6 +42,29 @@ describe("useCargaAlCambiar", () => {
     // con waitFor (justamente se espera que NO pase nada).
     await Promise.resolve();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("con escucharNube, recarga con un cambio local o una sincronización", () => {
+    const recargar = vi.fn().mockResolvedValue(undefined);
+    renderHook(() => useCargaAlCambiar(recargar, true));
+    expect(recargar).toHaveBeenCalledTimes(1);
+    act(() => {
+      window.dispatchEvent(new Event(EVENTO_CAMBIO_LOCAL_NUBE));
+    });
+    expect(recargar).toHaveBeenCalledTimes(2);
+    act(() => {
+      window.dispatchEvent(new Event(EVENTO_NUBE_ACTUALIZADA));
+    });
+    expect(recargar).toHaveBeenCalledTimes(3);
+  });
+
+  it("sin escucharNube, ignora los eventos", () => {
+    const recargar = vi.fn().mockResolvedValue(undefined);
+    renderHook(() => useCargaAlCambiar(recargar));
+    act(() => {
+      window.dispatchEvent(new Event(EVENTO_NUBE_ACTUALIZADA));
+    });
+    expect(recargar).toHaveBeenCalledTimes(1);
   });
 
   it("vuelve a correr recargar() cuando cambia su identidad", () => {

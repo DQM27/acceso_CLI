@@ -10,6 +10,7 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import MenuAcciones from "../componentes/MenuAcciones";
+import { useRecargaVisible } from "../componentes/useRecargaVisible";
 import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, cerrarActivos, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
@@ -117,11 +118,10 @@ const idPorClave = (fila: ActivoUnificado) => fila.clave;
 
 /** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
  * contratistas lo tienen). */
-function claseFilaActiva(fila: ActivoUnificado): string | undefined {
-  if (fila.nivel_permanencia === "Critico") return "fila-permanencia-critico";
-  if (fila.nivel_permanencia === "Aviso") return "fila-permanencia-aviso";
-  return undefined;
-}
+const REGLAS_PERMANENCIA: Record<string, (fila: ActivoUnificado) => boolean> = {
+  "fila-permanencia-critico": (fila) => fila.nivel_permanencia === "Critico",
+  "fila-permanencia-aviso": (fila) => fila.nivel_permanencia === "Aviso",
+};
 
 export default function Activos({
   refrescarSenal,
@@ -197,32 +197,35 @@ export default function Activos({
   // 2026-09-23) -- ni queda escondida en la barra de estado.
   const tablaRef = useRef<TablaHandle<ActivoUnificado>>(null);
 
+  // La selección NO se borra al recargar: cada sincronización o aviso en vivo
+  // recarga, y antes desmarcaba las casillas a mitad de una salida masiva. AG
+  // Grid ya saca de la selección las filas que desaparecen (y avisa por
+  // `onSeleccionCambia`), así que sólo quedan marcadas las que siguen adentro.
+  // `cargando` sólo vale para la PRIMERA carga (la tabla no muestra "Cargando…"
+  // después): arranca en `true` y se apaga al terminar, no se vuelve a prender
+  // en cada recarga -- así tampoco hace falta un setState síncrono dentro del
+  // efecto (antes se diferían con `Promise.resolve().then` para la regla
+  // `react-hooks/set-state-in-effect`).
   const recargar = useCallback(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
-    // esta actualización de estado como síncrona dentro del cuerpo del
-    // efecto que la dispara (abajo). Diferirla a un microtask no cambia
-    // nada perceptible (corre antes del próximo paint igual) y cumple la
-    // regla.
-    return Promise.resolve()
-      .then(() => setCargando(true))
-      .then(() => listarActivosUnificados())
+    return listarActivosUnificados()
       .then(({ activos, total }) => {
         setActivos(activos);
         setTotal(total);
         setCargadoAlgunaVez(true);
-        setSeleccionadas([]);
       })
       .finally(() => setCargando(false));
   }, []);
 
+  // Oculta (otra sección a la vista), la pantalla no recarga: queda
+  // pendiente y recarga una vez al volver (ver `useRecargaVisible`).
+  const versionDatos = useRecargaVisible(refrescarSenal);
   useEffect(() => {
     let vigente = true;
     recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
-  }, [recargar, refrescarSenal]);
+  }, [recargar, versionDatos]);
 
   // useCallback a propósito: esta función se cierra dentro de una celda de
   // `columnas` — sin identidad estable, `columnas` (memoizado más abajo)
@@ -405,7 +408,7 @@ export default function Activos({
             filtrosPorColumna
             id="activos"
             idFila={idPorClave}
-            claseFila={claseFilaActiva}
+            reglasClaseFila={REGLAS_PERMANENCIA}
             columnas={columnas}
             filas={filasVisibles}
             busqueda={busqueda}

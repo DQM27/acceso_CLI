@@ -28,8 +28,27 @@ export interface NubeActualizadaDetalle {
  * que agrega el `null` de "todavía no se intentó conectar". */
 export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
 
+/** ¿Esta sincronización pudo cambiar lo que muestran las pantallas?
+ *
+ * Una corrida que sólo SUBE lo registrado en esta PC (`soloEnvio`, ver
+ * `programarCorrida`) no baja nada: la pantalla que registró ya se recargó
+ * sola, así que recargar otra vez era trabajo repetido (auditoría
+ * 2026-11-13: cada salida recargaba Activos dos veces). Salvo que el envío
+ * traiga algo que mostrar: un rechazo (`fallidos`, gafete ya en uso en otro
+ * equipo) o la baja de la sesión. Cualquier corrida que baja datos sí
+ * recarga: el resumen no alcanza para saber si cambió algo (por ejemplo,
+ * `remotos_abiertos` es el total de gente adentro en otros sitios, no lo
+ * nuevo). */
+export function sincronizacionCambiaDatos(resumen: ResumenSincronizacion, soloEnvio: boolean): boolean {
+  if (!soloEnvio) return true;
+  return resumen.fallidos > 0 || resumen.conflictos_gafete.length > 0 || resumen.sesion_expulsada;
+}
+
 interface OpcionesRealtimeNube {
-  onSincronizado?: (resumen: ResumenSincronizacion) => void;
+  /** `recargar` es `false` cuando la corrida no pudo cambiar datos a la vista
+   * (ver `sincronizacionCambiaDatos`): igual hay que revisar el resumen
+   * (sesión expulsada, conflictos), pero no recargar pantallas. */
+  onSincronizado?: (resumen: ResumenSincronizacion, recargar: boolean) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
   /** Llegó un aviso de expulsión para este equipo: le pregunta a la nube
    * (`descartarTokenNube` pide un token a `device-auth`) y devuelve si
@@ -206,8 +225,9 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
           ? await sincronizarCambiosNube(tablas)
           : await enviarCambiosNube();
       if (!cancelado) {
-        opciones.onSincronizado?.(resumen);
-        emitirActualizacion(resumen);
+        const recargar = sincronizacionCambiaDatos(resumen, !completa && tablas.length === 0);
+        opciones.onSincronizado?.(resumen, recargar);
+        if (recargar) emitirActualizacion(resumen);
       }
     } catch (error) {
       console.error("No se pudo sincronizar tras aviso Realtime:", error);

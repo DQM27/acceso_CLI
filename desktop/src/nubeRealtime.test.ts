@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { iniciarRealtimeNube } from "./nubeRealtime";
+import { iniciarRealtimeNube, sincronizacionCambiaDatos } from "./nubeRealtime";
+import type { ResumenSincronizacion } from "./api/nube";
 import { solicitarSincronizacionNube } from "./eventosNube";
 
 const mocks = vi.hoisted(() => ({
@@ -38,7 +39,7 @@ const sesion = {
   access_token: "jwt-dispositivo", expires_in: 3600,
   sitio_id: "sitio-a", dispositivo_id: "equipo-a", topic: "sitio:sitio-a",
 };
-const resumen = { enviados: 0 };
+const resumen = { enviados: 0, fallidos: 0, conflictos_gafete: [], sesion_expulsada: false };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -235,6 +236,22 @@ describe("sincronización por Realtime", () => {
     expect(mocks.sincronizarCambios).not.toHaveBeenCalled();
   });
 
+  it("un cambio local que sólo subió no pide recargar pantallas", async () => {
+    const onSincronizado = vi.fn();
+    await iniciar({ onSincronizado });
+    solicitarSincronizacionNube();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(onSincronizado).toHaveBeenCalledWith(resumen, false);
+  });
+
+  it("una sincronización que baja datos sí pide recargar", async () => {
+    const onSincronizado = vi.fn();
+    const canal = await iniciar({ onSincronizado });
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "empresas", operation: "UPDATE" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(onSincronizado).toHaveBeenCalledWith(resumen, true);
+  });
+
   it("un aviso sin datos no intenta aplicar nada", async () => {
     const canal = await iniciar();
     canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "empresas", operation: "UPDATE" } });
@@ -374,5 +391,28 @@ describe("sincronización por Realtime", () => {
     await vi.advanceTimersByTimeAsync(600);
     expect(mocks.sincronizarCambios).toHaveBeenCalledTimes(2);
     expect(mocks.sincronizarCambios).toHaveBeenLastCalledWith(["citas"]);
+  });
+});
+
+describe("sincronizacionCambiaDatos", () => {
+  const base = resumen as unknown as ResumenSincronizacion;
+
+  it("lo que baja de la nube siempre recarga", () => {
+    expect(sincronizacionCambiaDatos(base, false)).toBe(true);
+  });
+
+  it("solo subir lo de esta PC no recarga", () => {
+    expect(sincronizacionCambiaDatos({ ...base, enviados: 3 }, true)).toBe(false);
+  });
+
+  it("subir con un rechazo o un gafete en conflicto si recarga", () => {
+    expect(sincronizacionCambiaDatos({ ...base, fallidos: 1 }, true)).toBe(true);
+    expect(
+      sincronizacionCambiaDatos({ ...base, conflictos_gafete: [{}] } as unknown as ResumenSincronizacion, true),
+    ).toBe(true);
+  });
+
+  it("la baja de la sesion siempre se atiende", () => {
+    expect(sincronizacionCambiaDatos({ ...base, sesion_expulsada: true }, true)).toBe(true);
   });
 });
