@@ -317,15 +317,23 @@ input {
   text-transform: uppercase;
 }
 
-/* Fila de filtros por columna: menos margen a los costados (16px -> 8px) y
-   entre el input y el botón del filtro (12px -> 6px). Con los 16px de
-   siempre (`--ag-cell-horizontal-padding`, el mismo de las celdas de datos)
-   una columna de 90px (`minWidth`) dejaba 12px de texto; así quedan 34px,
-   y una de ~118px pasa de 40px a 62px. Va junto con
-   `suppressInputClearButton` en Tabla.tsx. */
+/* Fila de filtros por columna: menos margen a los costados (16px -> 8px; los
+   16px de siempre son `--ag-cell-horizontal-padding`, el mismo de las celdas
+   de datos). Junto con `suppressInputClearButton` y sin el botón del filtro
+   (`suppressFloatingFilterButton`, ver Tabla.tsx), el texto pasa a tener
+   56px en una columna de 90px (`minWidth`, antes 0px) y 84px en una de
+   ~118px (antes 16px).
+   De esos 8px, 3px van al contenedor del input en vez de a la celda: el
+   halo de foco del input es una sombra de 3px (`box-shadow 0 0 0 3px`) y
+   `.ag-floating-filter-full-body` tiene `overflow: hidden` y mide lo mismo
+   que el input, así que la cortaba a los costados (hallazgo del usuario,
+   2026-11-13). El input conserva el mismo ancho. */
 .ag-header-cell.ag-floating-filter {
-  padding-inline: var(--ag-spacing);
-  gap: calc(var(--ag-spacing) * 0.75);
+  padding-inline: calc(var(--ag-spacing) - 3px);
+}
+
+.ag-floating-filter .ag-floating-filter-full-body {
+  padding-inline: 3px;
 }
 
 .shell-sidebar-colapsada {
