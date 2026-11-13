@@ -112,6 +112,7 @@ function opcionesFiltroClase(
   ];
 }
 
+
 /** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
  * contratistas lo tienen). */
 const REGLAS_PERMANENCIA: Record<string, (fila: ActivoUnificado) => boolean> = {
