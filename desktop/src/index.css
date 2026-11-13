@@ -626,8 +626,60 @@ textarea::placeholder {
   animation: ficha-aparecer 0.22s ease-out;
 }
 
+/* Entrada y salida de los modales (`Modal.tsx`): zoom corto. Al abrir, la
+   tarjeta crece de 94% a su tamaño con un fundido y el velo aparece detrás;
+   al cerrar (X o Esc) hace lo inverso, más rápido, y el modal se desmonta
+   al terminar (`DURACION_SALIDA_MODAL_MS`). Mientras sale ya no recibe
+   clics. */
+.modal-velo {
+  animation: velo-entrar 180ms ease-out both;
+}
+
+.modal-velo .modal {
+  animation: modal-entrar 220ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.modal-velo-saliendo {
+  animation: velo-salir 150ms ease-in forwards;
+  pointer-events: none;
+}
+
+.modal-velo-saliendo .modal {
+  animation: modal-salir 150ms ease-in forwards;
+}
+
+@keyframes velo-entrar {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes velo-salir {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-entrar {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes modal-salir {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ficha-desplegable {
+  .ficha-desplegable,
+  .modal-velo,
+  .modal-velo .modal,
+  .modal-velo-saliendo,
+  .modal-velo-saliendo .modal {
     animation: none;
   }
 

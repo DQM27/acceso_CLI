@@ -1,5 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+
+/** Lo que dura la animación de salida (`.modal-velo-saliendo` en
+ * index.css): `onCerrar` llega cuando termina. */
+export const DURACION_SALIDA_MODAL_MS = 150;
 
 /**
  * Modal genérico — backdrop + tarjeta centrada. No sabe nada de formularios
@@ -18,6 +22,12 @@ import type { ReactNode } from "react";
  * a los saltos; ahora el cuerpo mide su contenido (`ResizeObserver`) y el
  * alto pasa de un valor al otro con una transición, así el modal se estira
  * suave sin dejar de estar centrado.
+ *
+ * Entrada y salida con zoom (pedido del usuario, 2026-11-13): al abrir, la
+ * tarjeta crece desde un poco más chica con un fundido; al cerrar con la X
+ * o Esc, se encoge y se desvanece, y recién entonces avisa `onCerrar` (que
+ * la desmonta). Lo que cierra la pantalla por su cuenta (ej. al guardar,
+ * o un botón "Cancelar" propio) desmonta el modal sin animación de salida.
  */
 export default function Modal({
   titulo,
@@ -28,13 +38,39 @@ export default function Modal({
   onCerrar: () => void;
   children: ReactNode;
 }) {
+  // `onCerrar` puede cambiar en cada render de la pantalla: se lee el último
+  // al terminar la salida.
+  const onCerrarRef = useRef(onCerrar);
+  useEffect(() => {
+    onCerrarRef.current = onCerrar;
+  }, [onCerrar]);
+
+  const [saliendo, setSaliendo] = useState(false);
+  const saliendoRef = useRef(false);
+  const esperaSalida = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cerrar = useCallback(() => {
+    // Una sola salida: Esc repetido o X + Esc no avisan dos veces.
+    if (saliendoRef.current) return;
+    saliendoRef.current = true;
+    setSaliendo(true);
+    esperaSalida.current = setTimeout(() => onCerrarRef.current(), DURACION_SALIDA_MODAL_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") onCerrar();
+      if (evento.key === "Escape") cerrar();
     }
     window.addEventListener("keydown", alTeclear);
     return () => window.removeEventListener("keydown", alTeclear);
-  }, [onCerrar]);
+  }, [cerrar]);
 
   const contenidoRef = useRef<HTMLDivElement>(null);
   // `null` hasta la primera medida: al abrir, el modal aparece con su alto
@@ -52,6 +88,7 @@ export default function Modal({
 
   return (
     <div
+      className={saliendo ? "modal-velo modal-velo-saliendo" : "modal-velo"}
       style={{
         position: "fixed",
         inset: 0,
@@ -85,7 +122,7 @@ export default function Modal({
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--acento)" }}>{titulo}</h2>
-          <button type="button" className="boton" onClick={onCerrar}>
+          <button type="button" className="boton" onClick={cerrar}>
             ✕
           </button>
         </div>
