@@ -113,12 +113,14 @@ export function useNavegacionFlechas<T>(
   onSeleccionar: (item: T) => void,
 ) {
   const [resaltado, setResaltado] = useState(0);
-
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setResaltado` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => setResaltado(0));
-  }, [items]);
+  // Ajuste durante el render (patrón de React): con una lista nueva vuelve a
+  // 0 en el mismo render, sin un efecto ni el rodeo `Promise.resolve().then`
+  // (que además dejaba un render con el índice viejo).
+  const [itemsVistos, setItemsVistos] = useState(items);
+  if (itemsVistos !== items) {
+    setItemsVistos(items);
+    setResaltado(0);
+  }
 
   function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) {
     if (!activo || items.length === 0) return;

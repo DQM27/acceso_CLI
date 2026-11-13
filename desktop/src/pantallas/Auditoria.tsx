@@ -56,11 +56,8 @@ export default function Auditoria() {
   );
 
   const recargar = useCallback((estaVigente: () => boolean = () => true) => {
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- ver el mismo comentario en Activos.tsx.
-    return Promise.resolve()
-      .then(() => setCargando(true))
-      .then(() => Promise.all([listarAuditoria(), listarAuditoriaGafetes()]))
+    setCargando(true);
+    return Promise.all([listarAuditoria(), listarAuditoriaGafetes()])
       .then(([{ items: cambios, truncado }, incidentesGafetes]) => {
         if (!estaVigente()) return;
         setTruncado(truncado);

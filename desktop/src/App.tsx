@@ -405,15 +405,15 @@ function Shell({
   // PRIMERA visita a cada sección monta su componente; volver después es
   // instantáneo.
   const [visitadas, setVisitadas] = useState<Seccion[]>(["activos"]);
+  // Ajuste durante el render (patrón de React): la sección nueva se monta en
+  // el mismo render en que se elige, sin un efecto que la agregue después
+  // (antes se difería con `Promise.resolve().then` por la regla
+  // `react-hooks/set-state-in-effect`).
+  if (!visitadas.includes(seccion)) {
+    setVisitadas([...visitadas, seccion]);
+  }
   useEffect(() => {
     registrarPantalla(seccion);
-  }, [seccion]);
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => {
-      setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
-    });
   }, [seccion]);
   // React 19.3: `<ViewTransition>` sólo anima un cambio si ocurrió dentro de
   // una transición -- acá no hay router que la envuelva sola (a diferencia
