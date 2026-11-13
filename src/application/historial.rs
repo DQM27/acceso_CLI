@@ -339,7 +339,8 @@ pub fn exportar_historial_seleccion_con_conexion(
     let mut libro = rust_xlsxwriter::Workbook::new();
     let mut exportados = 0usize;
     {
-        let hoja = libro.add_worksheet_with_constant_memory();
+        // Desde `rust_xlsxwriter` 0.100 devuelve `Result` (antes `&mut Worksheet`).
+        let hoja = libro.add_worksheet_with_constant_memory()?;
         preparar_hoja(hoja, columnas)?;
         let formatos = FormatosHistorial::default();
 

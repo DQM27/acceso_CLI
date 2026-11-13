@@ -11,17 +11,25 @@ ignore = [
     # acá, así que el ataque de temporización no aplica; no hay upgrade
     # disponible que lo arregle (RustSec lo marca "no fixed upgrade").
     "RUSTSEC-2023-0071",
-    # RUSTSEC-2026-0367, -0368 y -0369 (`zip` 8.6.0) -- llegan por
-    # `rust_xlsxwriter` 0.99.1, que exige `zip ^8.3`; el arreglo está en
-    # `zip` >= 9.0.0 y no hay upgrade posible desde acá. Las tres alertas
-    # afectan la extracción de archivos (`ZipArchive::extract` y
-    # `ZipStreamReader`: enlaces simbólicos y bits SUID/SGID al
-    # desempaquetar). Este proyecto sólo ESCRIBE .xlsx para exportar
-    # reportes y nunca abre ni extrae un zip, así que no aplican. Quitar
-    # estas tres líneas cuando `rust_xlsxwriter` suba a `zip` 9.
-    "RUSTSEC-2026-0367",
-    "RUSTSEC-2026-0368",
-    "RUSTSEC-2026-0369",
+    # RUSTSEC-2026-0459 (CVE-2026-119375, SQLite < 3.54.0 puede devolver
+    # memoria sin inicializar del caché de páginas al abrir una base junto a
+    # un `-wal` con otro tamaño de página, armados a propósito). La alerta es
+    # sobre la copia de SQLite que trae `libsqlite3-sys` (`bundled`), que acá
+    # NO se usa: se enlaza SQLite3MC desde `sqlite3mc-vendor-lib/` (ver
+    # [env] en config.toml). Pero ese SQLite3MC 2.5.1 está sobre SQLite
+    # 3.53.4, así que por versión SÍ está afectado. En la práctica: la app
+    # sólo abre SU base cifrada, en su carpeta de datos, y no importa ni abre
+    # bases de afuera (`recuperacion_local.rs` sólo mueve archivos); hace
+    # falta escribir en esa carpeta para plantar el par base + `-wal`.
+    # Por qué no se actualiza todavía (2026-11-13): SQLite3MC 2.6.0/2.6.1
+    # (SQLite 3.54.0) tienen un fallo conocido en ChaCha20 -- el cifrado que
+    # usamos -- que con aceleración por hardware puede descifrar una página a
+    # datos equivocados sin dar error; el arreglo es 2.7.0 (SQLite 3.54.1),
+    # publicado el mismo 2026-11-13 con cambios amplios (rekey, hot journal,
+    # sin modo WAL legado). Pendiente (docs/pendientes.md): pasar a
+    # SQLite3MC 2.7.x + `rusqlite` 0.41 (`libsqlite3-sys` 0.39) cuando tenga
+    # recorrido, con pruebas sobre bases reales, y quitar esta línea.
+    "RUSTSEC-2026-0459",
     # RUSTSEC-2026-0387 (`crypto-bigint` 0.5.5, operaciones que debían ser de
     # tiempo constante con ramas según el secreto) -- llega por `p256`/`ecdsa`
     # 0.13. Sí aplica en principio: escritorio y móvil firman con la llave de

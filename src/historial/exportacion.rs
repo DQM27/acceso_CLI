@@ -473,7 +473,7 @@ mod tests {
         ];
         let mut libro = rust_xlsxwriter::Workbook::new();
         {
-            let hoja = libro.add_worksheet_with_constant_memory();
+            let hoja = libro.add_worksheet_with_constant_memory().unwrap();
             preparar_hoja(hoja, &columnas).unwrap();
             escribir_movimiento(
                 hoja,
