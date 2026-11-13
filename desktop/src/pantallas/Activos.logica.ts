@@ -22,7 +22,7 @@ export const CLASE_SINGULAR: Record<ClaseActivo, string> = {
   contratista: "Contratista",
   proveedor: "Proveedor",
   correo: "Visita por correo",
-  kof: "Gafete KOF",
+  kof: "Provisional KOF",
 };
 
 export function filtrarPorClase<T extends { clase: ClaseActivo }>(

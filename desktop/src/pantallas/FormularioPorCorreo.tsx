@@ -62,7 +62,9 @@ export function FormularioPorCorreo({
       await registrarIngresoCorreo({
         cedula: cedula.trim(),
         nombre: nombre.trim(),
-        motivo: motivo.trim(),
+        // En mayúscula como el resto de los datos: el campo ya se ve así
+        // mientras se escribe (regla global de `input` en index.css).
+        motivo: motivo.trim().toUpperCase(),
         // Sin placa = caminando (así lo guarda la nube).
         placa: medio === "Vehiculo" ? placa.trim() : null,
         gafete_numero: gafete.numero,

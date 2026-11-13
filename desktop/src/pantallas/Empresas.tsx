@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioEmpresa from "./FormularioEmpresa";
 import FormularioEmpresaProveedor from "./FormularioEmpresaProveedor";
 import { buscarEmpresas } from "../api";
@@ -84,7 +85,10 @@ export default function Empresas() {
 
   const filas: FilaEmpresa[] =
     tipo === "contratista" ? filasContratista : filasProveedor;
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
+  // Un solo conteo para las dos grillas: se monta una por vez, y la que
+  // entra informa el suyo apenas carga.
+  const [conteo, alContar] = useConteoVisible();
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "resultado(s)"));
 
   const recargar = useCallback(
     (estaVigente: () => boolean = () => true) => {
@@ -158,6 +162,7 @@ export default function Empresas() {
           {tipo === "contratista" ? (
             <Tabla<EmpresaResumen>
               cargando={cargando}
+              onConteoVisible={alContar}
               filtrosPorColumna
               id="empresas"
               columnas={columnasContratista}
@@ -168,6 +173,7 @@ export default function Empresas() {
           ) : (
             <Tabla<EmpresaProveedor>
               cargando={cargando}
+              onConteoVisible={alContar}
               filtrosPorColumna
               id="empresas-proveedor"
               columnas={columnasProveedor}

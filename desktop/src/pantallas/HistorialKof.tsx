@@ -7,6 +7,7 @@ import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import { listarGafetesProvisionalesHistorialSitio } from "../api/gafetesProvisionales";
 import type { PrestamoGafeteProvisionalHistorialSitio } from "../api/gafetesProvisionales";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -25,7 +26,9 @@ export default function HistorialKof({ selector, desde, hasta, onRango }: PropsH
   const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<PrestamoGafeteProvisionalHistorialSitio>>(null);
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} movimiento(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "movimiento(s)"));
 
   const recargar = useCallback(
     async (estaVigente: () => boolean = () => true) => {
@@ -105,6 +108,7 @@ export default function HistorialKof({ selector, desde, hasta, onRango }: PropsH
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<PrestamoGafeteProvisionalHistorialSitio>
             ref={tablaRef}
+            onConteoVisible={alContar}
             cargando={cargando}
             filtrosPorColumna
             id="gafetes-provisionales-historial"

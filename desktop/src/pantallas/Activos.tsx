@@ -430,7 +430,7 @@ export default function Activos({
                       { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
                       { texto: "Proveedor", Icono: Boxes, atajo: "Alt+P", onElegir: () => onAbrirOtroIngreso("proveedor") },
                       { texto: "Visita por correo", Icono: Mail, atajo: "Alt+C", onElegir: () => onAbrirOtroIngreso("correo") },
-                      { texto: "Gafete KOF", Icono: BadgeCheck, atajo: "Alt+K", onElegir: () => onAbrirOtroIngreso("kof") },
+                      { texto: "Provisional KOF", Icono: BadgeCheck, atajo: "Alt+K", onElegir: () => onAbrirOtroIngreso("kof") },
                     ]}
                   />
                   <button

@@ -4,13 +4,9 @@ import type { UsuarioSesion } from "../api";
 import CambiarPasswordModal from "./CambiarPasswordModal";
 import Engranaje from "./Engranaje";
 import { ListaFlotante } from "./ListaFlotante";
-import { useListaFlotante } from "./ListaFlotante.logica";
+import { useAperturaAnimada, useListaFlotante } from "./ListaFlotante.logica";
 import { NOMBRE_TEMA } from "./SelectorTema.logica";
 import type { Tema } from "./SelectorTema.logica";
-
-/** Lo que dura la animación de salida del menú (ver `.lista-flotante-saliendo`
- * en `index.css`): el menú se desmonta cuando termina. */
-const DURACION_SALIDA_MS = 120;
 
 /** La inicial del nombre, para el círculo (vacío si no hay nombre). */
 function inicialDe(nombre: string): string {
@@ -46,32 +42,10 @@ export default function MenuUsuario({
 }) {
   // `abierto` es lo que quiere quien opera; `visible` lo mantiene en pantalla
   // el rato que dura la animación de salida.
-  const [abierto, setAbierto] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const { abierto, visible, abrir, cerrar } = useAperturaAnimada();
   const [cambiandoPassword, setCambiandoPassword] = useState(false);
   const { campoRef, posicion } = useListaFlotante(visible);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const esperaSalida = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function abrir() {
-    if (esperaSalida.current) clearTimeout(esperaSalida.current);
-    setAbierto(true);
-    setVisible(true);
-  }
-
-  function cerrar() {
-    setAbierto(false);
-    if (esperaSalida.current) clearTimeout(esperaSalida.current);
-    esperaSalida.current = setTimeout(() => setVisible(false), DURACION_SALIDA_MS);
-  }
-
-  // Si el componente se desmonta con la salida en curso, no queda el temporizador.
-  useEffect(
-    () => () => {
-      if (esperaSalida.current) clearTimeout(esperaSalida.current);
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!abierto) return;
@@ -89,7 +63,7 @@ export default function MenuUsuario({
       document.removeEventListener("mousedown", alHacerClicAfuera);
       document.removeEventListener("keydown", alTeclear);
     };
-  }, [abierto, campoRef]);
+  }, [abierto, campoRef, cerrar]);
 
   const IconoTema = tema === "tokyo-night" ? Moon : Sun;
 

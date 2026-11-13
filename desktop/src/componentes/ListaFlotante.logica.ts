@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 /**
@@ -135,4 +135,43 @@ export function useNavegacionFlechas<T>(
   }
 
   return { resaltado, setResaltado, manejarTecla };
+}
+
+/** Lo que dura la animación de salida de una `ListaFlotante` animada (ver
+ * `.lista-flotante-saliendo` en `index.css`): la lista se desmonta cuando
+ * termina. */
+export const DURACION_SALIDA_LISTA_MS = 120;
+
+/**
+ * Abrir y cerrar una `ListaFlotante` con `animacion`: `abierto` es lo que
+ * quiere quien opera; `visible` la mantiene montada el rato que dura la
+ * animación de salida (`saliendo={!abierto}`). Lo comparten el menú de
+ * cuenta (`MenuUsuario`) y los menús de acciones (`MenuAcciones`).
+ */
+export function useAperturaAnimada() {
+  const [abierto, setAbierto] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const esperaSalida = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const abrir = useCallback(() => {
+    if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    setAbierto(true);
+    setVisible(true);
+  }, []);
+
+  const cerrar = useCallback(() => {
+    setAbierto(false);
+    if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    esperaSalida.current = setTimeout(() => setVisible(false), DURACION_SALIDA_LISTA_MS);
+  }, []);
+
+  // Si el componente se desmonta con la salida en curso, no queda el temporizador.
+  useEffect(
+    () => () => {
+      if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    },
+    [],
+  );
+
+  return { abierto, visible, abrir, cerrar };
 }

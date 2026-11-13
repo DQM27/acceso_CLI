@@ -6,6 +6,7 @@ import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioVehiculoRuta from "./FormularioVehiculoRuta";
 import FormularioEncargadoRuta from "./FormularioEncargadoRuta";
 import FormularioRuta from "./FormularioRuta";
@@ -76,7 +77,10 @@ export default function CatalogoRutas() {
 
   const total =
     vista === "vehiculos" ? vehiculos.length : vista === "encargados" ? encargados.length : rutas.length;
-  useBarraEstado(cargando ? "Cargando…" : `${total} resultado(s)`);
+  // Un solo conteo para las tres grillas: se monta una por vez, y la que
+  // entra informa el suyo apenas carga.
+  const [conteo, alContar] = useConteoVisible();
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, total, "resultado(s)"));
 
   useHotkeys(
     "ctrl+n",
@@ -218,6 +222,7 @@ export default function CatalogoRutas() {
           {vista === "vehiculos" ? (
             <Tabla<VehiculoRuta>
               id="rutas-vehiculos"
+              onConteoVisible={alContar}
               columnas={columnasVehiculos}
               filas={vehiculos}
               busqueda={busqueda}
@@ -246,6 +251,7 @@ export default function CatalogoRutas() {
           ) : vista === "encargados" ? (
             <Tabla<EncargadoRuta>
               id="rutas-encargados"
+              onConteoVisible={alContar}
               columnas={columnasEncargados}
               filas={encargados}
               busqueda={busqueda}
@@ -274,6 +280,7 @@ export default function CatalogoRutas() {
           ) : (
             <Tabla<Ruta>
               id="rutas-numeros"
+              onConteoVisible={alContar}
               columnas={columnasRutas}
               filas={rutas}
               busqueda={busqueda}
