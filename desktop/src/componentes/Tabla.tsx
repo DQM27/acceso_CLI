@@ -36,6 +36,7 @@ import {
   identidad,
 } from "./Tabla.logica";
 import type { EstadoGuardado } from "./Tabla.logica";
+import type { ConteoVisible } from "./conteoTabla";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -255,6 +256,11 @@ export interface TablaProps<T> {
    * la grilla se redibuja sola cada minuto mientras esto esté puesto. Debe
    * ser una función estable (definida fuera del componente). */
   claseFila?: (fila: T) => string | undefined;
+  /** Cuántas filas quedan visibles y si hay algún filtro puesto (por
+   * columna o `busqueda`), cada vez que cambia lo que muestra la grilla --
+   * para el contador de la barra de estado ("1 de 304 movimiento(s)"), ver
+   * `useConteoVisible`/`textoConteo` en conteoTabla.ts. */
+  onConteoVisible?: (conteo: ConteoVisible) => void;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -307,6 +313,7 @@ function TablaBase<T>(
     cargando,
     idFila,
     claseFila,
+    onConteoVisible,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -795,6 +802,18 @@ function TablaBase<T>(
           }
           onRowDoubleClicked={
             onFilaDobleClic ? (evento) => evento.data && onFilaDobleClic(evento.data) : undefined
+          }
+          // Se dispara tras filtrar (columna o buscador), ordenar o recibir
+          // filas nuevas. `getDisplayedRowCount` no recorre filas (sin
+          // agrupar, cada fila mostrada es un dato).
+          onModelUpdated={
+            onConteoVisible
+              ? (evento) =>
+                  onConteoVisible({
+                    visibles: evento.api.getDisplayedRowCount(),
+                    filtrando: evento.api.isAnyFilterPresent(),
+                  })
+              : undefined
           }
         />
       </div>
