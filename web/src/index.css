@@ -317,6 +317,17 @@ input {
   text-transform: uppercase;
 }
 
+/* Fila de filtros por columna: menos margen a los costados (16px -> 8px) y
+   entre el input y el botón del filtro (12px -> 6px). Con los 16px de
+   siempre (`--ag-cell-horizontal-padding`, el mismo de las celdas de datos)
+   una columna de 90px (`minWidth`) dejaba 12px de texto; así quedan 34px,
+   y una de ~118px pasa de 40px a 62px. Va junto con
+   `suppressInputClearButton` en Tabla.tsx. */
+.ag-header-cell.ag-floating-filter {
+  padding-inline: var(--ag-spacing);
+  gap: calc(var(--ag-spacing) * 0.75);
+}
+
 .shell-sidebar-colapsada {
   width: 3.75rem;
 }
