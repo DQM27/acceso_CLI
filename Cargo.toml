@@ -40,7 +40,7 @@ chrono-tz = "0.10.4"
 rusqlite = { version = "0.40.2", default-features = false, features = ["functions"] }
 argon2 = "0.6"
 rand_core = { version = "0.6", features = ["getrandom"] }
-rust_xlsxwriter = { version = "0.99.1", features = ["chrono", "constant_memory"] }
+rust_xlsxwriter = { version = "0.100.0", features = ["chrono", "constant_memory"] }
 tempfile = "3"
 thiserror = "2"
 # Fachada de logging, compartida por escritorio (tauri-plugin-log) y mobile

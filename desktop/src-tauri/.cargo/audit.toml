@@ -11,17 +11,28 @@ ignore = [
     # acá, así que el ataque de temporización no aplica; no hay upgrade
     # disponible que lo arregle (RustSec lo marca "no fixed upgrade").
     "RUSTSEC-2023-0071",
-    # RUSTSEC-2026-0367, -0368 y -0369 (`zip` 8.6.0) -- llegan por
-    # `rust_xlsxwriter` 0.99.1, que exige `zip ^8.3`; el arreglo está en
-    # `zip` >= 9.0.0 y no hay upgrade posible desde acá. Las tres alertas
-    # afectan la extracción de archivos (`ZipArchive::extract` y
-    # `ZipStreamReader`: enlaces simbólicos y bits SUID/SGID al
-    # desempaquetar). Este proyecto sólo ESCRIBE .xlsx para exportar
-    # reportes y nunca abre ni extrae un zip, así que no aplican. Quitar
-    # estas tres líneas cuando `rust_xlsxwriter` suba a `zip` 9.
+    # RUSTSEC-2026-0459 (SQLite < 3.54.0, CVE-2026-119375): ver la
+    # explicación en el .cargo/audit.toml de la raíz. Mismo SQLite3MC 2.5.1
+    # (SQLite 3.53.4); la app sólo abre su propia base cifrada. Pendiente:
+    # SQLite3MC 2.7.x + `rusqlite` 0.41, y quitar esta línea.
+    "RUSTSEC-2026-0459",
+    # RUSTSEC-2026-0429 (`zip` 4.6.1, `ZipArchive::extract` aborta el proceso
+    # con un enlace simbólico de tamaño declarado enorme: sólo DoS) y
+    # RUSTSEC-2026-0367, -0368 y -0369 (también de extracción: enlaces
+    # simbólicos y bits SUID/SGID al desempaquetar) -- llegan por
+    # `tauri-plugin-updater` 2.12, que extrae el zip de la actualización en
+    # Windows. (Las tres últimas antes venían además por `rust_xlsxwriter`
+    # 0.99 / `zip` 8.6; desde `rust_xlsxwriter` 0.100 ese camino usa `zip` 9.) Ese zip sólo se extrae DESPUÉS de verificar su firma
+    # minisign contra `plugins.updater.pubkey` (`Update::download` llama a
+    # `verify_signature` antes de devolver los bytes; la app usa sólo
+    # `downloadAndInstall()`, ver src/api/actualizaciones.ts): hace falta un
+    # zip firmado con nuestra clave privada. El arreglo (`zip` 9) llega con
+    # `tauri-plugin-updater` 2.14.1, que exige `tauri` >= 2.12 (hoy 2.11):
+    # quitar estas cuatro líneas al subir Tauri.
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0429",
     # RUSTSEC-2026-0387 (`crypto-bigint` 0.5.5): ver la explicación en el
     # .cargo/audit.toml de la raíz. Llega por `p256` 0.13; pendiente pasar los
     # firmantes a `p256` 0.14 y quitarla cuando `jsonwebtoken` suba a 0.14.

@@ -562,6 +562,29 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
     `windows` 0.61.3 → 0.62.2 en el mismo grupo) -- rompe con
     `.cast()` ya no disponible en `ICoreWebView2` y un struct que dejó de
     ser exhaustive.
+- [ ] **SQLite3MC 2.7.x por RUSTSEC-2026-0459 (2026-11-13).** El SQLite que
+  enlazamos (SQLite3MC 2.5.1 sobre SQLite 3.53.4) está en el rango de
+  CVE-2026-119375 (memoria sin inicializar al abrir una base con un `-wal`
+  armado a propósito; arreglo en SQLite 3.54.0). Ignorado en los tres
+  `.cargo/audit.toml` con la justificación completa: la app sólo abre su
+  propia base cifrada. No se subió en el momento porque 2.6.0/2.6.1 tienen
+  un fallo de ChaCha20 (con aceleración por hardware, una página puede
+  descifrarse a datos equivocados sin error) y 2.7.0, que lo arregla, salió
+  el mismo día con cambios amplios. Para hacerlo: vendorizar el amalgamation
+  de 2.7.x verificando el `SHA256SUMS` del release (como en
+  `sqlite3mc-vendor-lib/vendor/README-fuente.md`), subir `rusqlite` a 0.41
+  (`libsqlite3-sys` 0.39) en los tres crates, probar que abre bases reales
+  escritas por 2.5.1 (escritorio y móvil, con y sin `-wal`) y que los tests
+  de cifrado real (`sqlite3mc_cifra_de_verdad_*`) pasan; quitar
+  RUSTSEC-2026-0459 de los tres `audit.toml`.
+- [ ] **Subir Tauri a >= 2.12 por `zip` del actualizador (2026-11-13).**
+  `tauri-plugin-updater` 2.12 usa `zip` 4.6.1 (RUSTSEC-2026-0367/-0368/
+  -0369/-0429, todas de extracción). Ignoradas en
+  `desktop/src-tauri/.cargo/audit.toml`: el zip sólo se extrae después de
+  verificar la firma minisign. El arreglo es `tauri-plugin-updater` 2.14.1
+  (`zip` 9), que exige `tauri` >= 2.12 y arrastra `wry` 0.57 y
+  `webview2-com` 0.39 (ver el punto de arriba sobre `webview2-com`). Quitar
+  las cuatro líneas al subir.
 
 ## Panel web y modelo multi-sitio
 
