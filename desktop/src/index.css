@@ -423,15 +423,14 @@ input {
   text-transform: uppercase;
 }
 
-/* Fila de filtros por columna: menos margen a los costados (16px -> 8px) y
-   entre el input y el botón del filtro (12px -> 6px). Con los 16px de
-   siempre (`--ag-cell-horizontal-padding`, el mismo de las celdas de datos)
-   una columna de 90px (`minWidth`) dejaba 12px de texto; así quedan 34px,
-   y GAFETE (~118px) pasa de 40px a 62px. Va junto con
-   `suppressInputClearButton` en Tabla.tsx. */
+/* Fila de filtros por columna: menos margen a los costados (16px -> 8px; los
+   16px de siempre son `--ag-cell-horizontal-padding`, el mismo de las celdas
+   de datos). Junto con `suppressInputClearButton` y sin el botón del filtro
+   (`suppressFloatingFilterButton`, ver Tabla.tsx), el texto pasa a tener
+   56px en una columna de 90px (`minWidth`, antes 0px) y 84px en GAFETE
+   (~118px, antes 16px). */
 .ag-header-cell.ag-floating-filter {
   padding-inline: var(--ag-spacing);
-  gap: calc(var(--ag-spacing) * 0.75);
 }
 
 /* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
