@@ -110,6 +110,11 @@ function opcionesFiltroClase(
   ];
 }
 
+/** Fuera del componente a propósito: una función nueva en cada render hacía
+ * que la grilla se reconstruyera y perdiera los anchos ajustados (ver
+ * `columnaBase` en Tabla.tsx). */
+const idPorClave = (fila: ActivoUnificado) => fila.clave;
+
 /** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
  * contratistas lo tienen). */
 function claseFilaActiva(fila: ActivoUnificado): string | undefined {
@@ -399,7 +404,7 @@ export default function Activos({
             cargando={cargando}
             filtrosPorColumna
             id="activos"
-            idFila={(fila) => fila.clave}
+            idFila={idPorClave}
             claseFila={claseFilaActiva}
             columnas={columnas}
             filas={filasVisibles}
