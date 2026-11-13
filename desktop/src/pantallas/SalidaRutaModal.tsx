@@ -221,7 +221,8 @@ export default function SalidaRutaModal({
         encargado_codigo_empleado: valores.encargado_codigo_empleado.trim() || null,
         numero_ruta: valores.numero_ruta,
         sub_numero: valores.sub_numero,
-        numero_documento: valores.numero_documento.trim(),
+        // En mayúscula como se ve al escribir (regla global de `input`).
+        numero_documento: valores.numero_documento.trim().toUpperCase(),
         fecha_documento: valores.fecha_documento,
         tiene_correo_autorizacion: valores.tiene_correo_autorizacion,
       });

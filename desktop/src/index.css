@@ -46,6 +46,25 @@ input {
   font-family: inherit;
 }
 
+/* Todo lo que se escribe se ve en mayúscula, como los datos de la app
+   (pedido del usuario, 2026-11-13): buscadores, filtros de las grillas y
+   campos de los formularios. `text-transform` es sólo la vista; lo que se
+   guarda se convierte aparte, en cada formulario (nombres y placas al
+   escribir, `nombres.ts`; motivo, comprobante, placa/unidad de ruta al
+   guardar). Afuera: contraseñas y correos, y lo marcado con
+   `.sin-mayuscula` (ej. el buscador de Ayuda, donde se pega un mensaje de
+   error tal cual). El ejemplo (placeholder) queda en texto normal: frases
+   en mayúscula se leen peor. */
+input:not([type="password"]):not([type="email"]):not(.sin-mayuscula),
+textarea:not(.sin-mayuscula) {
+  text-transform: uppercase;
+}
+
+input::placeholder,
+textarea::placeholder {
+  text-transform: none;
+}
+
 /* Scrollbar temático en toda la app (WebView2 es Chromium, entiende
    ::-webkit-scrollbar) — sin esto se ve el scrollbar gris plano del SO en
    vez de seguir la paleta clara/oscura. AG Grid no dibuja el suyo propio:
@@ -132,10 +151,11 @@ input {
 /* Modales (`Modal.tsx`): título, etiquetas de campos y botones en
    mayúsculas -- pedido del usuario 2026-09-23, mismo lenguaje que los
    encabezados de las grillas y "ACCESO RÁPIDO" del selector de período.
-   Las etiquetas van chicas, grises y un poco espaciadas. Lo que se escribe
-   en los campos, los ejemplos (placeholder) y los mensajes de error dentro
-   de una etiqueta quedan en texto normal: frases en mayúsculas se leen
-   peor. */
+   Las etiquetas van chicas, grises y un poco espaciadas. Los ejemplos
+   (placeholder) y los mensajes de error dentro de una etiqueta quedan en
+   texto normal: frases en mayúsculas se leen peor. Lo que se escribe en
+   los campos va en mayúscula, ver la regla de `input` arriba (antes iba en
+   texto normal; cambió por pedido del usuario 2026-11-13). */
 .modal h2 {
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -147,11 +167,16 @@ input {
   font-size: 0.75rem;
 }
 
-.modal .campo input,
 .modal .campo select,
-.modal .campo textarea,
 .modal .campo span {
   text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Hereda el espaciado de la etiqueta, pero no le quita la mayúscula (la
+   pone la regla global de `input`). */
+.modal .campo input,
+.modal .campo textarea {
   letter-spacing: normal;
 }
 
@@ -442,21 +467,6 @@ input {
   padding-inline: 3px;
 }
 
-/* Buscadores de la barra de cada grilla y filtros por columna: lo escrito se
-   ve en mayúscula, como los datos (pedido del usuario, 2026-11-13). Sólo a
-   la vista (`text-transform`): el valor que se busca no cambia, así que
-   ninguna búsqueda se comporta distinto; los filtros de la grilla además ya
-   ignoran mayúsculas y tildes (`plegar` en Tabla.tsx). El ejemplo
-   (placeholder) queda en texto normal, mismo criterio que en los modales. */
-.tabla-barra input,
-.ag-floating-filter input {
-  text-transform: uppercase;
-}
-
-.tabla-barra input::placeholder,
-.ag-floating-filter input::placeholder {
-  text-transform: none;
-}
 
 /* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
    mismo alto, borde y fondo que `.boton`, con las opciones unidas y la

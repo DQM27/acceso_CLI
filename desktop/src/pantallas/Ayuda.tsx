@@ -67,6 +67,8 @@ export default function Ayuda({ senalBuscar }: { senalBuscar: number }) {
           <input
             ref={buscador}
             type="search"
+            // Se pega el mensaje de error tal cual: sin la mayúscula global.
+            className="sin-mayuscula"
             placeholder="Buscar, o pegar el mensaje que apareció…"
             aria-label="Buscar en la ayuda"
             value={consulta}
