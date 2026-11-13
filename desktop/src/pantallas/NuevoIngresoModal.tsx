@@ -3,13 +3,11 @@ import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
-import { buscarContratistas, prepararIngreso, registrarIngreso } from "../api";
+import { useBusquedaContratistas } from "../componentes/useBusquedaContratistas";
+import { prepararIngreso, registrarIngreso } from "../api";
 import { precalentarNube } from "../api/nube";
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
 import { avisosContratista, gafeteParaRegistrar } from "./NuevoIngresoModal.logica";
-
-const DEBOUNCE_MS = 120;
-const MAX_RESULTADOS = 4;
 
 type Seleccion =
   | { tipo: "ninguna" }
@@ -37,17 +35,16 @@ export default function NuevoIngresoModal({
   onCerrar: () => void;
 }) {
   const [filtro, setFiltro] = useState("");
-  const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
-  // Señal chica mientras pasan los DEBOUNCE_MS antes de buscar -- sin esto
-  // la búsqueda se siente muda entre que se deja de tipear y aparece algo
-  // (docs/pendientes.md, "Spinner durante debounce de búsqueda").
-  const [buscando, setBuscando] = useState(false);
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [gafeteTexto, setGafeteTexto] = useState("");
   const [sinGafete, setSinGafete] = useState(false);
   const [placaTexto, setPlacaTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // `buscando`: señal chica mientras pasa la espera antes de buscar -- sin
+  // esto la búsqueda se siente muda entre que se deja de tipear y aparece
+  // algo (docs/pendientes.md, "Spinner durante debounce de búsqueda").
+  const { resultados, buscando } = useBusquedaContratistas(filtro, true, setError);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const buscadorRef = useRef<HTMLInputElement>(null);
@@ -77,26 +74,6 @@ export default function NuevoIngresoModal({
       confirmarRef.current?.focus();
     }
   }, [seleccion]);
-
-  useEffect(() => {
-    if (!filtro.trim()) {
-      // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
-      // directo -- ver el mismo comentario en Activos.tsx.
-      Promise.resolve().then(() => {
-        setResultados([]);
-        setBuscando(false);
-      });
-      return;
-    }
-    Promise.resolve().then(() => setBuscando(true));
-    const id = setTimeout(() => {
-      buscarContratistas({ texto: filtro })
-        .then((pagina) => setResultados(pagina.items.slice(0, MAX_RESULTADOS)))
-        .catch((error) => setError(String(error)))
-        .finally(() => setBuscando(false));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [filtro]);
 
   function cambiarFiltro(texto: string) {
     setFiltro(texto);

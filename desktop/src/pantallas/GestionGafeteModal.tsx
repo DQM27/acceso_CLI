@@ -3,8 +3,8 @@ import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
+import { useBusquedaContratistas } from "../componentes/useBusquedaContratistas";
 import {
-  buscarContratistas,
   darDeBajaGafete,
   listarEncargadosRutaSeleccionables,
   marcarGafetePerdidoContratista,
@@ -21,9 +21,6 @@ import type {
   MotivoResolucionGafete,
 } from "../api";
 import { textoEstado } from "./GestionGafeteModal.logica";
-
-const DEBOUNCE_MS = 120;
-const MAX_RESULTADOS = 4;
 
 /**
  * Acciones de un gafete puntual, según su estado actual — mismo criterio
@@ -55,17 +52,21 @@ export default function GestionGafeteModal({
 }) {
   const [buscandoPortador, setBuscandoPortador] = useState(false);
   const [filtro, setFiltro] = useState("");
-  const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
-  // Señal chica mientras pasan los DEBOUNCE_MS antes de buscar -- sin esto
-  // la búsqueda se siente muda entre que se deja de tipear y aparece algo
-  // (docs/pendientes.md, "Spinner durante debounce de búsqueda").
-  const [cargandoResultados, setCargandoResultados] = useState(false);
   const [cedulaVisita, setCedulaVisita] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
   const esVisita = gafete.tipo === "Visita";
   const esProvisionalKof = gafete.tipo === "ProvisionalKof";
+  // Sólo se busca contratista como portador (visita va por cédula exacta y
+  // KOF por catálogo). `cargandoResultados`: señal chica mientras pasa la
+  // espera antes de buscar (docs/pendientes.md, "Spinner durante debounce
+  // de búsqueda").
+  const { resultados, buscando: cargandoResultados } = useBusquedaContratistas(
+    filtro,
+    buscandoPortador && !esVisita && !esProvisionalKof,
+    setError,
+  );
   // El ciclo normal de un gafete de proveedor es ingreso/salida
   // (`registro_ingresos_proveedor`), sin un catálogo propio de posibles
   // portadores (registro efímero, ver el doc-comment de arriba) -- se
@@ -79,26 +80,6 @@ export default function GestionGafeteModal({
     listaVisible,
     elegirPortadorContratista,
   );
-
-  useEffect(() => {
-    if (esVisita || esProvisionalKof || !buscandoPortador || !filtro.trim()) {
-      // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
-      // directo -- ver el mismo comentario en Activos.tsx.
-      Promise.resolve().then(() => {
-        setResultados([]);
-        setCargandoResultados(false);
-      });
-      return;
-    }
-    Promise.resolve().then(() => setCargandoResultados(true));
-    const id = setTimeout(() => {
-      buscarContratistas({ texto: filtro })
-        .then((pagina) => setResultados(pagina.items.slice(0, MAX_RESULTADOS)))
-        .catch((error) => setError(String(error)))
-        .finally(() => setCargandoResultados(false));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [filtro, buscandoPortador, esVisita, esProvisionalKof]);
 
   // Catálogo de encargados de ruta para el combobox de KOF -- mismo patrón
   // (`<input list>` + `<datalist>`, sin buscador servidor-lado aparte) que
