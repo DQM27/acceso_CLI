@@ -428,9 +428,18 @@ input {
    de datos). Junto con `suppressInputClearButton` y sin el botón del filtro
    (`suppressFloatingFilterButton`, ver Tabla.tsx), el texto pasa a tener
    56px en una columna de 90px (`minWidth`, antes 0px) y 84px en GAFETE
-   (~118px, antes 16px). */
+   (~118px, antes 16px).
+   De esos 8px, 3px van al contenedor del input en vez de a la celda: el
+   halo de foco del input es una sombra de 3px (`box-shadow 0 0 0 3px`) y
+   `.ag-floating-filter-full-body` tiene `overflow: hidden` y mide lo mismo
+   que el input, así que la cortaba a los costados (hallazgo del usuario,
+   2026-11-13). El input conserva el mismo ancho. */
 .ag-header-cell.ag-floating-filter {
-  padding-inline: var(--ag-spacing);
+  padding-inline: calc(var(--ag-spacing) - 3px);
+}
+
+.ag-floating-filter .ag-floating-filter-full-body {
+  padding-inline: 3px;
 }
 
 /* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
