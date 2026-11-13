@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ListaFlotante } from "./ListaFlotante";
-import { useListaFlotante } from "./ListaFlotante.logica";
+import { useAperturaAnimada, useListaFlotante } from "./ListaFlotante.logica";
 import { ESTILO_BOTON_COMPACTO } from "./MenuAcciones.logica";
 
 export interface AccionMenu {
@@ -18,7 +18,8 @@ export interface AccionMenu {
  * Un botón con texto que abre una lista corta de acciones -- para cuando una
  * misma intención ("Nuevo ingreso") tiene varios caminos y el botón no debe
  * adivinar cuál: se ven todos, con su nombre. Mismo mecanismo flotante que
- * el selector de columnas de `Tabla.tsx` (`ListaFlotante`).
+ * el selector de columnas de `Tabla.tsx` (`ListaFlotante`); entra y sale
+ * cayendo desde el botón, como el menú de cuenta (`animacion="caida"`).
  */
 export default function MenuAcciones({
   texto,
@@ -29,8 +30,8 @@ export default function MenuAcciones({
   Icono: LucideIcon;
   acciones: AccionMenu[];
 }) {
-  const [abierto, setAbierto] = useState(false);
-  const { campoRef, posicion } = useListaFlotante(abierto);
+  const { abierto, visible, abrir, cerrar } = useAperturaAnimada();
+  const { campoRef, posicion } = useListaFlotante(visible);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,10 +39,10 @@ export default function MenuAcciones({
     function alHacerClicAfuera(evento: MouseEvent) {
       const objetivo = evento.target as Node;
       if (campoRef.current?.contains(objetivo) || menuRef.current?.contains(objetivo)) return;
-      setAbierto(false);
+      cerrar();
     }
     function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") setAbierto(false);
+      if (evento.key === "Escape") cerrar();
     }
     document.addEventListener("mousedown", alHacerClicAfuera);
     document.addEventListener("keydown", alTeclear);
@@ -49,7 +50,7 @@ export default function MenuAcciones({
       document.removeEventListener("mousedown", alHacerClicAfuera);
       document.removeEventListener("keydown", alTeclear);
     };
-  }, [abierto, campoRef]);
+  }, [abierto, campoRef, cerrar]);
 
   return (
     <div ref={campoRef} style={{ flexShrink: 0 }}>
@@ -59,14 +60,14 @@ export default function MenuAcciones({
         style={ESTILO_BOTON_COMPACTO}
         aria-haspopup="menu"
         aria-expanded={abierto}
-        onClick={() => setAbierto((actual) => !actual)}
+        onClick={abierto ? cerrar : abrir}
       >
         <Icono size={16} aria-hidden="true" />
         {texto}
         <ChevronDown size={14} aria-hidden="true" />
       </button>
-      {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={220}>
+      {visible && posicion && (
+        <ListaFlotante posicion={posicion} ancho={220} animacion="caida" saliendo={!abierto}>
           <div ref={menuRef} role="menu" style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
             {acciones.map(({ texto: textoAccion, Icono: IconoAccion, atajo, onElegir }) => (
               <button
@@ -77,7 +78,7 @@ export default function MenuAcciones({
                 style={{ justifyContent: "flex-start" }}
                 title={atajo ? `Atajo: ${atajo}` : undefined}
                 onClick={() => {
-                  setAbierto(false);
+                  cerrar();
                   onElegir();
                 }}
               >

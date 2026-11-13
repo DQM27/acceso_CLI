@@ -37,8 +37,10 @@ export default function FormularioVehiculoRuta({
 
   async function alGuardar(valores: ValoresFormulario) {
     const datos = {
-      placa: valores.placa.trim(),
-      numero_unidad: valores.numero_unidad.trim() || null,
+      // En mayúscula como se ve al escribir (regla global de `input`), igual
+      // que las placas de los ingresos.
+      placa: valores.placa.trim().toUpperCase(),
+      numero_unidad: valores.numero_unidad.trim().toUpperCase() || null,
       activo: valores.activo,
     };
     try {

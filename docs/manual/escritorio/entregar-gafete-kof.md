@@ -13,7 +13,7 @@ Cualquier usuario con sesión abierta en el escritorio.
 ## Dónde
 
 - Atajo **Alt+K**, desde cualquier pantalla.
-- O en **Activos**, menú **Ingreso** → **Gafete KOF**.
+- O en **Activos**, menú **Ingreso** → **Provisional KOF**.
 
 ## Pasos
 

@@ -3,6 +3,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import {
   etiquetaCampo,
   etiquetaEntidad,
@@ -48,7 +49,11 @@ export default function Auditoria() {
   const [truncado, setTruncado] = useState(false);
   const [cambiosCargados, setCambiosCargados] = useState(0);
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} cambio(s) auditado(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(
+    cargando ? "Cargando…" : textoConteo(conteo, filas.length, "cambio(s) auditado(s)"),
+  );
 
   const recargar = useCallback((estaVigente: () => boolean = () => true) => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -175,6 +180,7 @@ export default function Auditoria() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaAuditoria>
             cargando={cargando}
+            onConteoVisible={alContar}
             filtrosPorColumna
             id="auditoria"
             columnas={columnas}

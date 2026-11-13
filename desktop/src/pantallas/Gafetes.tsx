@@ -4,6 +4,7 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioGafete from "./FormularioGafete";
 import GestionGafeteModal from "./GestionGafeteModal";
 import HistorialGafeteModal from "./HistorialGafeteModal";
@@ -36,7 +37,9 @@ export default function Gafetes() {
   const [gestionAbierta, setGestionAbierta] = useState<GafeteResumen | null>(null);
   const [detalleAbierto, setDetalleAbierto] = useState<GafeteResumen | null>(null);
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "resultado(s)"));
 
   const columnas: ColDef<GafeteResumen>[] = useMemo(
     () => [
@@ -129,6 +132,7 @@ export default function Gafetes() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<GafeteResumen>
             cargando={cargando}
+            onConteoVisible={alContar}
             filtrosPorColumna
             id="gafetes"
             columnas={columnas}

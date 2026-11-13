@@ -3,6 +3,7 @@ import { avisos } from "../avisos/avisos";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import { listarRutasActivas, registrarRetornoRuta } from "../api";
 import type { SalidaRutaActivaResumen } from "../api";
 import { textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -30,7 +31,9 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} ruta(s) activa(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "ruta(s) activa(s)"));
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -130,6 +133,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<SalidaRutaActivaResumen>
             id="rutas-activas"
+            onConteoVisible={alContar}
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}

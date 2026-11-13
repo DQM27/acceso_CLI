@@ -20,7 +20,7 @@ clase** de ingresos ver (al pasar el mouse se ve el nombre):
 - **Contratistas**
 - **Proveedores**
 - **Visitas por correo**
-- **Gafetes KOF** (entregas y devoluciones de gafetes provisionales)
+- **Provisionales KOF** (entregas y devoluciones de gafetes provisionales)
 
 Cada clase tiene su propia tabla y sus columnas. Las visitas agendadas en
 la web no están aquí.
@@ -38,7 +38,7 @@ Salida, Dio ingreso y Dio salida.
 **Visitas por correo**: igual que proveedores, con **Motivo** en lugar de
 Empresa.
 
-**Gafetes KOF**: Encargado, Código empleado, Gafete, Fecha, Entrega,
+**Provisionales KOF**: Encargado, Código empleado, Gafete, Fecha, Entrega,
 Devolución, Entregó y Recibió.
 
 ## Pasos — elegir el período

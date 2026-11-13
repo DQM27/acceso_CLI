@@ -16,7 +16,7 @@ const OPCIONES_CLASE: OpcionSegmentada<ClaseHistorial>[] = [
   { valor: "contratistas", Icono: HardHat, titulo: "Contratistas" },
   { valor: "proveedores", Icono: Boxes, titulo: "Proveedores" },
   { valor: "correo", Icono: Mail, titulo: "Visitas por correo" },
-  { valor: "kof", Icono: BadgeCheck, titulo: "Gafetes KOF" },
+  { valor: "kof", Icono: BadgeCheck, titulo: "Provisionales KOF" },
 ];
 
 const VISTAS: Record<ClaseHistorial, (props: PropsHistorialClase) => ReactNode> = {

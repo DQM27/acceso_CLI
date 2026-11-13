@@ -4,6 +4,7 @@ import { avisos } from "../avisos/avisos";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
 import type { ContratistaResumen, Empresa } from "../api";
@@ -23,7 +24,9 @@ export default function Contratistas() {
   // que la persona ya acomodó (persistido en localStorage vía `Tabla`).
   const columnas = useMemo(() => columnasContratistas(), []);
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "resultado(s)"));
 
   useEffect(() => {
     // Sólo activas -- una empresa desactivada no es una opción válida en el
@@ -74,6 +77,7 @@ export default function Contratistas() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<ContratistaResumen>
             cargando={cargando}
+            onConteoVisible={alContar}
             id="contratistas"
             columnas={columnas}
             filas={filas}

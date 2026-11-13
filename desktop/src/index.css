@@ -46,6 +46,25 @@ input {
   font-family: inherit;
 }
 
+/* Todo lo que se escribe se ve en mayúscula, como los datos de la app
+   (pedido del usuario, 2026-11-13): buscadores, filtros de las grillas y
+   campos de los formularios. `text-transform` es sólo la vista; lo que se
+   guarda se convierte aparte, en cada formulario (nombres y placas al
+   escribir, `nombres.ts`; motivo, comprobante, placa/unidad de ruta al
+   guardar). Afuera: contraseñas y correos, y lo marcado con
+   `.sin-mayuscula` (ej. el buscador de Ayuda, donde se pega un mensaje de
+   error tal cual). El ejemplo (placeholder) queda en texto normal: frases
+   en mayúscula se leen peor. */
+input:not([type="password"]):not([type="email"]):not(.sin-mayuscula),
+textarea:not(.sin-mayuscula) {
+  text-transform: uppercase;
+}
+
+input::placeholder,
+textarea::placeholder {
+  text-transform: none;
+}
+
 /* Scrollbar temático en toda la app (WebView2 es Chromium, entiende
    ::-webkit-scrollbar) — sin esto se ve el scrollbar gris plano del SO en
    vez de seguir la paleta clara/oscura. AG Grid no dibuja el suyo propio:
@@ -132,10 +151,11 @@ input {
 /* Modales (`Modal.tsx`): título, etiquetas de campos y botones en
    mayúsculas -- pedido del usuario 2026-09-23, mismo lenguaje que los
    encabezados de las grillas y "ACCESO RÁPIDO" del selector de período.
-   Las etiquetas van chicas, grises y un poco espaciadas. Lo que se escribe
-   en los campos, los ejemplos (placeholder) y los mensajes de error dentro
-   de una etiqueta quedan en texto normal: frases en mayúsculas se leen
-   peor. */
+   Las etiquetas van chicas, grises y un poco espaciadas. Los ejemplos
+   (placeholder) y los mensajes de error dentro de una etiqueta quedan en
+   texto normal: frases en mayúsculas se leen peor. Lo que se escribe en
+   los campos va en mayúscula, ver la regla de `input` arriba (antes iba en
+   texto normal; cambió por pedido del usuario 2026-11-13). */
 .modal h2 {
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -147,11 +167,16 @@ input {
   font-size: 0.75rem;
 }
 
-.modal .campo input,
 .modal .campo select,
-.modal .campo textarea,
 .modal .campo span {
   text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Hereda el espaciado de la etiqueta, pero no le quita la mayúscula (la
+   pone la regla global de `input`). */
+.modal .campo input,
+.modal .campo textarea {
   letter-spacing: normal;
 }
 
@@ -423,6 +448,26 @@ input {
   text-transform: uppercase;
 }
 
+/* Fila de filtros por columna: menos margen a los costados (16px -> 8px; los
+   16px de siempre son `--ag-cell-horizontal-padding`, el mismo de las celdas
+   de datos). Junto con `suppressInputClearButton` y sin el botón del filtro
+   (`suppressFloatingFilterButton`, ver Tabla.tsx), el texto pasa a tener
+   56px en una columna de 90px (`minWidth`, antes 0px) y 84px en GAFETE
+   (~118px, antes 16px).
+   De esos 8px, 3px van al contenedor del input en vez de a la celda: el
+   halo de foco del input es una sombra de 3px (`box-shadow 0 0 0 3px`) y
+   `.ag-floating-filter-full-body` tiene `overflow: hidden` y mide lo mismo
+   que el input, así que la cortaba a los costados (hallazgo del usuario,
+   2026-11-13). El input conserva el mismo ancho. */
+.ag-header-cell.ag-floating-filter {
+  padding-inline: calc(var(--ag-spacing) - 3px);
+}
+
+.ag-floating-filter .ag-floating-filter-full-body {
+  padding-inline: 3px;
+}
+
+
 /* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
    mismo alto, borde y fondo que `.boton`, con las opciones unidas y la
    elegida rellena con el acento (`aria-pressed`). */
@@ -581,8 +626,60 @@ input {
   animation: ficha-aparecer 0.22s ease-out;
 }
 
+/* Entrada y salida de los modales (`Modal.tsx`): zoom corto. Al abrir, la
+   tarjeta crece de 94% a su tamaño con un fundido y el velo aparece detrás;
+   al cerrar (X o Esc) hace lo inverso, más rápido, y el modal se desmonta
+   al terminar (`DURACION_SALIDA_MODAL_MS`). Mientras sale ya no recibe
+   clics. */
+.modal-velo {
+  animation: velo-entrar 180ms ease-out both;
+}
+
+.modal-velo .modal {
+  animation: modal-entrar 220ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.modal-velo-saliendo {
+  animation: velo-salir 150ms ease-in forwards;
+  pointer-events: none;
+}
+
+.modal-velo-saliendo .modal {
+  animation: modal-salir 150ms ease-in forwards;
+}
+
+@keyframes velo-entrar {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes velo-salir {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-entrar {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes modal-salir {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ficha-desplegable {
+  .ficha-desplegable,
+  .modal-velo,
+  .modal-velo .modal,
+  .modal-velo-saliendo,
+  .modal-velo-saliendo .modal {
     animation: none;
   }
 
@@ -852,8 +949,39 @@ input {
   }
 }
 
+/* Menús de acciones (ListaFlotante con animacion="caida", ej. "Ingreso" en
+   Activos): mismo movimiento corto que el menú de cuenta, pero cayendo desde
+   el botón. Mismas duraciones (la salida, `DURACION_SALIDA_LISTA_MS`). */
+.lista-flotante-caida {
+  animation: lista-entrar-caida 160ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.lista-flotante-caida.lista-flotante-saliendo {
+  animation: lista-salir-caida 120ms ease-in forwards;
+}
+
+/* Mientras sale ya está cerrada: un clic en ese rato no debe elegir nada. */
+.lista-flotante-saliendo {
+  pointer-events: none;
+}
+
+@keyframes lista-entrar-caida {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes lista-salir-caida {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .lista-flotante-lateral {
+  .lista-flotante-lateral,
+  .lista-flotante-caida {
     animation: none;
   }
 }

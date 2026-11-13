@@ -19,7 +19,7 @@ sesión.
 
 | Columna | Qué muestra |
 |---|---|
-| Clase | Contratista, Proveedor, Visita por correo o Gafete KOF |
+| Clase | Contratista, Proveedor, Visita por correo o Provisional KOF |
 | Cédula | La cédula; en KOF aparece "—" porque se identifican por código de empleado |
 | Nombre | Nombre de la persona |
 | Empresa / motivo | La empresa (contratistas y proveedores), a quién visita (por correo) o el código de empleado (KOF) |
@@ -55,8 +55,8 @@ este equipo o en el otro equipo del sitio.
 ## Registrar ingresos y salidas desde aquí
 
 - Botón **Ingreso**: abre la lista para elegir **Contratista** (Ctrl+N),
-  **Proveedor** (Alt+P), **Visita por correo** (Alt+C) o **Gafete KOF**
-  (Alt+K).
+  **Proveedor** (Alt+P), **Visita por correo** (Alt+C) o **Provisional
+  KOF** (Alt+K).
 - Botón **Salida** (Ctrl+S) arriba, o el botón **Salida** de cada fila: ver
   [Registrar una salida](registrar-salida.md).
 

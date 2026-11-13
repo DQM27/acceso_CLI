@@ -10,6 +10,7 @@ import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import {
   cerrarVisitaRemota,
   listarAgendaVisitas,
@@ -99,10 +100,18 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   // Para que la exportación lea lo que muestra la grilla (filtros incluidos).
   const tablaHistorialRef = useRef<TablaHandle<FilaVisitaHistorial>>(null);
 
+  // Un conteo por grilla: las tres quedan montadas, cada una con sus
+  // propios filtros.
+  const [conteoEsperadas, alContarEsperadas] = useConteoVisible();
+  const [conteoAdentro, alContarAdentro] = useConteoVisible();
+  const [conteoHistorial, alContarHistorial] = useConteoVisible();
+
   const total = vista === "esperadas" ? esperadas.length : vista === "adentro" ? adentro.length : historial.length;
+  const conteo =
+    vista === "esperadas" ? conteoEsperadas : vista === "adentro" ? conteoAdentro : conteoHistorial;
   const unidad =
-    vista === "esperadas" ? "visita(s) esperada(s) hoy" : vista === "adentro" ? "visitante(s) adentro" : "movimientos";
-  useBarraEstado(cargando ? "Cargando…" : `${total} ${unidad}`);
+    vista === "esperadas" ? "visita(s) esperada(s) hoy" : vista === "adentro" ? "visitante(s) adentro" : "movimiento(s)";
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, total, unidad));
 
   const recargarEsperadas = useCallback(() => {
     setCargando(true);
@@ -394,6 +403,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
           <div className={claseCapaVista(vista === "esperadas")}>
             <Tabla<FilaEsperada>
               cargando={cargando}
+              onConteoVisible={alContarEsperadas}
               filtrosPorColumna
               id="visitas-esperadas"
               idFila={idPorClave}
@@ -412,6 +422,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
           <div className={claseCapaVista(vista === "adentro")}>
             <Tabla<FilaVisitaAdentro>
               cargando={cargando}
+              onConteoVisible={alContarAdentro}
               filtrosPorColumna
               id="visitas-adentro"
               idFila={idPorClave}
@@ -430,6 +441,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
           <div className={claseCapaVista(vista === "historial")}>
             <Tabla<FilaVisitaHistorial>
               ref={tablaHistorialRef}
+              onConteoVisible={alContarHistorial}
               cargando={cargando}
               filtrosPorColumna
               id="visitas-historial-unificado"

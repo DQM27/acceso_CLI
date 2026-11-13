@@ -7,6 +7,7 @@ import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import {
@@ -73,12 +74,14 @@ export default function HistorialContratistas({
   const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
+  const [conteo, alContar] = useConteoVisible();
+
   useBarraEstado(
     cargando
       ? "Cargando…"
       : truncado
-        ? `${filas.length}+ movimiento(s) (rango truncado)`
-        : `${filas.length} movimiento(s)`,
+        ? `${textoConteo(conteo, `${filas.length}+`, "movimiento(s)")} (rango truncado)`
+        : textoConteo(conteo, filas.length, "movimiento(s)"),
   );
 
   const recargar = useCallback(
@@ -346,6 +349,7 @@ export default function HistorialContratistas({
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaHistorial>
             cargando={cargando}
+            onConteoVisible={alContar}
             ref={tablaRef}
             id="historial"
             idFila={idPorUuid}

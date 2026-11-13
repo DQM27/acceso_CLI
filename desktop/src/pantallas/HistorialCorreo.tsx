@@ -7,6 +7,7 @@ import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import { listarHistorialIngresosCorreoSitio } from "../api/correo";
 import type { HistorialIngresoCorreoRemoto } from "../api/correo";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -24,7 +25,9 @@ export default function HistorialCorreo({ selector, desde, hasta, onRango }: Pro
   const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<HistorialIngresoCorreoRemoto>>(null);
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} movimiento(s)`);
+  const [conteo, alContar] = useConteoVisible();
+
+  useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "movimiento(s)"));
 
   const recargar = useCallback(
     async (estaVigente: () => boolean = () => true) => {
@@ -114,6 +117,7 @@ export default function HistorialCorreo({ selector, desde, hasta, onRango }: Pro
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<HistorialIngresoCorreoRemoto>
             ref={tablaRef}
+            onConteoVisible={alContar}
             cargando={cargando}
             filtrosPorColumna
             id="correo-historial"
