@@ -167,7 +167,7 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
                 TipoEstado.EXITO -> paleta.rellenoExito
                 TipoEstado.ERROR -> paleta.rellenoError
                 TipoEstado.AVISO -> paleta.rellenoAdvertencia
-                TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.rellenoInfo
+                TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.relleno
             },
             contentColor = paleta.sobreRelleno,
             modifier = Modifier.clickable { avisos.ocultar(aviso.id) },

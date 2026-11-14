@@ -32,7 +32,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import uniffi.control_acceso_mobile.AvisoAcceso
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -251,8 +254,11 @@ internal fun marcaContratista(contratista: ContratistaResumen): MarcaContratista
 /// En la búsqueda salen juntos quienes pueden entrar, quienes ya están
 /// adentro y quienes no pueden entrar. Se distinguen sin leer (antes era una
 /// línea de texto al final), con fondo, franja, ícono y una palabra:
-/// adentro en ámbar con la señal de "ya está adentro"; acceso denegado y
-/// PRAIND vencido en rojo, con el "prohibido" o el calendario con una X.
+/// adentro en el azul de salida, con la flecha que se aleja (igual que las
+/// tarjetas de la búsqueda por gafete: tocarla abre la salida); acceso
+/// denegado y PRAIND vencido en rojo, con el "prohibido" o el calendario con
+/// una X. Adentro iba en ámbar hasta 2026-11-14: estar adentro es lo normal,
+/// y el ámbar se leía como advertencia.
 @Composable
 internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
     val marca = marcaContratista(contratista)
@@ -264,7 +270,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
             .clip(MaterialTheme.shapes.medium)
             .fondoTarjeta(
                 when (marca) {
-                    MarcaContratista.ADENTRO -> paleta.tinteAdentro
+                    MarcaContratista.ADENTRO -> paleta.tinteSalida
                     MarcaContratista.DENEGADO, MarcaContratista.VENCIDO -> paleta.tinteBloqueado
                     null -> null
                 },
@@ -306,7 +312,14 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         if (marca != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 when (marca) {
-                    MarcaContratista.ADENTRO -> SenalAdentro()
+                    // La misma flecha de la hoja de salida ([IconoPaso]),
+                    // en espejo para que se aleje hacia la izquierda.
+                    MarcaContratista.ADENTRO -> Icon(
+                        Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = null,
+                        tint = paleta.acento,
+                        modifier = Modifier.size(24.dp).graphicsLayer { scaleX = -1f },
+                    )
                     MarcaContratista.DENEGADO -> IconoMarca(IconosLucide.Prohibido, paleta.textoBloqueado)
                     MarcaContratista.VENCIDO -> IconoMarca(IconosLucide.CalendarioConX, paleta.textoBloqueado)
                 }
@@ -314,7 +327,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                     marca.palabra,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (adentro) paleta.textoAdentro else paleta.textoBloqueado,
+                    color = if (adentro) paleta.acento else paleta.textoBloqueado,
                 )
             }
         }

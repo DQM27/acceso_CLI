@@ -477,8 +477,8 @@ private fun DetalleSalidaOtraVia(salida: SalidaPorOtraVia, modifier: Modifier = 
 @Composable
 private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Modifier = Modifier) {
     val acento = MaterialTheme.colorScheme.primary
-    val relleno = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas
-    val sobreRelleno = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas
+    val relleno = ColorRellenoBrisas
+    val sobreRelleno = ColorSobreRellenoBrisas
     val fondo by animateColorAsState(if (activo) relleno else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
     val texto by animateColorAsState(
         if (activo) sobreRelleno else acento,

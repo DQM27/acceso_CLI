@@ -293,16 +293,17 @@ internal suspend fun ScrollState.seguirFondoMientrasAbreTeclado() {
 /// Lo que tarda el teclado en abrirse, con margen.
 private const val MS_APERTURA_TECLADO = 600L
 
-/** Acciones principales: forma y área táctil comunes en todas las pantallas.
- * Dentro de una sección, en su color ([LocalRellenoBotones]). */
+/** Acciones principales: forma y área táctil comunes en todas las pantallas,
+ * siempre en el azul de la app (también dentro de una sección, ver
+ * `AcentoSeccion.kt`). */
 @Composable
 fun BotonBrisas(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(
-        containerColor = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas,
-        contentColor = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas,
+        containerColor = ColorRellenoBrisas,
+        contentColor = ColorSobreRellenoBrisas,
     ),
     content: @Composable RowScope.() -> Unit,
 ) {

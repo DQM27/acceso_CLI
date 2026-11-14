@@ -10,25 +10,16 @@ import androidx.compose.ui.unit.dp
 
 // Todos los colores de la app, en un solo lugar (pedido del usuario
 // 2026-10-27): para cambiar un tono se toca sólo este archivo. Lo demás lee
-// de acá: el esquema de Material ([EsquemaDia], [EsquemaNoche]), los acentos
-// de cada sección (`AcentoSeccion.kt`) y los colores sueltos de `DisenoMovil.kt`.
+// de acá: el esquema de Material ([EsquemaDia], [EsquemaNoche]), el color de
+// cada sección (`AcentoSeccion.kt`) y los colores sueltos de `DisenoMovil.kt`.
 //
-// Cada sección tiene dos tonos ([TonoSeccion]): el acento (texto, íconos,
-// pestaña activa) y el relleno de los botones, siempre con texto blanco. En el
-// tema claro son el mismo; en el oscuro el acento es más claro, para leerse
-// sobre el fondo, y el relleno sigue profundo: antes los botones se rellenaban
-// con el acento claro y quedaban como bloques fluorescentes.
+// Un color, un significado (2026-11-14, `docs/handoff-rediseno-movil-ux.md`):
+// el azul ([Paleta.acento], [Paleta.relleno]) es lo que se toca; verde, ámbar
+// y rojo dicen qué pasó; el color de sección sólo dice dónde se está, en su
+// pestaña de abajo. Antes cada sección pintaba también sus botones y un
+// "Entregar" rojo en KOF se leía como un error.
 //
 // Contrastes medidos (WCAG) en `PaletaLattisTest` y `AcentoSeccionTest`.
-
-/// Los dos tonos de una sección (ver arriba).
-@Immutable
-internal class TonoSeccion(
-    /// Texto, íconos y pestaña activa.
-    val acento: Color,
-    /// Relleno de los botones principales, con [Paleta.sobreRelleno] encima.
-    val relleno: Color,
-)
 
 @Immutable
 internal class Paleta(
@@ -67,7 +58,6 @@ internal class Paleta(
     /// Relleno de los avisos que bajan de arriba, uno por tipo, con
     /// [sobreRelleno] encima.
     val rellenoExito: Color,
-    val rellenoInfo: Color,
     val rellenoError: Color,
     /// Ámbar de íconos y puntos (sin red).
     val advertencia: Color,
@@ -78,14 +68,9 @@ internal class Paleta(
     val advertenciaSuave: Color,
     /// Relleno del aviso breve de advertencia, con [sobreRelleno] encima.
     val rellenoAdvertencia: Color,
-    /// La tarjeta de quien ya está adentro en la búsqueda de contratistas:
-    /// fondo ámbar suave, franja a la izquierda y la palabra "ADENTRO". Ámbar
-    /// como la señal de [AmarilloSenal], que ya dice eso mismo.
-    val adentroSuave: Color,
-    val franjaAdentro: Color,
-    val textoAdentro: Color,
-    /// Las tarjetas de una búsqueda por gafete, que siempre es para la
-    /// salida: azul, el acento general, distinto del ámbar de "adentro".
+    /// Las tarjetas que al tocarlas abren la salida: la búsqueda por gafete
+    /// y quien ya está adentro en la búsqueda de contratistas (antes ésta
+    /// iba en ámbar, que se leía como advertencia). Azul, el de lo que se toca.
     val salidaSuave: Color,
     val franjaSalida: Color,
     /// La tarjeta de quien no puede entrar (acceso denegado o PRAIND
@@ -94,12 +79,13 @@ internal class Paleta(
     val bloqueadoSuave: Color,
     val franjaBloqueado: Color,
     val textoBloqueado: Color,
-    val contratistas: TonoSeccion,
-    val kof: TonoSeccion,
-    val proveedores: TonoSeccion,
-    val porCorreo: TonoSeccion,
+    /// El color de cada sección: ícono y nombre de su pestaña activa, y nada
+    /// más. A 4,5:1 sobre la píldora gris de la barra (la etiqueta es de 12sp).
+    val contratistas: Color,
+    val kof: Color,
+    val proveedores: Color,
+    val porCorreo: Color,
 ) {
-    val tinteAdentro = TinteTarjeta(adentroSuave, franjaAdentro)
     val tinteSalida = TinteTarjeta(salidaSuave, franjaSalida)
     val tinteBloqueado = TinteTarjeta(bloqueadoSuave, franjaBloqueado)
 }
@@ -135,25 +121,23 @@ internal val PaletaDia = Paleta(
     errorSuave = Color(0xFFFEE4E2),
     exito = Color(0xFF15803D),
     rellenoExito = Color(0xFF15803D),
-    rellenoInfo = Color(0xFF1D4ED8),
     rellenoError = Color(0xFFB42318),
     // Ícono o punto, no texto: 3,2:1 sobre la tarjeta.
     advertencia = Color(0xFFD97706),
     textoAdvertencia = Color(0xFF92400E),
     advertenciaSuave = Color(0xFFFEF3C7),
     rellenoAdvertencia = Color(0xFFB45309),
-    adentroSuave = Color(0xFFFFF1C2),
-    franjaAdentro = Color(0xFFB45309),
-    textoAdentro = Color(0xFF92400E),
     salidaSuave = Color(0xFFDBEAFE),
     franjaSalida = Color(0xFF1D4ED8),
     bloqueadoSuave = Color(0xFFFEE4E2),
     franjaBloqueado = Color(0xFFB42318),
     textoBloqueado = Color(0xFFB42318),
-    contratistas = TonoSeccion(acento = Color(0xFF00806A), relleno = Color(0xFF00806A)),
-    kof = TonoSeccion(acento = Color(0xFFC4161C), relleno = Color(0xFFC4161C)),
-    proveedores = TonoSeccion(acento = Color(0xFFB85C00), relleno = Color(0xFFB85C00)),
-    porCorreo = TonoSeccion(acento = Color(0xFF6D32C9), relleno = Color(0xFF6D32C9)),
+    // Verde azulado y mango más oscuros que antes (#00806A, #B85C00): sobre la
+    // píldora gris de la pestaña daban 4,2:1 y 4,0:1.
+    contratistas = Color(0xFF00735F),
+    kof = Color(0xFFC4161C),
+    proveedores = Color(0xFFA35200),
+    porCorreo = Color(0xFF6D32C9),
 )
 
 /// Oscuro neutro, sin el tinte lavanda de Tokyo Night (2026-10-27): casi
@@ -181,24 +165,21 @@ internal val PaletaNoche = Paleta(
     errorSuave = Color(0xFF3A1F22),
     exito = Color(0xFF4ADE80),
     rellenoExito = Color(0xFF1F7A44),
-    rellenoInfo = Color(0xFF2F5FD0),
     rellenoError = Color(0xFFC53030),
     advertencia = Color(0xFFFBBF24),
     textoAdvertencia = Color(0xFFFBBF24),
     advertenciaSuave = Color(0xFF3A2E10),
     rellenoAdvertencia = Color(0xFFB45309),
-    adentroSuave = Color(0xFF2E2610),
-    franjaAdentro = Color(0xFFFBBF24),
-    textoAdentro = Color(0xFFFBBF24),
     salidaSuave = Color(0xFF16233A),
     franjaSalida = Color(0xFF6EA8FF),
     bloqueadoSuave = Color(0xFF331A1D),
     franjaBloqueado = Color(0xFFFF6B6B),
     textoBloqueado = Color(0xFFFF6B6B),
-    contratistas = TonoSeccion(acento = Color(0xFF5CC8B2), relleno = Color(0xFF00806A)),
-    kof = TonoSeccion(acento = Color(0xFFFF6B5E), relleno = Color(0xFFD0312D)),
-    proveedores = TonoSeccion(acento = Color(0xFFFFB547), relleno = Color(0xFFB85C00)),
-    porCorreo = TonoSeccion(acento = Color(0xFFB79CFF), relleno = Color(0xFF7C45D6)),
+    contratistas = Color(0xFF5CC8B2),
+    // Más claro que #FF6B5E: sobre la píldora gris daba 4,2:1.
+    kof = Color(0xFFFF8A7A),
+    proveedores = Color(0xFFFFB547),
+    porCorreo = Color(0xFFB79CFF),
 )
 
 /// Ancho del contorno [Paleta.bordeVidrio].
@@ -265,6 +246,7 @@ val ColorEscaneoInvalido = Color(0xFFE53935)
 val ColorEscaneoConfirmado = Color(0xFF43A047)
 val ColorEscaneoVencido = Color(0xFFFF8F00)
 
-/// La señal de tránsito de "ya está adentro" (`IconoPaso.kt`).
+/// La señal de tránsito de la hoja de salida cuando se escaneó a alguien que
+/// ya estaba adentro y quizá se esperaba darle el ingreso (`IconoPaso.kt`).
 internal val AmarilloSenal = Color(0xFFFFC20E)
 internal val NegroSenal = Color(0xFF1F1F1F)

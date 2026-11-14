@@ -701,8 +701,8 @@ fun PantallaPrincipal(
                             // `when` exhaustivo sobre el enum: agregar una sección sin
                             // su pantalla no compila (antes eran textos y un `else`
                             // que caía en Activos en silencio ante un error de tipeo).
-                            // Cada página con su propio acento.
-                            TemaSeccion(seccionMostrada) {
+                            // El color de la sección sólo va en su pestaña (ver
+                            // `AcentoSeccion.kt`): la página usa el azul de la app.
                                 when (seccionMostrada) {
                                     SeccionPrincipal.ACTIVOS -> PantallaActivos(
                                         nucleo,
@@ -737,7 +737,6 @@ fun PantallaPrincipal(
                                     )
                                     SeccionPrincipal.VISITAS -> PantallaVisitas(nucleo, refrescarNube)
                                 }
-                            }
                             }
                         }
                     }
@@ -905,7 +904,7 @@ private fun BarraSecciones(
     ) {
         SECCIONES_VISIBLES.forEach { seccion ->
             val elegida = seccion == seleccionada
-            val acento = acentoDeSeccion(seccion, oscuro)?.color ?: MaterialTheme.colorScheme.primary
+            val acento = colorDeSeccion(seccion, oscuro) ?: MaterialTheme.colorScheme.primary
             val color by animateColorAsState(
                 targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(MS_FUNDIDO_ENTRADA),

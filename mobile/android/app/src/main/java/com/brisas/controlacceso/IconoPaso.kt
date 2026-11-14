@@ -134,15 +134,6 @@ internal fun SenalAdvertencia(arriba: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/// La misma señal, chica y quieta, para marcar en una lista a quien ya está
-/// adentro: en una lista que se desplaza, el rebote se repetiría con cada fila.
-@Composable
-internal fun SenalAdentro(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(width = 26.dp, height = 23.dp)) {
-        dibujarSenal()
-    }
-}
-
 /// Triángulo amarillo con borde y "!" negros, del tamaño del lienzo.
 private fun DrawScope.dibujarSenal() {
     val ancho = size.width
