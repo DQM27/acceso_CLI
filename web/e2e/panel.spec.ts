@@ -265,7 +265,7 @@ test("Contratistas: el modal registra a alguien con el acceso denegado", async (
 }) => {
   await preparar(page);
   await page.goto("/contratistas");
-  await page.getByRole("button", { name: "+ Nuevo" }).click();
+  await page.getByRole("button", { name: "Nuevo contratista" }).click();
 
   const modal = page.getByRole("dialog");
   await expect(modal.getByText("Nuevo contratista")).toBeVisible();
@@ -378,7 +378,7 @@ test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", as
 }) => {
   await preparar(page);
   await page.goto("/dispositivos");
-  await page.getByRole("button", { name: "+ Nuevo" }).click();
+  await page.getByRole("button", { name: "Nuevo dispositivo" }).click();
   await page.getByPlaceholder("ej. Brisas - PC recepción").fill("PC nueva");
   await page.getByRole("button", { name: "Crear y generar código" }).click();
 
