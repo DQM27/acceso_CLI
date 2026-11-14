@@ -586,7 +586,7 @@ Ganancia estimada: ~50 ms por recarga de Activos. Prioridad baja.
 | `aviso_bandeja_salida` | 63.937 | 25 ms | 46 ms | Cada 15 s en `BarraNube.tsx`; con la conexión persistente bajaría a casi nada |
 | `listar_historial` + `listar_historial_sitio` | 2.674 | 72 + 183 ms | 134 + 346 ms | Con 6 meses. El arranque en 7 días (R7) debería bajarlo mucho; medir |
 | `sincronizar_con_nube` | 499 | 1,2 s | 2,0 s | Red; máximo 28 s. 8 errores |
-| `sesion_realtime_nube` | 1.033 | 3 ms | 8 ms | **338 errores (33 %)**: revisar aparte, no es rendimiento |
+| `sesion_realtime_nube` | 1.033 | 3 ms | 8 ms | 338 errores (33 %): todos de un solo equipo sin red, ver abajo |
 | `login` | 79 | 406 ms | 1,0 s | 33 errores (probablemente contraseñas mal escritas) |
 
 ### Interfaz
@@ -604,6 +604,33 @@ Ganancia estimada: ~50 ms por recarga de Activos. Prioridad baja.
    fase 1 ya lo ataca (R1, R2, R4). Falta medirlo en la versión nueva.
 2. R6 baja a prioridad baja y cambia de forma (conexión persistente, no
    comando único).
-3. El 33 % de errores de `sesion_realtime_nube` merece una revisión propia.
+3. El 33 % de errores de `sesion_realtime_nube` no es un fallo de la app: ver abajo.
 4. El resto del rendimiento está bien: lo que queda por ganar está en la
    UX (fase 3), no en la velocidad.
+
+### Errores de la conexión en vivo (`sesion_realtime_nube`), escritorio y móvil
+
+Últimos 30 días, todas las versiones:
+
+| Plataforma | Equipos con error | Llamadas | Errores | Tipo |
+| --- | --- | --- | --- | --- |
+| Escritorio | 1 de 3 (`a016c1b9…`) | 1.715 | 872 (51 %) | `sin_red` (528 de versiones viejas sin clasificar) |
+| Escritorio | los otros 2 | — | 0 | — |
+| Móvil | 4 de 9 | 2.872 | 92 (3 %) | Sobre todo `no_autenticado` (72); `interno` 7, `sin_red` 4 |
+
+- **No es un fallo de la app de escritorio.** Los errores salen de un solo
+  equipo y llegan a razón de ~60 por hora: es el reintento con espera
+  máxima de 60 s de `nubeRealtime.ts` (`REINTENTO_TOPE_MS`) mientras la PC
+  no tiene red, a veces durante horas (por ejemplo, de 9 h a 17 h). En sólo
+  16 de 863 minutos con error había otra llamada a la nube funcionando en
+  el minuto de al lado: son los momentos en que la red se cae o vuelve.
+- **Mejora menor posible:** con `navigator.onLine === false`, no intentar y
+  esperar el evento `online` en vez de reintentar cada minuto. Ahorra
+  llamadas inútiles y deja de inflar esta métrica. Prioridad baja.
+- **Lo que sí conviene revisar es la red de ese puesto**: identificar el
+  equipo `a016c1b9…` (ver `sesion_inicio`/`identidad_equipo`). Mientras no
+  hay red, la PC no recibe avisos en vivo; la sincronización periódica
+  recupera al volver.
+- **Móvil:** tasa baja (3 %), casi toda en un teléfono (`b5e22be5…`, 66 de
+  `no_autenticado`): la sesión no estaba lista al conectar y el reintento
+  la resuelve. No requiere acción por ahora.
