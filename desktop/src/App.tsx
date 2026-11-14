@@ -405,15 +405,15 @@ function Shell({
   // PRIMERA visita a cada sección monta su componente; volver después es
   // instantáneo.
   const [visitadas, setVisitadas] = useState<Seccion[]>(["activos"]);
+  // Ajuste durante el render (patrón de React): la sección nueva se monta en
+  // el mismo render en que se elige, sin un efecto que la agregue después
+  // (antes se difería con `Promise.resolve().then` por la regla
+  // `react-hooks/set-state-in-effect`).
+  if (!visitadas.includes(seccion)) {
+    setVisitadas([...visitadas, seccion]);
+  }
   useEffect(() => {
     registrarPantalla(seccion);
-  }, [seccion]);
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => {
-      setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
-    });
   }, [seccion]);
   // React 19.3: `<ViewTransition>` sólo anima un cambio si ocurrió dentro de
   // una transición -- acá no hay router que la envuelva sola (a diferencia
@@ -512,7 +512,11 @@ function Shell({
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
   // Gente con demasiado tiempo adentro: lo calcula el núcleo (`domain::permanencia`),
   // acá sólo se guarda lo que contesta y qué aviso está pulsado.
-  const avisosPermanencia = useAvisosPermanencia(`${refrescarActivos}-${sincronizandoManual}`);
+  // Si alguien cruzó un umbral con el reloj, Activos recarga para que el
+  // color de su fila coincida con el aviso (ver `useAvisosPermanencia`).
+  const avisosPermanencia = useAvisosPermanencia(`${refrescarActivos}-${sincronizandoManual}`, () =>
+    startTransition(() => setRefrescarActivos((n) => n + 1)),
+  );
   const [filtroPermanencia, setFiltroPermanencia] = useState<FiltroPermanencia | null>(null);
   // Si el aviso pulsado ya no tiene a nadie (salieron), el filtro se ignora para
   // no dejar la tabla vacía sin un aviso que lo apague.
@@ -670,9 +674,11 @@ function Shell({
   // `manejarResumenSincronizacion`, una función nueva cada vez, en las
   // dependencias) lo reconectaría sin parar. El evento siempre ve la
   // versión más reciente del manejador sin ser una dependencia.
-  const alSincronizarNube = useEffectEvent((resumen: ResumenSincronizacion, emitir: boolean) => {
+  const alSincronizarNube = useEffectEvent((resumen: ResumenSincronizacion, emitir: boolean, recargar = true) => {
     if (manejarResumenSincronizacion(resumen)) return;
-    startTransition(() => setRefrescarActivos((n) => n + 1));
+    // Una corrida que sólo subió lo de esta PC no recarga (ver
+    // `sincronizacionCambiaDatos`).
+    if (recargar) startTransition(() => setRefrescarActivos((n) => n + 1));
     if (emitir) emitirActualizacion(resumen);
     // Sincronizó: la nube aceptó al equipo y el núcleo ya borró la marca de
     // retirado. Si el aviso quedó a la vista, se va solo.
@@ -684,7 +690,7 @@ function Shell({
   });
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
-      onSincronizado: (resumen) => alSincronizarNube(resumen, false),
+      onSincronizado: (resumen, recargar) => alSincronizarNube(resumen, false, recargar),
       onEstado: setEstadoConexionNube,
       // Aviso de expulsión: la nube confirma (o no) el retiro. Sólo si lo
       // confirma se ofrece reconectar (ver `expulsionNube.ts`). El trabajo

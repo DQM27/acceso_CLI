@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 
-import { describirError, fijarPantallaErrores, reportarErrorJs } from "./errores";
+import { describirError, escucharErroresJs, fijarPantallaErrores, reportarErrorJs } from "./errores";
 
 describe("describirError", () => {
   it("un Error da su nombre, su mensaje y su traza", () => {
@@ -46,6 +46,26 @@ describe("envío al núcleo", () => {
     mocks.invoke.mockRejectedValue(new Error("sin backend"));
     expect(() => reportarErrorJs("x", "error")).not.toThrow();
     await Promise.resolve();
+  });
+
+  it("avisa a los oyentes (la telemetría) por la misma entrada", () => {
+    const oyente = vi.fn();
+    const dejar = escucharErroresJs(oyente);
+    const error = new Error("boom");
+    reportarErrorJs(error, "render");
+    expect(oyente).toHaveBeenCalledWith("render", error);
+    dejar();
+    reportarErrorJs(error, "render");
+    expect(oyente).toHaveBeenCalledTimes(1);
+  });
+
+  it("un oyente que falla no frena el envío al núcleo", () => {
+    const dejar = escucharErroresJs(() => {
+      throw new Error("oyente roto");
+    });
+    expect(() => reportarErrorJs("x", "error")).not.toThrow();
+    expect(mocks.invoke).toHaveBeenCalledWith("reportar_error_js", expect.anything());
+    dejar();
   });
 
   it("avisa la pantalla sólo cuando cambia", () => {

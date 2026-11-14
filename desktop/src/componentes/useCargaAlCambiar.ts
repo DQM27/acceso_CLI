@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { avisos } from "../avisos/avisos";
-import { EVENTO_CAMBIO_EN_VIVO, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
+import { useSeccionActiva } from "../contexto/BarraEstadoContexto";
+import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
+import { useRecargaVisible } from "./useRecargaVisible";
 
 /**
  * Corre `recargar(estaVigente)` cada vez que cambia su identidad
@@ -13,25 +15,38 @@ import { EVENTO_CAMBIO_EN_VIVO, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
  * Contratistas/Empresas/Usuarios; `recargar` sigue siendo dueño de cada
  * pantalla (su propio `useCallback`), acá sólo vive el envoltorio que era
  * idéntico en las tres.
+ *
+ * Con `escucharNube`, también recarga cuando llega una sincronización, un
+ * aviso en vivo o un registro hecho en esta PC desde otra parte (ej. el
+ * modal de ingreso con Ctrl+N) -- pero sólo con la pantalla a la vista;
+ * oculta, queda pendiente y recarga una vez al volver (`useRecargaVisible`).
  */
 export function useCargaAlCambiar(recargar: (estaVigente: () => boolean) => Promise<unknown>, escucharNube = false) {
+  const activa = useSeccionActiva();
+  const versionVisible = useRecargaVisible();
+  // Cambios que llegan con la pantalla a la vista.
+  const [cambiosVistos, setCambiosVistos] = useState(0);
+
+  useEffect(() => {
+    if (!escucharNube || !activa) return;
+    const alCambiar = () => setCambiosVistos((n) => n + 1);
+    const eventos = [EVENTO_NUBE_ACTUALIZADA, EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE];
+    for (const evento of eventos) window.addEventListener(evento, alCambiar);
+    return () => {
+      for (const evento of eventos) window.removeEventListener(evento, alCambiar);
+    };
+  }, [activa, escucharNube]);
+
+  // Sin `escucharNube` la versión visible no participa: esa pantalla no
+  // quiere enterarse de cambios externos.
+  const versionExterna = escucharNube ? versionVisible : 0;
+
   useEffect(() => {
     let vigente = true;
-    let revision = 0;
-    const cargar = () => {
-      const actual = ++revision;
-      const estaVigente = () => vigente && actual === revision;
-      recargar(estaVigente).catch((error) => estaVigente() && avisos.error(error));
-    };
-    cargar();
-    if (escucharNube) {
-      window.addEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
-      window.addEventListener(EVENTO_CAMBIO_EN_VIVO, cargar);
-    }
+    const estaVigente = () => vigente;
+    recargar(estaVigente).catch((error) => estaVigente() && avisos.error(error));
     return () => {
       vigente = false;
-      window.removeEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
-      window.removeEventListener(EVENTO_CAMBIO_EN_VIVO, cargar);
     };
-  }, [recargar, escucharNube]);
+  }, [recargar, cambiosVistos, versionExterna]);
 }

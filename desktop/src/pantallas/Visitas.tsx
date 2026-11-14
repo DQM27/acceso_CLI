@@ -11,6 +11,10 @@ import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
+import { useRecargaVisible } from "../componentes/useRecargaVisible";
+import { claseCapaVista } from "../componentes/capaVista";
+import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
+import { idPorClave } from "../componentes/Tabla.logica";
 import {
   cerrarVisitaRemota,
   listarAgendaVisitas,
@@ -24,7 +28,7 @@ import {
   listarHistorialIngresosCorreoSitio,
   listarTodosLosCorreosActivos,
 } from "../api/correo";
-import { fechaHaceMeses, fechaLocalYMD, fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaHaceMeses, fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
   TEXTO_ORIGEN,
   textoMedioDePlaca,
@@ -58,14 +62,6 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
   );
 }
 
-/** Identidad de fila para el destello de celdas cambiadas (`idFila`). */
-const idPorClave = (fila: { clave: string }) => fila.clave;
-
-/** Las tres grillas quedan montadas y sólo se ve la elegida (mismo motivo
- * que en Proveedores: no parpadea ni pierde scroll y filtros). */
-function claseCapaVista(visible: boolean): string {
-  return visible ? "capa-vista" : "capa-vista capa-vista-oculta";
-}
 
 const guion = (valor: string | null | undefined) => valor || "—";
 
@@ -149,6 +145,10 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const recargarVista =
     vista === "esperadas" ? recargarEsperadas : vista === "adentro" ? recargarAdentro : recargarHistorial;
 
+  // `refrescarSenal` sube en cada sincronización (Realtime, pulso periódico
+  // o manual) -- ver `App.tsx`/`Shell`. Con Visitas oculta no recarga: queda
+  // pendiente hasta volver (`useRecargaVisible`).
+  const versionDatos = useRecargaVisible(refrescarSenal);
   useEffect(() => {
     let vigente = true;
     const recargar =
@@ -157,9 +157,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     return () => {
       vigente = false;
     };
-    // `refrescarSenal` sube en cada sincronización (Realtime, pulso
-    // periódico o manual) -- ver `App.tsx`/`Shell`.
-  }, [vista, refrescarSenal, recargarEsperadas, recargarAdentro, recargarHistorial]);
+  }, [vista, versionDatos, recargarEsperadas, recargarAdentro, recargarHistorial]);
 
   const darSalida = useCallback(
     async (fila: FilaVisitaAdentro) => {
@@ -260,30 +258,9 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         minWidth: 130,
         valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.7,
-        minWidth: 85,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-      },
-      {
-        colId: "fecha_entrada",
-        type: "fecha",
-        headerName: "Fecha",
-        flex: 1,
-        minWidth: 105,
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_entrada) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        colId: "hora_entrada",
-        headerName: "Hora",
-        flex: 0.7,
-        minWidth: 80,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_entrada) : ""),
-      },
+      columnaGafete({ flex: 0.7, minWidth: 85 }),
+      columnaFecha("fecha_entrada", (fila) => fila.fecha_hora_entrada, { flex: 1, minWidth: 105 }),
+      columnaHora("hora_entrada", (fila) => fila.fecha_hora_entrada, { flex: 0.7, minWidth: 80 }),
       {
         headerName: "Acción",
         flex: 0.8,
@@ -324,38 +301,19 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         minWidth: 130,
         valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.7,
-        minWidth: 85,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-      },
-      {
-        colId: "fecha_entrada",
-        type: "fecha",
-        headerName: "Fecha",
-        flex: 1,
-        minWidth: 105,
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_entrada) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        colId: "hora_entrada",
+      columnaGafete({ flex: 0.7, minWidth: 85 }),
+      columnaFecha("fecha_entrada", (fila) => fila.fecha_hora_entrada, { flex: 1, minWidth: 105 }),
+      columnaHora("hora_entrada", (fila) => fila.fecha_hora_entrada, {
         headerName: "Entrada",
         flex: 0.7,
         minWidth: 80,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_entrada) : ""),
-      },
-      {
-        colId: "hora_salida",
+      }),
+      columnaHora("hora_salida", (fila) => fila.fecha_hora_salida, {
         headerName: "Salida",
         flex: 0.7,
         minWidth: 80,
-        valueGetter: (p) => (p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : ""),
         valueFormatter: (p) => p.value || "—",
-      },
+      }),
       {
         field: "usuario_entrada_nombre",
         headerName: "Dio ingreso",

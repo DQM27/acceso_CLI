@@ -752,7 +752,7 @@ textarea::placeholder {
   outline-offset: -2px;
 }
 
-/* Larga permanencia (Activos, `claseFilaActiva`): el nivel lo calcula el núcleo.
+/* Larga permanencia (Activos, `REGLAS_PERMANENCIA`): el nivel lo calcula el núcleo.
    Aviso (más de 12 h): fondo suave de advertencia y marca a la izquierda.
    Crítico (más de 14 h): lo mismo en rojo. Únicos resaltados de filas de la
    app. */

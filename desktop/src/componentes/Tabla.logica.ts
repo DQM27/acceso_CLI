@@ -67,3 +67,10 @@ export function identidad(columna: ColDef<unknown>): string | undefined {
   if (typeof columna.field === "string") return columna.field;
   return undefined;
 }
+
+/** Identidad de fila (`idFila` de `Tabla`) para las filas con `uuid` o con
+ * `clave`: funciones de módulo, estables -- una función nueva en cada render
+ * hacía que la grilla se reconstruyera y perdiera los anchos ajustados.
+ * Estaban repetidas en cada pantalla. */
+export const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+export const idPorClave = (fila: { clave: string }) => fila.clave;

@@ -13,6 +13,9 @@ import {
 // 2026-10-29: un parche que se pone y se quita, nada más).
 export const NAVIDAD_ACTIVA = false;
 
+/** ~30 cuadros por segundo (ver `dibujar`). */
+const MS_ENTRE_CUADROS = 1000 / 30;
+
 // Nieve muy sutil que cae DETRÁS de la barra lateral y la grilla (pedido
 // del usuario 2026-10-29): un `canvas` fijo con `z-index: -1`, encima del
 // fondo del `body` y debajo de todo lo demás, así se ve sólo en los
@@ -48,10 +51,17 @@ export default function NieveNavidena() {
     window.addEventListener("resize", ajustarTamano);
 
     let pedido = 0;
+    let ultimoDibujo = -Infinity;
     const dibujar = (ahora: number) => {
+      pedido = requestAnimationFrame(dibujar);
+      // ~30 cuadros por segundo en vez de 60: la posición de cada copo sale
+      // del tiempo (no del número de cuadro), así que cae igual, y en un
+      // equipo de portería abierto todo el turno es la mitad de trabajo.
+      if (ahora - ultimoDibujo < MS_ENTRE_CUADROS) return;
+      ultimoDibujo = ahora;
       // El tema se revisa una vez por segundo, no en cada cuadro: leer el
       // estilo calculado fuerza a recalcular estilos.
-      if (cuadro++ % 60 === 0)
+      if (cuadro++ % 30 === 0)
         oscuro = esFondoOscuro(getComputedStyle(document.body).backgroundColor);
       const ancho = window.innerWidth;
       const alto = window.innerHeight;
@@ -66,7 +76,6 @@ export default function NieveNavidena() {
         contexto.arc(x, y, copo.radio, 0, 2 * Math.PI);
         contexto.fill();
       }
-      pedido = requestAnimationFrame(dibujar);
     };
     pedido = requestAnimationFrame(dibujar);
 
