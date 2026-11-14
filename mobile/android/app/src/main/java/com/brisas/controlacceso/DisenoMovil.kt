@@ -40,9 +40,15 @@ internal val ColorRellenoBrisas: Color
 internal val ColorSobreRellenoBrisas: Color
     @Composable get() = paletaActual.sobreRelleno
 internal val EspacioControlBrisas = 12.dp
-// 20% más chico que los 48.dp originales, a pedido explícito (2026-09-15) --
-// no estaba "muy grande", pero se veía mejor un poco más compacto.
-internal val AlturaControlBrisas = 38.dp
+// Botones principales a 48dp, el mínimo táctil de Android (2026-11-14, fase 2
+// de `docs/handoff-rediseno-movil-ux.md`): "Registrar ingreso/salida" es lo
+// que más se toca, de pie y a veces con guantes. Estuvieron en 38dp desde
+// 2026-09-15 (pedido de entonces: más compactos).
+internal val AlturaControlBrisas = 48.dp
+
+/// Botones de menor jerarquía ("Cancelar"): más bajos que los principales
+/// para no competir con ellos, sin bajar del área que se toca con el pulgar.
+internal val AlturaControlDiscretoBrisas = 40.dp
 internal val ColorExitoBrisas: Color
     @Composable get() = paletaActual.exito
 /// Ámbar de advertencia para íconos y puntos (el triángulo, el punto de

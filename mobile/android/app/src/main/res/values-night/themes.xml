@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variante oscura del tema de la ventana (ver values/themes.xml). -->
+<resources>
+    <color name="fondo_ventana">#FF08080A</color>
+
+    <style name="Theme.Lattis" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fondo_ventana</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

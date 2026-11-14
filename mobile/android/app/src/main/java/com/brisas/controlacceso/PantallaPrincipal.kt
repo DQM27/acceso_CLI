@@ -432,7 +432,10 @@ fun PantallaPrincipal(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { altoBarraSuperiorPx = it.height }
-                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+                // Los botones de la derecha traen su propio aire tocable
+                // (`MARGEN_TACTIL_BOTON_CUADRADO`, 4dp por lado): se descuenta
+                // acá para que la barra mida y se alinee igual que antes.
+                .padding(start = 16.dp, end = 16.dp - MARGEN_TACTIL_BOTON_CUADRADO, top = 0.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -454,7 +457,9 @@ fun PantallaPrincipal(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Sin separación propia: los 8dp entre cuadraditos los ponen sus
+            // márgenes tocables.
+            Row {
                 BotonIconoCuadradoBrisas(onClick = {
                     mostrarAvisos = false
                     mostrarAyuda = false

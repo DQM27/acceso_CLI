@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tema de la ventana, lo que se ve antes de que Compose dibuje (la pantalla
+     de inicio de Android 12+ incluida, que toma este fondo). Con
+     Theme.Material.Light a secas, en un teléfono en oscuro la app arrancaba
+     con un destello blanco. Mismos fondos que PaletaLattis.kt; si cambia el
+     fondo allá, cambiarlo acá también. La variante oscura está en
+     values-night/. Sigue al sistema: un tema elegido a mano dentro de la app
+     recién aplica cuando Compose dibuja. -->
+<resources>
+    <color name="fondo_ventana">#FFF2F4F7</color>
+
+    <style name="Theme.Lattis" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fondo_ventana</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

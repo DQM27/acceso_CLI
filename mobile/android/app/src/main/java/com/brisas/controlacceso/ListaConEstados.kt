@@ -85,6 +85,10 @@ internal fun <T> ListaConEstados(
     // El del mensaje sin filas: el de la sección (cajas en Proveedores, sobre
     // en Correo, insignia en KOF), como el ícono de su pestaña.
     iconoVacio: ImageVector = Icons.Default.Groups,
+    // Un renglón chico arriba de las filas que dice cuántas hay y qué pasa al
+    // tocarlas (ver [pistaListaAdentro]). Sólo en la lista de la pantalla, no
+    // en los resultados del buscador.
+    pista: String? = null,
     contenidoFila: @Composable (T) -> Unit,
 ) {
     val estado = when {
@@ -123,6 +127,16 @@ internal fun <T> ListaConEstados(
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
+                    if (pista != null) {
+                        item(key = CLAVE_PISTA) {
+                            Text(
+                                pista,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                            )
+                        }
+                    }
                     items(filas, key = { fila -> clave(fila) }) { fila ->
                         Box(modifier = Modifier.animateItem()) {
                             contenidoFila(fila)
@@ -135,6 +149,21 @@ internal fun <T> ListaConEstados(
         }
     }
 }
+
+/// Clave del renglón de [ListaConEstados] `pista`: no choca con las de las
+/// filas, que son números o textos con prefijo (`local-`, `remota-`).
+private const val CLAVE_PISTA = "pista-lista"
+
+/// La pista de una lista de gente adentro (2026-11-14, fase 2 de
+/// `docs/handoff-rediseno-movil-ux.md`): antes sólo los resultados del
+/// buscador decían qué pasaba al tocar una tarjeta, y la lista de la
+/// pantalla, la que más se usa, no.
+internal fun pistaListaAdentro(cantidad: Int): String =
+    "$cantidad adentro · Toque a alguien para registrar su salida"
+
+/// La misma pista para los gafetes provisionales de KOF.
+internal fun pistaListaPrestados(cantidad: Int): String =
+    "${if (cantidad == 1) "1 prestado" else "$cantidad prestados"} · Toque uno para registrar su devolución"
 
 /// Cuatro tarjetas grises con la forma de una fila, quietas (sin brillo que
 /// recorra la pantalla: eso sería una animación infinita sólo para esperar).

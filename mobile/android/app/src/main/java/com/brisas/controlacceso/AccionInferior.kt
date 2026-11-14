@@ -193,19 +193,27 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
 /// Alto de [PildoraBusqueda].
 internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 
-/// Botón redondo de vidrio junto a la barra de secciones, del mismo alto y el
-/// mismo vidrio que ella. Al cambiar de acción, el ícono nuevo entra con
-/// rebote.
+/// Botón redondo junto a la barra de secciones, del mismo alto que ella. Es
+/// la acción principal de la pantalla (registrar un ingreso, entregar un
+/// gafete), así que va relleno del azul de los botones, con el ícono en
+/// blanco (2026-11-14, fase 2 de `docs/handoff-rediseno-movil-ux.md`): antes
+/// era del mismo vidrio que la barra y se perdía junto a ella. Al cambiar de
+/// acción, el ícono nuevo entra con rebote.
 @Composable
 internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
     // Redondo, no la mitad de una pieza (pedido del usuario 2026-10-29): la
     // barra sí queda cortada de su lado, y esa asimetría se ve mejor.
-    BotonRedondoVidrio(
-        tamano = tamano,
-        descripcion = accion.descripcion,
-        onClick = accion::tocar,
-        modifier = modifier,
-        forma = CircleShape,
+    Box(
+        modifier = modifier
+            .size(tamano)
+            .clip(CircleShape)
+            .background(ColorRellenoBrisas)
+            .clickable(onClick = accion::tocar)
+            .semantics {
+                contentDescription = accion.descripcion
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
     ) {
         // Por acción y no por ícono: rebota en cada cambio de sección, también
         // entre dos con el mismo ícono (Proveedores y Correo).
@@ -217,7 +225,7 @@ internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Mo
             },
             label = "iconoAccion",
         ) { mostrada ->
-            Icon(mostrada.icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+            Icon(mostrada.icono, contentDescription = null, tint = ColorSobreRellenoBrisas, modifier = Modifier.size(24.dp))
         }
     }
 }

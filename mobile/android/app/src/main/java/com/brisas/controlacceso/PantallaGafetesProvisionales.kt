@@ -114,6 +114,7 @@ fun PantallaGafetesProvisionales(
                 onSincronizar = onSincronizar,
                 contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
                 onElegir = { filaParaDevolver = it },
+                pista = pistaListaPrestados(viewModel.activos.size),
             )
         }
 
@@ -205,8 +206,10 @@ private fun ListaGafetesPrestados(
     onSincronizar: () -> Unit,
     contentPadding: PaddingValues,
     onElegir: (FilaGafeteProvisionalActiva) -> Unit,
+    pista: String? = null,
 ) {
     ListaConEstados(
+        pista = pista,
         filas = filas,
         clave = { it.clave() },
         cargando = cargando,

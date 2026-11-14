@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.selectable
@@ -318,7 +320,7 @@ fun BotonBrisas(
     )
 }
 
-/** Acciones de menor jerarquía, con la misma forma y área táctil. */
+/** Acciones de menor jerarquía, con la misma forma y un poco más bajas. */
 @Composable
 fun BotonDiscretoBrisas(
     onClick: () -> Unit,
@@ -328,7 +330,7 @@ fun BotonDiscretoBrisas(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = AlturaControlBrisas),
+        modifier = modifier.heightIn(min = AlturaControlDiscretoBrisas),
         enabled = enabled,
         shape = FormaControlBrisas,
         contentPadding = PaddingValues(horizontal = EspacioControlBrisas),
@@ -439,13 +441,18 @@ fun AvatarBrisas(inicial: String, modifier: Modifier = Modifier, tamano: Dp = 48
     }
 }
 
-/// Lado de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra de
-/// arriba ocupe menos (pedido del usuario 2026-10-29); sigue sobre el mínimo
-/// táctil con el aire alrededor.
+/// Lado visible de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra
+/// de arriba ocupe menos (pedido del usuario 2026-10-29).
 internal val TAMANO_BOTON_CUADRADO = 36.dp
 
+/// Aire tocable alrededor del cuadradito: el área que responde al dedo mide
+/// 44dp (2026-11-14, fase 2 de `docs/handoff-rediseno-movil-ux.md`; con
+/// guantes, 36dp se erraba) sin que el cuadradito crezca.
+internal val MARGEN_TACTIL_BOTON_CUADRADO = 4.dp
+
 /** Botón de icono dentro de un cuadradito blanco redondeado -- reemplaza el
- * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. */
+ * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. Se
+ * toca en un área de 44dp; el cuadradito y su onda siguen de 36dp. */
 @Composable
 fun BotonIconoCuadradoBrisas(
     onClick: () -> Unit,
@@ -453,15 +460,23 @@ fun BotonIconoCuadradoBrisas(
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val interaccion = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .size(TAMANO_BOTON_CUADRADO)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = interaccion, indication = null, enabled = enabled, onClick = onClick)
+            .padding(MARGEN_TACTIL_BOTON_CUADRADO),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .size(TAMANO_BOTON_CUADRADO)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .indication(interaccion, ripple()),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
     }
 }
 

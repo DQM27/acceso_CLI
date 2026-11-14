@@ -151,7 +151,7 @@ fun MenuCuenta(
                 )
             }
         }
-        if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp))
+        if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = (-1).dp, y = 1.dp))
 
         if (visible.currentState || visible.targetState) {
             // Debajo del botón, alineado a su borde derecho.
@@ -476,8 +476,9 @@ internal fun IconoTema(tema: TemaApp) {
     }
 }
 
-/// Alto de [BotonIconoCuadradoBrisas]: el panel se abre justo debajo.
-private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO
+/// Dónde termina el cuadradito visible de [BotonIconoCuadradoBrisas], medido
+/// desde arriba de su área tocable: el panel se abre justo debajo.
+private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO + MARGEN_TACTIL_BOTON_CUADRADO
 
 /// El panel crece desde la esquina superior derecha, donde está el botón.
 private val OrigenEsquina = TransformOrigin(1f, 0f)

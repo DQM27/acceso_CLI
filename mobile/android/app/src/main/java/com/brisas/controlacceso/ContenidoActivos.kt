@@ -256,6 +256,7 @@ private fun ListaActivos(
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
+        pista = pistaListaAdentro(activos.size),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
     }

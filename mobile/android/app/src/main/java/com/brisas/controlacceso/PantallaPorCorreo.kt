@@ -58,8 +58,10 @@ private fun ListaCorreoActivos(
     onSincronizar: () -> Unit,
     contentPadding: PaddingValues,
     onElegir: (FilaCorreoActiva) -> Unit,
+    pista: String? = null,
 ) {
     ListaConEstados(
+        pista = pista,
         filas = filas,
         clave = { it.clave() },
         cargando = cargando,
@@ -222,6 +224,7 @@ fun PantallaPorCorreo(
                             onSincronizar = onSincronizar,
                             contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
                             onElegir = { filaParaSalida = it },
+                            pista = pistaListaAdentro(viewModel.activos.size),
                         )
                     }
 
