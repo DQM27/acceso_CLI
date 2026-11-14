@@ -122,26 +122,21 @@ export default function Empresas() {
 
   // Orden pedido por el usuario (2026-09-23): "+ Nueva", el buscador y al
   // final el selector de tipo.
+  // Misma barra en todas las pantallas (auditoría 2026-11-14, U5): acción
+  // principal con su nombre y el filtro a la izquierda, buscador a la derecha.
   const controles = (
     <>
       <button
         type="button"
         className="boton boton-icono"
-        title="Nueva empresa"
-        aria-label="Nueva empresa"
         onClick={() => setFormularioAbierto("crear")}
       >
         <Plus size={16} aria-hidden="true" />
+        {tipo === "contratista" ? "Nueva empresa" : "Nueva empresa proveedora"}
       </button>
-      <div className="campo" style={{ flex: "0 1 16rem" }}>
-        <input
-          placeholder="Nombre…"
-          value={texto}
-          onChange={(evento) => setTexto(evento.target.value)}
-        />
-      </div>
       <div className="campo" style={{ flex: "0 1 13rem" }}>
         <select
+          aria-label="Tipo de empresa"
           value={tipo}
           onChange={(evento) => {
             setTipo(evento.target.value as TipoEmpresa);
@@ -153,6 +148,16 @@ export default function Empresas() {
         </select>
       </div>
     </>
+  );
+
+  const buscador = (
+    <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
+      <input
+        placeholder="Nombre…"
+        value={texto}
+        onChange={(evento) => setTexto(evento.target.value)}
+      />
+    </div>
   );
 
   return (
@@ -169,6 +174,8 @@ export default function Empresas() {
               filas={filasContratista}
               onFilaDobleClic={setFormularioAbierto}
               controles={controles}
+              accionesDerecha={buscador}
+              mensajeVacio="No hay empresas registradas. «Nueva empresa» agrega la primera."
             />
           ) : (
             <Tabla<EmpresaProveedor>
@@ -179,6 +186,8 @@ export default function Empresas() {
               columnas={columnasProveedor}
               filas={filasProveedor}
               controles={controles}
+              accionesDerecha={buscador}
+              mensajeVacio="No hay empresas proveedoras registradas. «Nueva empresa proveedora» agrega la primera."
             />
           )}
         </div>

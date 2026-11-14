@@ -169,8 +169,11 @@ export default function Auditoria() {
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}
-            controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
+            mensajeVacio="No hay cambios registrados."
+            // Misma barra en todas las pantallas (auditoría 2026-11-14, U5):
+            // el buscador a la derecha, junto a «Tabla».
+            accionesDerecha={
+              <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
                 <input
                   placeholder="Entidad, campo, valor…"
                   value={busqueda}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
-import { BadgeCheck, Boxes, HardHat, Layers, LogIn, LogOut, Mail } from "lucide-react";
+import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -29,12 +29,41 @@ import {
 } from "./Activos.logica";
 import type { FiltroClase, FiltroGafete, FiltroPermanencia, OtroIngreso } from "./Activos.logica";
 
-/** Filtro de gafete de los contratistas (los únicos que pueden entrar sin
- * gafete): un desplegable compacto con el nombre y la cantidad de cada
- * opción, en vez de tres botones de íconos que no cabían junto a las clases
- * (auditoría 2026-11-14, U3). Mientras carga no se muestran números, para no
- * enseñar ceros falsos. */
-function FiltroGafeteSelector({
+/** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
+ * números son el conteo de gente adentro: el total, y cuántos tienen gafete y
+ * cuántos no (S/G). Mientras carga no se muestran, para no enseñar ceros
+ * falsos. */
+function opcionesFiltroGafete(
+  conteo: { todos: number; con: number; sin: number } | null,
+): OpcionSegmentada<FiltroGafete>[] {
+  return [
+    {
+      valor: "todos",
+      Icono: Users,
+      titulo: conteo ? `${conteo.todos} adentro` : "Todos",
+      cantidad: conteo?.todos,
+    },
+    {
+      valor: "con",
+      Icono: IdCard,
+      titulo: conteo ? `${conteo.con} con gafete` : "Con gafete",
+      cantidad: conteo?.con,
+    },
+    {
+      valor: "sin",
+      Icono: CircleOff,
+      // Sólo los contratistas pueden entrar sin gafete: proveedores, visitas por
+      // correo y KOF lo llevan siempre.
+      titulo: conteo
+        ? `${conteo.sin} sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete`
+        : "Sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete",
+      cantidad: conteo?.sin,
+    },
+  ];
+}
+
+/** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
+function ToggleGafete({
   filtro,
   conteo,
   onCambiar,
@@ -43,20 +72,13 @@ function FiltroGafeteSelector({
   conteo: { todos: number; con: number; sin: number } | null;
   onCambiar: (filtro: FiltroGafete) => void;
 }) {
-  const numero = (n: number | undefined) => (n === undefined ? "" : ` (${n})`);
   return (
-    <div className="campo">
-      <select
-        aria-label="Filtrar por gafete"
-        title="Sólo los contratistas pueden entrar sin gafete (S/G)"
-        value={filtro}
-        onChange={(evento) => onCambiar(evento.target.value as FiltroGafete)}
-      >
-        <option value="todos">Gafete: todos{numero(conteo?.todos)}</option>
-        <option value="con">Con gafete{numero(conteo?.con)}</option>
-        <option value="sin">Sin gafete (S/G){numero(conteo?.sin)}</option>
-      </select>
-    </div>
+    <SegmentadoOpciones
+      opciones={opcionesFiltroGafete(conteo)}
+      valor={filtro}
+      onCambiar={onCambiar}
+      etiqueta="Filtrar por gafete"
+    />
   );
 }
 
@@ -79,14 +101,12 @@ function opcionesFiltroClase(
     {
       valor: "todas",
       Icono: Layers,
-      texto: "Todas",
       titulo: todas === undefined ? "Todas las clases" : `${todas} en total`,
       cantidad: todas,
     },
     ...CLASES.map((clase) => ({
       valor: clase,
       Icono: ICONO_CLASE[clase],
-      texto: ETIQUETA_CLASE[clase],
       titulo: conteo ? `${ETIQUETA_CLASE[clase]}: ${conteo[clase]}` : ETIQUETA_CLASE[clase],
       cantidad: conteo?.[clase],
     })),
@@ -151,7 +171,7 @@ export default function Activos({
       filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafeteEfectivo), filtroPermanencia),
     [activosDeClase, filtroGafeteEfectivo, filtroPermanencia],
   );
-  // Los números de los filtros (ver `FiltroGafeteSelector` y
+  // Los números de los filtros (ver `opcionesFiltroGafete` y
   // `opcionesFiltroClase`): son la única métrica de la pantalla, ya no hay texto
   // en la barra de estado. `total` sólo vale para "todas": es el de contratistas
   // más las otras clases.
@@ -416,24 +436,10 @@ export default function Activos({
                 />
               </div>
             }
-            pestanas={
-              <>
-                <SegmentadoOpciones
-                  opciones={opcionesFiltroClase(conteoClases)}
-                  valor={filtroClase}
-                  onCambiar={setFiltroClase}
-                  etiqueta="Filtrar por clase"
-                />
-                {mostrarFiltroGafete && (
-                  <FiltroGafeteSelector filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
-                )}
-              </>
-            }
             controles={
               <>
-                {/* Qué registrar, a la izquierda; el buscador va al otro
-                    extremo y las clases en la fila de pestañas, encima de
-                    la grilla. "Ingreso" abre la lista de qué registrar con
+                {/* Qué registrar y qué ver a la izquierda; el buscador, al
+                    otro extremo. "Ingreso" abre la lista de qué registrar con
                     el atajo de cada uno; el de "Salida" (Ctrl+S) está en su
                     título. */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -457,6 +463,20 @@ export default function Activos({
                     <LogOut size={15} aria-hidden="true" />
                     Salida
                   </button>
+                </div>
+                {/* Clases y gafete con íconos y cantidad: toda la barra entra
+                    en una sola línea (decisión del dueño, 2026-11-14); el
+                    nombre de cada opción se ve al pasar el mouse. */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem" }}>
+                  <SegmentadoOpciones
+                    opciones={opcionesFiltroClase(conteoClases)}
+                    valor={filtroClase}
+                    onCambiar={setFiltroClase}
+                    etiqueta="Filtrar por clase"
+                  />
+                  {mostrarFiltroGafete && (
+                    <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+                  )}
                 </div>
               </>
             }

@@ -222,11 +222,6 @@ export interface TablaProps<T> {
   /** Al centro de la misma línea (ej. un selector de clase): los dos lados
    * se reparten el ancho por igual, así queda centrado de verdad. */
   accionesCentro?: ReactNode;
-  /** Segunda fila, justo encima de la grilla: las pestañas que eligen qué
-   * filas se ven (ej. clases de Activos e Historial). Separadas de las
-   * acciones, la barra no se parte en dos líneas al agregar un filtro y se
-   * lee igual en todas las pantallas (auditoría 2026-11-14, U3/U5). */
-  pestanas?: ReactNode;
   /** Columnas que la pantalla oculta según su propio estado (ej. "Clase" de
    * Activos con una clase elegida), sin tocar lo que eligió la persona en
    * "Tabla" y sin sacarlas del arreglo (al volver, quedan en su lugar).
@@ -329,7 +324,6 @@ function TablaBase<T>(
     controles,
     accionesDerecha,
     accionesCentro,
-    pestanas,
     columnasOcultasPorPantalla,
     busqueda,
     seleccionMultiple,
@@ -775,8 +769,6 @@ function TablaBase<T>(
           )}
         </div>
       </div>
-
-      {pestanas && <div className="tabla-pestanas">{pestanas}</div>}
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <AgGridReact<T>

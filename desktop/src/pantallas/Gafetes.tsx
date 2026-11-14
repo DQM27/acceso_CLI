@@ -138,27 +138,31 @@ export default function Gafetes() {
             columnas={columnas}
             filas={filas}
             onFilaDobleClic={setGestionAbierta}
+            mensajeVacio="No hay gafetes de este tipo. «Nuevo gafete» agrega uno o un rango."
+            // Misma barra en todas las pantallas (auditoría 2026-11-14, U5).
+            accionesDerecha={
+              <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
+                <input
+                  placeholder="Número…"
+                  value={texto}
+                  onChange={(evento) => setTexto(evento.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                />
+              </div>
+            }
             controles={
               <>
                 <button
                   type="button"
                   className="boton boton-icono"
-                  title="Nuevo gafete"
-                  aria-label="Nuevo gafete"
                   onClick={() => setFormularioAbierto(true)}
                 >
                   <Plus size={16} aria-hidden="true" />
+                  Nuevo gafete
                 </button>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
-                  <input
-                    placeholder="Número…"
-                    value={texto}
-                    onChange={(evento) => setTexto(evento.target.value.replace(/\D/g, ""))}
-                    inputMode="numeric"
-                  />
-                </div>
                 <div className="campo" style={{ flex: "0 1 12rem" }}>
                   <select
+                    aria-label="Tipo de gafete"
                     value={tipo}
                     onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada)}
                   >
