@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 fun colorDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): Color? {
     val paleta = if (oscuro) PaletaNoche else PaletaDia
     return when (seccion) {
-        SeccionPrincipal.ACTIVOS -> paleta.contratistas
+        SeccionPrincipal.CONTRATISTAS -> paleta.contratistas
         SeccionPrincipal.KOF -> paleta.kof
         SeccionPrincipal.PROVEEDORES -> paleta.proveedores
         SeccionPrincipal.CORREO -> paleta.porCorreo

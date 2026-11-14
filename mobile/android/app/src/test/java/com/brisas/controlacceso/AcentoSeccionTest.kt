@@ -12,7 +12,7 @@ import org.junit.Test
 class AcentoSeccionTest {
 
     private val seccionesConColor = listOf(
-        SeccionPrincipal.ACTIVOS,
+        SeccionPrincipal.CONTRATISTAS,
         SeccionPrincipal.KOF,
         SeccionPrincipal.PROVEEDORES,
         SeccionPrincipal.CORREO,
@@ -93,7 +93,7 @@ class AcentoSeccionTest {
     fun laBarraMuestraCuatroSeccionesPorUso() {
         val visibles = SeccionPrincipal.entries.filterNot { it.enDesarrollo }
         assertEquals(
-            listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.PROVEEDORES, SeccionPrincipal.CORREO, SeccionPrincipal.KOF),
+            listOf(SeccionPrincipal.CONTRATISTAS, SeccionPrincipal.PROVEEDORES, SeccionPrincipal.CORREO, SeccionPrincipal.KOF),
             visibles,
         )
     }

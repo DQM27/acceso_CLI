@@ -47,9 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -80,6 +78,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.control_acceso_mobile.EncargadoRuta
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
@@ -424,22 +424,6 @@ fun FilaPildoras(
 }
 
 private const val DURACION_FUNDIDO_PILDORA_MS = 300
-
-/** Avatar circular con inicial, para el header de [PantallaPrincipal]. */
-@Composable
-fun AvatarBrisas(inicial: String, modifier: Modifier = Modifier, tamano: Dp = 48.dp) {
-    Box(
-        modifier = modifier.size(tamano).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            inicial.uppercase(),
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleLarge,
-        )
-    }
-}
 
 /// Lado visible de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra
 /// de arriba ocupe menos (pedido del usuario 2026-10-29).
