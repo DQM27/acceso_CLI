@@ -13,10 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +39,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Entrega/devolución de gafetes provisionales KOF -- ver
 /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`. Resuelve el
@@ -281,7 +280,9 @@ private fun HojaEntregaGafete(
     ModalBottomSheet(
         onDismissRequest = onCancelar,
         sheetState = estado,
-        containerColor = MaterialTheme.colorScheme.surface,
+        // El fondo de las hojas de ingreso y salida: el grupo del gafete, en
+        // superficie, se distingue encima.
+        containerColor = MaterialTheme.colorScheme.background,
     ) {
         Column(
             modifier = Modifier
@@ -308,21 +309,19 @@ private fun HojaEntregaGafete(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
-            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- a ese alto el
-            // placeholder de un `OutlinedTextField` queda recortado (bug
-            // reportado en pruebas reales, 2026-09-17).
-            OutlinedTextField(
-                value = gafeteTexto,
-                onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-                placeholder = { Text("Número de gafete") },
-                singleLine = true,
-                // ✓ del teclado entrega, igual que el botón.
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (numero != null && !registrando) onEntregar(numero) }),
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).focusRequester(foco),
-            )
+            // Agrupado como el resto de los formularios (2026-11-14).
+            GrupoCampos(modifier = Modifier.padding(top = 16.dp)) {
+                CampoAgrupado(
+                    valor = gafeteTexto,
+                    onCambiar = { gafeteTexto = it.filter(Char::isDigit) },
+                    ayuda = "Número",
+                    etiqueta = "Gafete",
+                    // ✓ del teclado entrega, igual que el botón.
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (numero != null && !registrando) onEntregar(numero) }),
+                    modifier = Modifier.focusRequester(foco),
+                )
+            }
             if (error != null) {
                 FranjaEstado(error, TipoEstado.ERROR, modifier = Modifier.padding(top = 8.dp), vibrar = true)
             }

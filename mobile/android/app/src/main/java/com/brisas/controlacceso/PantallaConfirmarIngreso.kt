@@ -1,5 +1,9 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +18,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -274,75 +277,69 @@ internal fun HojaIngreso(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             )
 
-            if (campos.medio == MedioIngreso.VEHICULO) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = campos.placaTexto,
-                        onValueChange = { campos.placaTexto = it },
-                        label = { Text("Placa del vehículo") },
-                        singleLine = true,
-                        // Con gafete por escribir, ✓ pasa a él; si no, registra.
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = if (preparacion.requiereGafete && !campos.sinGafete) ImeAction.Next else ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focoGafete.requestFocus() },
-                            onDone = { registrarSiListo() },
-                        ),
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f),
-                    )
-                    // La misma cámara que lee placas en Proveedores y Rutas
-                    // (`LectorVehiculoRuta.kt`), pedido del usuario 2026-10-21.
-                    // La abre [PantallaActivos], que tapa la hoja mientras tanto.
-                    // `top` por la etiqueta flotante del campo, que corre su
-                    // marco hacia abajo: así el botón queda a la par del marco.
-                    BotonCuadradoBordeBrisas(
-                        icono = IconosLucide.Camara,
-                        descripcion = "Escanear placa",
-                        onClick = onEscanearPlaca,
-                        tamano = 56.dp,
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                    )
-                }
-            }
-
-            if (preparacion.requiereGafete) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = campos.gafeteTexto,
-                        onValueChange = { campos.gafeteTexto = it.filter(Char::isDigit) },
-                        label = { Text("Número de gafete") },
-                        singleLine = true,
-                        enabled = !campos.sinGafete,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { registrarSiListo() }),
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f).focusRequester(focoGafete),
-                    )
-                    // "S/G" de dos estados en lugar de la cámara (escanear el
-                    // número del gafete casi no se usaba y estorbaba) y de la
-                    // casilla "Sin gafete" que iba debajo (pedido del usuario
-                    // 2026-10-21). Encenderlo borra el número tipeado: sin número
-                    // el núcleo registra el ingreso S/G.
-                    BotonSinGafete(
-                        activo = campos.sinGafete,
-                        onAlternar = {
-                            campos.sinGafete = !campos.sinGafete
-                            hapticos(if (campos.sinGafete) Haptico.ACTIVAR else Haptico.DESACTIVAR)
-                            if (campos.sinGafete) campos.gafeteTexto = ""
-                            onLimpiarError()
-                        },
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                    )
+            // Placa y gafete agrupados como el resto de los formularios
+            // (`GrupoCampos`, 2026-11-14, fase 2 de
+            // `docs/handoff-rediseno-movil-ux.md`): etiqueta a la izquierda,
+            // valor a la derecha, y la cámara o el S/G al final del renglón.
+            val conPlaca = campos.medio == MedioIngreso.VEHICULO
+            if (conPlaca || preparacion.requiereGafete) {
+                GrupoCampos(modifier = Modifier.padding(bottom = 16.dp)) {
+                    if (conPlaca) {
+                        CampoAgrupado(
+                            valor = campos.placaTexto,
+                            onCambiar = { campos.placaTexto = it },
+                            ayuda = "ABC-123",
+                            etiqueta = "Placa",
+                            // Con gafete por escribir, ✓ pasa a él; si no, registra.
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                imeAction = if (preparacion.requiereGafete && !campos.sinGafete) ImeAction.Next else ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focoGafete.requestFocus() },
+                                onDone = { registrarSiListo() },
+                            ),
+                            // La misma cámara que lee placas en Proveedores y
+                            // Rutas (`LectorVehiculoRuta.kt`), pedido del usuario
+                            // 2026-10-21. La abre [PantallaActivos], que tapa la
+                            // hoja mientras tanto.
+                            alFinal = {
+                                IconButton(onClick = onEscanearPlaca) {
+                                    Icon(IconosLucide.Camara, contentDescription = "Escanear placa", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                        )
+                    }
+                    if (conPlaca && preparacion.requiereGafete) DivisorGrupo()
+                    if (preparacion.requiereGafete) {
+                        CampoAgrupado(
+                            valor = campos.gafeteTexto,
+                            onCambiar = { campos.gafeteTexto = it.filter(Char::isDigit) },
+                            ayuda = if (campos.sinGafete) "Sin gafete" else "Número",
+                            etiqueta = "Gafete",
+                            habilitado = !campos.sinGafete,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { registrarSiListo() }),
+                            modifier = Modifier.focusRequester(focoGafete),
+                            // "S/G" de dos estados en lugar de la cámara (escanear
+                            // el número del gafete casi no se usaba y estorbaba) y
+                            // de la casilla "Sin gafete" que iba debajo (pedido del
+                            // usuario 2026-10-21). Encenderlo borra el número
+                            // tipeado: sin número el núcleo registra el ingreso S/G.
+                            alFinal = {
+                                BotonSinGafete(
+                                    activo = campos.sinGafete,
+                                    onAlternar = {
+                                        campos.sinGafete = !campos.sinGafete
+                                        hapticos(if (campos.sinGafete) Haptico.ACTIVAR else Haptico.DESACTIVAR)
+                                        if (campos.sinGafete) campos.gafeteTexto = ""
+                                        onLimpiarError()
+                                    },
+                                    modifier = Modifier.padding(end = 8.dp),
+                                )
+                            },
+                        )
+                    }
                 }
             }
 
@@ -482,12 +479,14 @@ private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Mo
         tween(MS_FUNDIDO_ENTRADA),
         label = "textoSinGafete",
     )
+    // Del alto del renglón de [CampoAgrupado], que lo lleva al final.
+    val forma = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
-            .size(width = 64.dp, height = 56.dp)
-            .clip(FormaCampoBrisas)
+            .size(width = 56.dp, height = 36.dp)
+            .clip(forma)
             .background(fondo)
-            .border(1.dp, if (activo) relleno else acento, FormaCampoBrisas)
+            .border(1.dp, if (activo) relleno else acento, forma)
             .toggleable(value = activo, role = Role.Switch, onValueChange = { onAlternar() })
             .semantics { contentDescription = "Sin gafete" },
         contentAlignment = Alignment.Center,
