@@ -84,6 +84,11 @@ function claseFilaActivo(fila: PersonaAdentro): string | undefined {
  * préstamos KOF e ingresos por correo no están en la publicación de Realtime,
  * así que dependen del intervalo.
  */
+/** Identidad de fila: el mismo `id` puede repetirse entre clases. Fuera del
+ * componente, estable: en línea, la grilla perdía los anchos ajustados en cada
+ * refresco (cada 30 s). */
+const idPorTipoEId = (fila: PersonaAdentro) => `${fila.tipo}:${fila.id}`;
+
 export default function Activos() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
@@ -169,7 +174,7 @@ export default function Activos() {
             filas={filasVisibles}
             busqueda={busqueda}
             filtrosPorColumna
-            idFila={(fila) => `${fila.tipo}:${fila.id}`}
+            idFila={idPorTipoEId}
             claseFila={claseFilaActivo}
             controles={
               <>

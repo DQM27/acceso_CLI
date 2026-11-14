@@ -4,6 +4,7 @@ import { CircleDashed, FlaskConical, History, Layers, MonitorSmartphone, RotateC
 import type { ColDef } from "ag-grid-community";
 import Modal from "../componentes/Modal";
 import Tabla from "../componentes/Tabla";
+import { idPorId } from "../componentes/Tabla.logica";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
@@ -314,6 +315,10 @@ const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
  * propio equipo en su evento `orden_telemetria`, que va a la telemetría de
  * staging (Grafana), no a esta base.
  */
+/** Identidad de fila, fuera del componente para que sea estable (en línea,
+ * la grilla perdía los anchos ajustados en cada refresco). */
+const idPorEquipo = (fila: FilaTelemetria) => fila.equipo.id;
+
 export default function Telemetria() {
   // Sin Realtime: las órdenes sólo las escribe este panel, que recarga al guardar.
   const { datos, cargando, recargar } = useLista(["telemetria-equipos"], cargarDatos, {
@@ -454,7 +459,7 @@ export default function Telemetria() {
               filas={filasVisibles}
               busqueda={busqueda}
               filtrosPorColumna
-              idFila={(fila) => fila.equipo.id}
+              idFila={idPorEquipo}
               onFilaDobleClic={cambiar}
               controles={
                 <>
@@ -485,7 +490,7 @@ export default function Telemetria() {
               filas={cambios}
               busqueda={busqueda}
               filtrosPorColumna
-              idFila={(cambio) => String(cambio.id)}
+              idFila={idPorId}
               controles={
                 <>
                   {selectorVista}

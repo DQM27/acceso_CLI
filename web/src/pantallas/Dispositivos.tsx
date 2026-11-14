@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import { MonitorSmartphone, ShieldAlert } from "lucide-react";
 import Tabla from "../componentes/Tabla";
+import { idPorId } from "../componentes/Tabla.logica";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
@@ -545,7 +546,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               columnas={columnasEventos}
               filas={eventos}
               filtrosPorColumna
-              idFila={(evento) => String(evento.id)}
+              idFila={idPorId}
               controles={
                 <>
                   {selectorVista}

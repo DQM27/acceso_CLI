@@ -13,6 +13,7 @@ import type {
   ColumnState,
   GetRowIdParams,
   GridReadyEvent,
+  NewColumnsLoadedEvent,
   IDatasource,
   IGetRowsParams,
   PaginationChangedEvent,
@@ -21,6 +22,7 @@ import type {
   TextMatcherParams,
 } from "ag-grid-community";
 import { useUsuarioId } from "../contexto/SesionContexto";
+import { useSeccionActiva } from "../contexto/SeccionActivaContexto";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
 import FiltroFechaTabla from "./FiltroFechaTabla";
@@ -390,6 +392,14 @@ function TablaBase<T>(
         const clave = identidad(original as ColDef<unknown>);
         const { type, ...resto } = original;
         let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        // Columna sin dato (botones "Acción" de Telemetría, etc.): AG Grid la
+        // refresca a la fuerza en CADA actualización de filas -- no tiene un
+        // valor que comparar -- y con `enableCellChangeFlash` destellaba en
+        // cada refresco aunque nada hubiera cambiado. Mismo arreglo que el
+        // escritorio (#253).
+        if (resto.field === undefined && resto.valueGetter === undefined) {
+          columna = { ...columna, enableCellChangeFlash: false };
+        }
         if (type === "fecha" && conFiltro) columna = { ...columna, ...(FILTRO_FECHA as ColDef<T>) };
         if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
         return columna;
@@ -397,12 +407,18 @@ function TablaBase<T>(
     [columnas, ocultas, conFiltro],
   );
 
+  // Depende de SI hay `idFila`, no de su identidad: un `defaultColDef` nuevo
+  // hace que AG Grid reconstruya las columnas y les reaplique el `flex`/orden
+  // del código, borrando los anchos que el usuario ajustó. Con
+  // `idFila={(f) => ...}` en línea eso pasaba en cada refresco (Activos cada
+  // 30 s). Mismo arreglo que el escritorio (#253).
+  const conIdFila = idFila !== undefined;
   const columnaBase = useMemo<ColDef>(
     () => ({
       ...(conFiltro ? columnaPorDefectoConFiltro : columnaPorDefecto),
-      ...(idFila ? { enableCellChangeFlash: true } : {}),
+      ...(conIdFila ? { enableCellChangeFlash: true } : {}),
     }),
-    [conFiltro, idFila],
+    [conFiltro, conIdFila],
   );
 
   // El origen cambia de identidad en cada render de la pantalla; la grilla
@@ -527,6 +543,31 @@ function TablaBase<T>(
       evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
     }
   }
+
+  /** AG Grid reconstruye las columnas cada vez que cambian `columnDefs` o
+   * `defaultColDef` (ocultar una columna, mostrar/ocultar filtros...) y les
+   * vuelve a poner el `flex`, el orden y el sort del código: el layout que
+   * el usuario acomodó se perdía. Se reaplica el guardado (siempre al día).
+   * No entra en bucle: `applyColumnState` no reconstruye columnas. */
+  function alCargarColumnas(evento: NewColumnsLoadedEvent<T>) {
+    const guardado = leerEstadoGuardado(idGrilla);
+    if (guardado?.columnas?.length) {
+      evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
+    }
+  }
+
+  // Las secciones visitadas quedan montadas (ocultas con `display: none`) y
+  // AG Grid recalcula el ancho de las columnas `flex` cuando el contenedor
+  // vuelve a verse, pisando el layout ya aplicado. Se reaplica cada vez que
+  // la sección vuelve a estar a la vista (mismo criterio que el escritorio).
+  const seccionActiva = useSeccionActiva();
+  useEffect(() => {
+    if (!seccionActiva || !apiRef.current) return;
+    const guardado = leerEstadoGuardado(idGrilla);
+    if (guardado?.columnas?.length) {
+      apiRef.current.applyColumnState({ state: guardado.columnas, applyOrder: true });
+    }
+  }, [seccionActiva, idGrilla]);
 
   function alMoverColumna(evento: ColumnMovedEvent<T>) {
     if (evento.finished) guardarLayout(ocultas);
@@ -701,6 +742,7 @@ function TablaBase<T>(
               : undefined
           }
           onGridReady={alListo}
+          onNewColumnsLoaded={alCargarColumnas}
           onColumnMoved={alMoverColumna}
           onColumnResized={alRedimensionarColumna}
           onSortChanged={alOrdenar}

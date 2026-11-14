@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import { idPorId } from "../componentes/Tabla.logica";
 import type { TablaHandle } from "../componentes/Tabla";
 import AvisoTruncado from "../componentes/AvisoTruncado";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
@@ -169,7 +170,7 @@ export default function Sesiones() {
             filas={filas}
             busqueda={busqueda}
             filtrosPorColumna
-            idFila={(fila) => String(fila.id)}
+            idFila={idPorId}
             controles={
               <>
                 <div className="campo flex-[0_1_16rem]">
