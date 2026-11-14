@@ -15,7 +15,7 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { avisos } from "../avisos/avisos";
-import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
+import { ChevronDown, RotateCcw, SlidersHorizontal, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   Column,
@@ -47,6 +47,8 @@ import {
   claveAlmacenamiento,
   leerEstadoGuardado,
   identidad,
+  filtrosVisiblesIniciales,
+  ocultasIniciales,
 } from "./Tabla.logica";
 import type { EstadoGuardado } from "./Tabla.logica";
 import type { ConteoVisible } from "./conteoTabla";
@@ -126,7 +128,9 @@ const temaBrisas = themeQuartz.withParams({
   fontFamily: "var(--fuente)",
   accentColor: "var(--acento)",
   selectedRowBackgroundColor: "var(--acento-suave)",
-  oddRowBackgroundColor: "var(--campo-fondo)",
+  // Sin cebra: con filas de 36 px y líneas entre filas alcanza, y así los
+  // resaltados de permanencia (ver `.fila-permanencia-*`) se distinguen de
+  // una fila normal (auditoría 2026-11-14, U7).
   borderRadius: "var(--radio-chico)",
   wrapperBorderRadius: "var(--radio)",
 });
@@ -174,8 +178,6 @@ const FILTRO_NUMERO: ColDef = {
   filter: "agNumberColumnFilter",
   filterParams: {},
 };
-
-const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
 const columnaPorDefectoConFiltro: ColDef = {
   ...columnaPorDefecto,
@@ -263,6 +265,10 @@ export interface TablaProps<T> {
    * para el contador de la barra de estado ("1 de 304 movimiento(s)"), ver
    * `useConteoVisible`/`textoConteo` en conteoTabla.ts. */
   onConteoVisible?: (conteo: ConteoVisible) => void;
+  /** Qué decir cuando no hay ninguna fila y nadie está buscando ni filtrando
+   * (ej. "No hay nadie adentro. Ctrl+N registra un ingreso."): un mensaje
+   * que diga el siguiente paso, no sólo "Sin resultados" (U8). */
+  mensajeVacio?: string;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -316,6 +322,7 @@ function TablaBase<T>(
     idFila,
     reglasClaseFila,
     onConteoVisible,
+    mensajeVacio = "No hay registros.",
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -325,11 +332,17 @@ function TablaBase<T>(
   // prioridad: con miles de filas (Historial) escribir no se traba.
   const busquedaDiferida = useDeferredValue(busqueda);
   const [ocultas, setOcultas] = useState<Set<string>>(
-    () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
+    () => new Set(ocultasIniciales(leerEstadoGuardado(idGrilla), columnas as ColDef<unknown>[])),
   );
-  const [filtrosVisibles, setFiltrosVisibles] = useState(
-    () => leerEstadoGuardado(idGrilla)?.filtrosVisibles ?? true,
+  const [filtrosVisibles, setFiltrosVisibles] = useState(() =>
+    filtrosVisiblesIniciales(leerEstadoGuardado(idGrilla)),
   );
+  // Si la persona ya eligió a mano mostrar u ocultar los filtros (ver
+  // `filtrosVisiblesIniciales`); se guarda junto con el layout.
+  const filtrosElegidos = useRef(leerEstadoGuardado(idGrilla)?.filtrosElegidos === true);
+  // Filas que muestra la grilla ahora (tras filtros y búsqueda), para el
+  // mensaje de "no hay nada" propio (ver `mensajeSinFilas`).
+  const [filasMostradas, setFilasMostradas] = useState<ConteoVisible | null>(null);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
@@ -540,6 +553,7 @@ function TablaBase<T>(
       ocultas: Array.from(ocultasActual),
       columnas: columnState,
       filtrosVisibles: filtrosVisiblesActual,
+      filtrosElegidos: filtrosElegidos.current,
     };
     try {
       localStorage.setItem(claveAlmacenamiento(idGrilla), JSON.stringify(estado));
@@ -550,6 +564,7 @@ function TablaBase<T>(
   }
 
   function alternarFiltrosVisibles() {
+    filtrosElegidos.current = true;
     setFiltrosVisibles((actual) => {
       const siguiente = !actual;
       guardarLayout(ocultas, siguiente);
@@ -612,6 +627,21 @@ function TablaBase<T>(
     guardarLayout(ocultas);
   }
 
+  // Sin filas a la vista y ya cargado: si se está buscando, lo dice con el
+  // texto buscado; si no, el mensaje de la pantalla con el siguiente paso.
+  const buscandoTexto = (busquedaDiferida ?? "").trim();
+  // Las pantallas que no informan `cargando` muestran el mensaje en cuanto
+  // la grilla queda vacía.
+  const cargado = primeraCargaHecha || cargando === undefined;
+  const mensajeSinFilas =
+    filasMostradas?.visibles === 0 && cargado
+      ? buscandoTexto
+        ? `Nada coincide con «${buscandoTexto}».`
+        : filasMostradas.filtrando || filas.length > 0
+          ? "Nada coincide con los filtros."
+          : mensajeVacio
+      : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -661,73 +691,47 @@ function TablaBase<T>(
         >
           {accionesDerecha}
 
-          {/* Filtros y anchos de columna en una sola pieza de íconos
-              (`.segmentado`, como el filtro de gafete de Activos) -- pedido
-              del usuario 2026-09-23: son de la misma categoría. El embudo es
-              un interruptor (relleno de acento con los filtros visibles);
-              los otros dos son acciones. Antes vivían dentro de
-              "Columnas ▾". */}
-          <div
-            ref={selectorRef}
-            className="segmentado"
-            role="group"
-            aria-label="Columnas: filtros, anchos y visibles"
-          >
-            {filtrosPorColumna && (
-              <button
-                type="button"
-                className="segmentado-interruptor"
-                title={filtrosVisibles ? "Ocultar filtros" : "Mostrar filtros"}
-                aria-label="Filtros por columna"
-                aria-pressed={filtrosVisibles}
-                onClick={alternarFiltrosVisibles}
-              >
-                <Funnel size={16} aria-hidden="true" />
-              </button>
-            )}
+          {/* Un solo botón "Tabla" con todo lo que configura la grilla:
+              filtros por columna, anchos y columnas visibles. Antes eran
+              cuatro íconos sueltos en el lugar más visible de la barra, para
+              cosas que se tocan de vez en cuando (auditoría 2026-11-14, U5). */}
+          <div ref={selectorRef}>
             <button
               type="button"
-              title="Ajustar anchos al contenido"
-              aria-label="Ajustar anchos al contenido"
-              onClick={ajustarAnchos}
-            >
-              <UnfoldHorizontal size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Restablecer anchos"
-              aria-label="Restablecer anchos"
-              onClick={restablecerAnchos}
-            >
-              <RotateCcw size={16} aria-hidden="true" />
-            </button>
-            {/* Antes "COLUMNAS ▾" en texto: ahora ícono, al final del mismo
-                grupo (pedido del usuario 2026-09-23). Queda marcado
-                mientras el menú está abierto. */}
-            <button
-              type="button"
-              title="Columnas visibles"
-              aria-label="Columnas visibles"
+              className="boton boton-icono"
+              title="Opciones de la tabla: filtros, anchos y columnas"
+              aria-haspopup="menu"
               aria-expanded={selectorAbierto}
-              aria-pressed={selectorAbierto}
-              className="segmentado-interruptor"
               onClick={() => setSelectorAbierto((a) => !a)}
             >
-              <Columns3 size={16} aria-hidden="true" />
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              Tabla
+              <ChevronDown size={14} aria-hidden="true" />
             </button>
           </div>
 
           {selectorAbierto && posicionSelector && (
-            <ListaFlotante posicion={posicionSelector} ancho={220} alinear="derecha">
-              <div
-                ref={popoverRef}
-                style={{
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.4rem",
-                }}
-              >
+            <ListaFlotante posicion={posicionSelector} ancho={250} alinear="derecha">
+              <div ref={popoverRef} className="menu-tabla" role="menu">
+                {filtrosPorColumna && (
+                  <label className="menu-tabla-opcion">
+                    <input
+                      type="checkbox"
+                      checked={filtrosVisibles}
+                      onChange={alternarFiltrosVisibles}
+                    />
+                    Filtros por columna
+                  </label>
+                )}
+                <button type="button" role="menuitem" className="menu-tabla-accion" onClick={ajustarAnchos}>
+                  <UnfoldHorizontal size={15} aria-hidden="true" />
+                  Ajustar anchos al contenido
+                </button>
+                <button type="button" role="menuitem" className="menu-tabla-accion" onClick={restablecerAnchos}>
+                  <RotateCcw size={15} aria-hidden="true" />
+                  Restablecer anchos
+                </button>
+                <p className="menu-tabla-titulo">Columnas visibles</p>
                 {columnas
                   .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
                   .filter(
@@ -735,10 +739,7 @@ function TablaBase<T>(
                       entrada.clave !== undefined,
                   )
                   .map(({ columna, clave }) => (
-                    <label
-                      key={clave}
-                      style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-                    >
+                    <label key={clave} className="menu-tabla-opcion">
                       <input
                         type="checkbox"
                         checked={!ocultas.has(clave)}
@@ -753,7 +754,7 @@ function TablaBase<T>(
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <AgGridReact<T>
           theme={temaBrisas}
           defaultColDef={columnaBase}
@@ -768,7 +769,6 @@ function TablaBase<T>(
           // feo y no copiaba nada) -- a cambio no hay navegación por
           // flechas dentro de la grilla.
           suppressCellFocus
-          columnHoverHighlight
           // "Álvarez" junto a las A, no al final de la lista.
           accentedSort
           columnDefs={columnasConVisibilidad}
@@ -779,7 +779,9 @@ function TablaBase<T>(
           cacheQuickFilter
           quickFilterParser={quickFilterParser}
           quickFilterMatcher={quickFilterMatcher}
-          overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
+          // El mensaje de "no hay nada" es propio (`mensajeSinFilas`, abajo):
+          // el de AG Grid no cambia con la búsqueda.
+          suppressNoRowsOverlay
           // Menús de filtro, "Cargando…", etc. en español -- sin esto AG
           // Grid mostraba "Contains", "Equals", "AND/OR" en inglés.
           localeText={AG_GRID_LOCALE_ES}
@@ -836,16 +838,22 @@ function TablaBase<T>(
           // Se dispara tras filtrar (columna o buscador), ordenar o recibir
           // filas nuevas. `getDisplayedRowCount` no recorre filas (sin
           // agrupar, cada fila mostrada es un dato).
-          onModelUpdated={
-            onConteoVisible
-              ? (evento) =>
-                  onConteoVisible({
-                    visibles: evento.api.getDisplayedRowCount(),
-                    filtrando: evento.api.isAnyFilterPresent(),
-                  })
-              : undefined
-          }
+          onModelUpdated={(evento) => {
+            const conteo = {
+              visibles: evento.api.getDisplayedRowCount(),
+              filtrando: evento.api.isAnyFilterPresent(),
+            };
+            setFilasMostradas((actual) =>
+              actual?.visibles === conteo.visibles && actual.filtrando === conteo.filtrando ? actual : conteo,
+            );
+            onConteoVisible?.(conteo);
+          }}
         />
+        {mensajeSinFilas && (
+          <div className="tabla-sin-filas" role="status">
+            {mensajeSinFilas}
+          </div>
+        )}
       </div>
     </div>
   );

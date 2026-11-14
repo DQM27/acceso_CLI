@@ -85,6 +85,31 @@ export interface EstadoGuardado {
    * se toma como visible (comportamiento de siempre) para no ocultarle a
    * nadie los filtros sin que lo haya pedido. */
   filtrosVisibles?: boolean;
+  /** `true` desde que la persona prendió o apagó la fila de filtros a mano.
+   * Sin esto (layouts guardados antes del 2026-11-14), `filtrosVisibles` se
+   * ignora y la fila arranca apagada: antes se guardaba siempre en `true`
+   * con cualquier cambio de anchos, aunque nadie la hubiera elegido. */
+  filtrosElegidos?: boolean;
+}
+
+/** Fila de filtros por columna al abrir la grilla: apagada salvo que la
+ * persona la haya prendido a mano (auditoría 2026-11-14, U6). */
+export function filtrosVisiblesIniciales(guardado: EstadoGuardado | null): boolean {
+  return guardado?.filtrosElegidos === true ? guardado.filtrosVisibles === true : false;
+}
+
+/** Columnas ocultas al abrir: las que eligió la persona o, si nunca tocó la
+ * grilla, las que el código marca `hide: true` (opcionales, ej. "Dio
+ * ingreso" en Activos). */
+export function ocultasIniciales(
+  guardado: EstadoGuardado | null,
+  columnas: ColDef<unknown>[],
+): string[] {
+  if (guardado) return guardado.ocultas;
+  return columnas
+    .filter((columna) => columna.hide === true)
+    .map(identidad)
+    .filter((clave): clave is string => clave !== undefined);
 }
 
 export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {

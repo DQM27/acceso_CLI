@@ -510,16 +510,6 @@ textarea::placeholder {
   cursor: default;
 }
 
-/* Interruptor (ej. mostrar/ocultar filtros en Tabla.tsx): a diferencia de
-   una opción elegida, encendido se vuelve a pulsar para apagarlo. */
-.segmentado button.segmentado-interruptor[aria-pressed="true"] {
-  cursor: pointer;
-}
-
-.segmentado button.segmentado-interruptor[aria-pressed="true"]:hover {
-  background: var(--acento-hover);
-}
-
 /* Capas de "Activos / Historial" (Proveedores, KOF): las dos grillas
    quedan montadas, una encima de la otra, y el cambio es un fundido
    cruzado -- la anterior se desvanece mientras aparece la nueva (pedido del
@@ -1282,4 +1272,60 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+}
+
+/* Menú "Tabla" (Tabla.tsx): filtros por columna, anchos y columnas
+   visibles en un solo lugar (auditoría 2026-11-14, U5). */
+.menu-tabla {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  padding: var(--espacio-2);
+  font-size: var(--fuente-control);
+}
+
+.menu-tabla-opcion,
+.menu-tabla-accion {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: var(--control-compacto);
+  padding: 0 var(--espacio-2);
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-tabla-opcion:hover,
+.menu-tabla-accion:hover {
+  background: color-mix(in srgb, var(--texto) 8%, transparent);
+}
+
+.menu-tabla-accion:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
+.menu-tabla-titulo {
+  margin: var(--espacio-2) 0 0;
+  padding: var(--espacio-2) var(--espacio-2) var(--espacio-1);
+  border-top: 1px solid var(--borde);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Mensaje cuando la grilla no tiene filas (Tabla.tsx, `mensajeVacio`):
+   centrado debajo del encabezado, sin tapar los filtros ni recibir clics. */
+.tabla-sin-filas {
+  position: absolute;
+  inset: 5rem 1rem auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+  pointer-events: none;
 }
