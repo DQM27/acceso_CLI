@@ -34,7 +34,7 @@
 .ayuda-grupo h3 {
   margin: var(--espacio-1) var(--espacio-2);
   color: var(--texto-atenuado);
-  font-size: 0.72rem;
+  font-size: var(--tam-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -80,12 +80,12 @@
 
 .ayuda-resultado-seccion {
   color: var(--texto-atenuado);
-  font-size: 0.78rem;
+  font-size: var(--tam-xs);
 }
 
 .ayuda-resultado-fragmento {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--tam-sm);
   line-height: 1.35;
 }
 
@@ -123,13 +123,13 @@
   margin: var(--espacio-6) 0 var(--espacio-2);
   padding-bottom: var(--espacio-1);
   border-bottom: 1px solid var(--borde);
-  font-size: 1.05rem;
+  font-size: var(--tam-titulo);
 }
 
 .ayuda-contenido h3,
 .ayuda-contenido h4 {
   margin: var(--espacio-4) 0 var(--espacio-2);
-  font-size: 0.95rem;
+  font-size: var(--tam-base);
 }
 
 .ayuda-contenido p,
@@ -174,7 +174,7 @@
 .ayuda-tabla table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: var(--tam-sm);
 }
 
 .ayuda-tabla th,

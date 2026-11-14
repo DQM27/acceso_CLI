@@ -44,6 +44,14 @@ export function inicioSemana(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset);
 }
 
+/** Desde cuándo muestran los historiales al abrir: los últimos 7 días, hoy
+ * incluido (`hasta` va abierto). Antes eran 6 meses, que traían por IPC
+ * miles de filas cuando lo habitual en el puesto de control es revisar hoy
+ * o esta semana (auditoría 2026-11-14, R7). */
+export function desdeInicialHistorial(hoy: Date = new Date()): string {
+  return fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 6));
+}
+
 export const PRESETS: Preset[] = [
   {
     etiqueta: "Hoy",
@@ -98,13 +106,13 @@ export const PRESETS: Preset[] = [
       hasta: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), 0)),
     }),
   },
+  // Es el período con que abren los historiales (`desdeInicialHistorial`):
+  // `hasta` abierto, como "Últimos 6 meses", para que con la app abierta de
+  // un día para otro no se pierdan los movimientos posteriores a medianoche.
   {
     etiqueta: "Últimos 7 días",
     corta: "7 días",
-    calcular: (hoy) => ({
-      desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 6)),
-      hasta: fechaYMD(hoy),
-    }),
+    calcular: (hoy) => ({ desde: desdeInicialHistorial(hoy), hasta: "" }),
   },
   {
     etiqueta: "Últimos 30 días",
@@ -115,11 +123,10 @@ export const PRESETS: Preset[] = [
     }),
   },
   // Los dos de abajo son las formas de "anular" el filtro (pedido del
-  // usuario 2026-09-23: no había cómo volver atrás). "Últimos 6 meses" es
-  // exactamente el período con que abre Historial (`hasta` abierto, ver
-  // `fechaHaceMeses` en Historial.tsx), así que el botón lo muestra por su
-  // nombre desde el arranque. "Todo el historial" deja los dos extremos
-  // abiertos -- sin filtro.
+  // usuario 2026-09-23: no había cómo volver atrás). "Últimos 6 meses" fue
+  // el período de arranque de Historial hasta el 2026-11-14 (ahora son 7
+  // días, ver `desdeInicialHistorial`); queda como acceso rápido. "Todo el
+  // historial" deja los dos extremos abiertos -- sin filtro.
   {
     etiqueta: "Últimos 6 meses",
     corta: "6 meses",

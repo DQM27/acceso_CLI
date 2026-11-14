@@ -242,7 +242,7 @@ export default function SalidaModal({
                   <span style={{ color: "var(--muted)" }}>· {activo.cedula ?? "—"}</span>
                 </span>
                 {/* La clase va siempre: el buscador mezcla las cuatro. */}
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                <span style={{ color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                   {CLASE_SINGULAR[activo.clase]} · {activo.detalle ?? "—"}
                 </span>
               </FilaListaFlotante>
@@ -275,7 +275,7 @@ export default function SalidaModal({
               <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
                 {seleccion.activo.nombre}
               </p>
-              <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+              <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                 {CLASE_SINGULAR[seleccion.activo.clase]} · {seleccion.activo.cedula ?? "—"} ·{" "}
                 {seleccion.activo.detalle ?? "—"} · {textoGafete(seleccion.activo.gafete_numero)}
               </p>
@@ -314,7 +314,7 @@ export default function SalidaModal({
                       gap: "0.4rem",
                       padding: "0.6rem 0.85rem",
                       borderTop: indice > 0 ? "1px solid var(--borde)" : undefined,
-                      fontSize: "0.9rem",
+                      fontSize: "var(--tam-base)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>

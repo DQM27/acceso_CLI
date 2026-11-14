@@ -43,12 +43,18 @@ LOGO_NAVIDAD = RAIZ / "assets" / "iconoL-navidad.png"
 
 LOGO_NORMAL = RAIZ / "assets" / "iconoL.png"
 # El logo grande dentro de las apps: login y arranque del móvil, login y
-# pantalla de carga del escritorio. Todos son copias de iconoL.png.
+# pantalla de carga del escritorio. Salen de iconoL.png (o de su versión
+# navideña) con el lado en píxeles de la derecha; `None` es copia tal cual.
+# El escritorio lo muestra a 128-160 px: con 320 alcanza para pantallas al
+# 200 % y pasa de 822 kB a ~35 kB (auditoría 2026-11-14, R2).
 LOGOS_INTERNOS = (
-    RAIZ / "mobile" / "android" / "app" / "src" / "main" / "res" / "drawable" / "marca.png",
-    RAIZ / "desktop" / "src" / "assets" / "marca.png",
-    RAIZ / "desktop" / "public" / "lattis-splash.png",
+    (RAIZ / "mobile" / "android" / "app" / "src" / "main" / "res" / "drawable" / "marca.png", None),
+    (RAIZ / "desktop" / "src" / "assets" / "marca.png", 320),
+    (RAIZ / "desktop" / "public" / "lattis-splash.png", 320),
 )
+# Colores de la paleta de los logos reducidos: el logo tiene pocos colores
+# planos y con 64 no se nota diferencia frente al original.
+COLORES_LOGO = 64
 
 # La nieve de cada app: `poner` y `quitar` cambian sólo este valor.
 INTERRUPTORES = (
@@ -146,11 +152,22 @@ def generar() -> None:
     print("assets/iconos/navidad generado")
 
 
+def copiar_logo(logo: Path, destino: Path, lado: int | None) -> None:
+    """Copia el logo tal cual, o reducido a `lado` px con paleta de colores."""
+    if lado is None:
+        shutil.copyfile(logo, destino)
+        return
+    reducido = Image.open(logo).convert("RGB").resize((lado, lado), Image.LANCZOS)
+    reducido.quantize(
+        colors=COLORES_LOGO, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE
+    ).save(destino, optimize=True)
+
+
 def aplicar(origen: Path) -> None:
     navidad = origen == NAVIDAD
     logo = LOGO_NAVIDAD if navidad else LOGO_NORMAL
-    for destino in LOGOS_INTERNOS:
-        shutil.copyfile(logo, destino)
+    for destino, lado in LOGOS_INTERNOS:
+        copiar_logo(logo, destino, lado)
     for nombre in INSTALADOR:
         shutil.copyfile(origen / "escritorio" / nombre, ICONOS_ESCRITORIO / nombre)
 

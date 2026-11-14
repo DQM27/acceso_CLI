@@ -1,4 +1,5 @@
 import type { ColDef } from "ag-grid-community";
+import CeldaAdentro from "../componentes/CeldaAdentro";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { textoTipoIngreso } from "../api";
 import type { ContratistaResumen, EstadoAccesoLista } from "../api";
@@ -99,9 +100,12 @@ export function columnasContratistas(): ColDef<ContratistaResumen>[] {
       headerName: "Adentro",
       flex: 0.9,
       minWidth: 100,
-      // Texto para que también se pueda filtrar ("Sí").
+      // Texto para que también se pueda filtrar ("Sí"); en la celda, el
+      // mismo indicador de punto de color que el resto de los estados
+      // (`.ag-cell .chip`), en vez de un "Sí" en negrita (auditoría
+      // 2026-11-14).
       valueGetter: (p) => (p.data?.tiene_ingreso_activo ? "Sí" : ""),
-      cellStyle: { fontWeight: 600 },
+      cellRenderer: CeldaAdentro,
     },
     {
       field: "es_personal_ruta",

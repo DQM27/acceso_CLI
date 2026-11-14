@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use control_acceso::application::AppCore;
-use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
+use control_acceso::database::connection::{
+    abrir_conexion_secundaria, abrir_conexion_secundaria_escritura,
+};
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{
     self as nube, CacheTokenDispositivo, FirmanteDispositivo, NubeError, TokenDispositivo,
@@ -46,6 +48,14 @@ pub struct GuiState {
     /// para poder leer el mismo archivo cifrado. `Zeroizing` la borra de
     /// memoria cuando la app cierra.
     clave_base_datos: Zeroizing<[u8; 32]>,
+    /// Conexión de sólo lectura que se abre la primera vez y se reutiliza,
+    /// para las lecturas chicas y frecuentes (ver `con_lectura`). Abrir una
+    /// conexión nueva en cada llamada cuesta más que la consulta misma: lee
+    /// el esquema y arranca con la caché de páginas vacía, descifrándolas de
+    /// nuevo. La telemetría lo mostró (auditoría 2026-11-14, sección 12):
+    /// `aviso_bandeja_salida`, que sólo cuenta pendientes, tardaba 25 ms, y
+    /// los cuatro listados remotos de Activos ~80 ms por recarga.
+    lectura: Mutex<Option<Connection>>,
 }
 
 impl GuiState {
@@ -65,6 +75,7 @@ impl GuiState {
             cache_token,
             ruta_base_datos,
             clave_base_datos,
+            lectura: Mutex::new(None),
         }
     }
 
@@ -139,6 +150,33 @@ impl GuiState {
             .map_err(|error| error.to_string())
     }
 
+    /// Corre `consulta` sobre la conexión de lectura compartida (ver el campo
+    /// `lectura`), abriéndola si todavía no existe. Sólo para lecturas
+    /// cortas: mientras corre, cualquier otra llamada a `con_lectura` espera.
+    /// Las consultas largas (historiales, auditoría, exportaciones) siguen
+    /// con `conexion_secundaria`.
+    ///
+    /// Es de sólo lectura (`PRAGMA query_only`): una escritura por error
+    /// falla en vez de pasar. Con WAL, cada consulta ve lo último confirmado
+    /// aunque la conexión lleve horas abierta. Si la consulta falla, la
+    /// conexión se descarta y la próxima llamada abre una nueva.
+    ///
+    /// Orden de candados: este primero y después, si hace falta, `core()`
+    /// (ver `listar_ingresos_remotos`). Nunca al revés.
+    pub fn con_lectura<T>(
+        &self,
+        consulta: impl FnOnce(&Connection) -> Result<T, String>,
+    ) -> Result<T, String> {
+        con_conexion_reutilizada(
+            &self.lectura,
+            || {
+                abrir_conexion_secundaria(&self.ruta_base_datos, Some(&self.clave_base_datos))
+                    .map_err(|error| error.to_string())
+            },
+            consulta,
+        )
+    }
+
     /// Sesión actual o el error que ya usan todos los comandos que la
     /// necesitan — un solo lugar para ese chequeo repetido.
     pub fn sesion_activa(&self) -> Result<UsuarioSesion, String> {
@@ -166,5 +204,82 @@ impl GuiState {
         self.sesion
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Lo que hace `GuiState::con_lectura`, aparte para poder probarlo sin todo
+/// el estado de la app: usa la conexión guardada en `ranura` o abre una con
+/// `abrir`, corre `consulta` y la vuelve a guardar sólo si salió bien. Ante un
+/// error se descarta, así una conexión que quedó en mal estado no se reusa.
+fn con_conexion_reutilizada<T>(
+    ranura: &Mutex<Option<Connection>>,
+    abrir: impl FnOnce() -> Result<Connection, String>,
+    consulta: impl FnOnce(&Connection) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut guarda = ranura
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let conexion = match guarda.take() {
+        Some(conexion) => conexion,
+        None => abrir()?,
+    };
+    let resultado = consulta(&conexion);
+    if resultado.is_ok() {
+        *guarda = Some(conexion);
+    }
+    resultado
+}
+
+#[cfg(test)]
+mod tests {
+    use super::con_conexion_reutilizada;
+    use rusqlite::Connection;
+    use std::cell::Cell;
+    use std::sync::Mutex;
+
+    fn abrir_contando(aperturas: &Cell<u32>) -> Result<Connection, String> {
+        aperturas.set(aperturas.get() + 1);
+        Connection::open_in_memory().map_err(|error| error.to_string())
+    }
+
+    fn uno(conexion: &Connection) -> Result<i64, String> {
+        conexion
+            .query_row("SELECT 1", [], |fila| fila.get(0))
+            .map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn abre_una_sola_vez_y_reutiliza() {
+        let ranura = Mutex::new(None);
+        let aperturas = Cell::new(0);
+        for _ in 0..3 {
+            let valor = con_conexion_reutilizada(&ranura, || abrir_contando(&aperturas), uno);
+            assert_eq!(valor, Ok(1));
+        }
+        assert_eq!(aperturas.get(), 1);
+    }
+
+    #[test]
+    fn tras_un_error_descarta_la_conexion_y_abre_otra() {
+        let ranura = Mutex::new(None);
+        let aperturas = Cell::new(0);
+        let fallo: Result<(), String> = con_conexion_reutilizada(
+            &ranura,
+            || abrir_contando(&aperturas),
+            |_| Err("falló".to_string()),
+        );
+        assert!(fallo.is_err());
+        assert!(ranura.lock().unwrap().is_none());
+        let valor = con_conexion_reutilizada(&ranura, || abrir_contando(&aperturas), uno);
+        assert_eq!(valor, Ok(1));
+        assert_eq!(aperturas.get(), 2);
+    }
+
+    #[test]
+    fn si_no_se_puede_abrir_devuelve_el_error_sin_guardar_nada() {
+        let ranura = Mutex::new(None);
+        let valor = con_conexion_reutilizada(&ranura, || Err("sin base".to_string()), uno);
+        assert_eq!(valor, Err("sin base".to_string()));
+        assert!(ranura.lock().unwrap().is_none());
     }
 }

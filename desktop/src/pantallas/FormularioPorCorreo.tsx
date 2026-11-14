@@ -94,7 +94,7 @@ export function FormularioPorCorreo({
       }}
       style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}
     >
-      <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
+      <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
         Sólo con un correo que autorice la visita. Si la visita está agendada en la web, use “Agendada”.
       </p>
 
@@ -123,7 +123,7 @@ export function FormularioPorCorreo({
       </div>
 
       {gafeteAdentro !== undefined && (
-        <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+        <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "var(--tam-sm)" }}>
           ⚠ Ya está adentro con el gafete {textoGafete(gafeteAdentro)}
         </p>
       )}

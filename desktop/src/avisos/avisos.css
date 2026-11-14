@@ -67,7 +67,7 @@
 }
 
 .aviso .aviso-titulo {
-  font-size: 0.8125rem;
+  font-size: var(--tam-sm);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -75,7 +75,7 @@
 .aviso .aviso-mensaje {
   overflow-wrap: anywhere;
   color: var(--texto-atenuado);
-  font-size: 0.75rem;
+  font-size: var(--tam-xs);
   line-height: 1.35;
 }
 
@@ -86,7 +86,7 @@
   border-radius: 8px;
   background: var(--color);
   color: var(--panel);
-  font-size: 0.75rem;
+  font-size: var(--tam-xs);
   font-weight: 600;
   cursor: pointer;
 }

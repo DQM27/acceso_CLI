@@ -96,7 +96,7 @@ export default function BotonesExportacion<T>({
         onClick={exportarExcel}
         disabled={exportando}
       >
-        <FileSpreadsheet size={16} />
+        <FileSpreadsheet size={16} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -104,7 +104,7 @@ export default function BotonesExportacion<T>({
         onClick={() => tablaRef.current?.exportarCsv(nombreArchivo)}
         disabled={exportando}
       >
-        <Sheet size={16} />
+        <Sheet size={16} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -112,7 +112,7 @@ export default function BotonesExportacion<T>({
         onClick={exportarPdf}
         disabled={exportando}
       >
-        <FileText size={16} />
+        <FileText size={16} aria-hidden="true" />
       </button>
     </div>
   );

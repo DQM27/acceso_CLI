@@ -76,7 +76,7 @@ beforeEach(() => {
     };
   });
 });
-afterEach(() => { detener?.(); detener = undefined; vi.useRealTimers(); });
+afterEach(() => { detener?.(); detener = undefined; vi.useRealTimers(); vi.restoreAllMocks(); });
 
 async function iniciar(opciones: Parameters<typeof iniciarRealtimeNube>[0] = {}) {
   detener = iniciarRealtimeNube(opciones);
@@ -391,6 +391,73 @@ describe("sincronización por Realtime", () => {
     await vi.advanceTimersByTimeAsync(600);
     expect(mocks.sincronizarCambios).toHaveBeenCalledTimes(2);
     expect(mocks.sincronizarCambios).toHaveBeenLastCalledWith(["citas"]);
+  });
+});
+
+describe("sin red (navigator.onLine en false)", () => {
+  function sinRed(valor: boolean) {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(!valor);
+  }
+
+  it("al abrir sin red no intenta conectar y espera a que vuelva", async () => {
+    sinRed(true);
+    const onEstado = vi.fn();
+    detener = iniciarRealtimeNube({ onEstado });
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mocks.sesion).not.toHaveBeenCalled();
+    expect(onEstado).toHaveBeenCalledWith("CHANNEL_ERROR");
+
+    sinRed(false);
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sesion).toHaveBeenCalledTimes(1);
+    expect(canales).toHaveLength(1);
+  });
+
+  it("si la red se cae con el canal activo, no reintenta cada minuto", async () => {
+    const canal = await iniciar();
+    canal.estado("SUBSCRIBED");
+    sinRed(true);
+    canal.estado("CLOSED");
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(mocks.sesion).toHaveBeenCalledTimes(1);
+
+    sinRed(false);
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sesion).toHaveBeenCalledTimes(2);
+  });
+
+  it("al volver la red reconecta enseguida, sin esperar el resto del reintento", async () => {
+    mocks.sesion.mockRejectedValue(new Error("sin internet"));
+    detener = iniciarRealtimeNube();
+    // Varios intentos fallidos: la espera ya va por los 32 s.
+    await vi.advanceTimersByTimeAsync(2_000 + 4_000 + 8_000 + 16_000);
+    const intentos = mocks.sesion.mock.calls.length;
+
+    mocks.sesion.mockResolvedValue(sesion);
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sesion).toHaveBeenCalledTimes(intentos + 1);
+    expect(canales).toHaveLength(1);
+  });
+
+  it("con el canal suscrito, el evento online no reconecta", async () => {
+    const canal = await iniciar();
+    canal.estado("SUBSCRIBED");
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sesion).toHaveBeenCalledTimes(1);
+  });
+
+  it("después de detenerse no reconecta al volver la red", async () => {
+    sinRed(true);
+    detener = iniciarRealtimeNube();
+    detener();
+    sinRed(false);
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sesion).not.toHaveBeenCalled();
   });
 });
 

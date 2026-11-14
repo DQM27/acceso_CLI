@@ -22,9 +22,9 @@ function remoto(overrides: Partial<MovimientoHistorialRemoto> = {}): MovimientoH
 }
 
 describe("textoDispositivo", () => {
-  it("pc y mobile dan su ícono", () => {
-    expect(textoDispositivo("pc")).toBe("💻");
-    expect(textoDispositivo("mobile")).toBe("📱");
+  it("pc y mobile dan su nombre (filtro y exportación; el ícono lo pone la celda)", () => {
+    expect(textoDispositivo("pc")).toBe("PC");
+    expect(textoDispositivo("mobile")).toBe("Celular");
   });
 
   it("null muestra un guión, sin inventar nada", () => {

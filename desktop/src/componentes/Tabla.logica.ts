@@ -4,6 +4,45 @@ import type { ColDef, ITooltipParams, ColumnState } from "ag-grid-community";
  * "S/G", "23/09/2026") si la columna tiene `valueFormatter`, si no el valor
  * crudo; `undefined` (sin tooltip) para cualquier cosa que no sea texto o
  * número. */
+/** Espejo en JS de `PLEGAR` (SQLite, `database/schema.rs`) -- mismo criterio
+ * de "sin tildes/mayúsculas no importa" que ya tiene el buscador de Rust
+ * (`database/search.rs`). El `quickFilterText` propio de AG Grid sólo hace
+ * `.toUpperCase()`, sin tocar diacríticos -- sin esto, buscar "Sanches" en
+ * la grilla no encontraba a "Sánchez" aunque el mismo texto sí funcionara en
+ * el buscador del modal "Nuevo ingreso" (hallazgo real del usuario,
+ * 2026-09-21: dos buscadores con reglas distintas para el mismo dato). */
+export function plegar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+}
+
+/** Tope de textos recordados por `plegarConCache`: de sobra para el historial
+ * más grande que trae una grilla (ver `LIMITE_CARGA_COMPLETA_MAXIMO`). Al
+ * llenarse se vacía entero, sin llevar la cuenta de cuál se usó último. */
+export const TOPE_CACHE_PLEGADO = 20_000;
+
+const cachePlegado = new Map<string, string>();
+
+/** `plegar` recordando el resultado. El buscador de las grillas compara el
+ * texto de CADA fila en cada tecla; con `cacheQuickFilter` AG Grid entrega
+ * siempre el mismo texto por fila, así que cada uno se pliega una sola vez
+ * en vez de una vez por tecla (auditoría 2026-11-14, R5). */
+export function plegarConCache(texto: string): string {
+  const guardado = cachePlegado.get(texto);
+  if (guardado !== undefined) return guardado;
+  if (cachePlegado.size >= TOPE_CACHE_PLEGADO) cachePlegado.clear();
+  const plegado = plegar(texto);
+  cachePlegado.set(texto, plegado);
+  return plegado;
+}
+
+/** Para los tests: cuántos textos hay recordados. */
+export function tamanoCachePlegado(): number {
+  return cachePlegado.size;
+}
+
 export function textoTooltip({ valueFormatted, value }: ITooltipParams): string | undefined {
   if (typeof valueFormatted === "string" && valueFormatted !== "") return valueFormatted;
   if (typeof value === "string" && value !== "") return value;
@@ -46,6 +85,31 @@ export interface EstadoGuardado {
    * se toma como visible (comportamiento de siempre) para no ocultarle a
    * nadie los filtros sin que lo haya pedido. */
   filtrosVisibles?: boolean;
+  /** `true` desde que la persona prendió o apagó la fila de filtros a mano.
+   * Sin esto (layouts guardados antes del 2026-11-14), `filtrosVisibles` se
+   * ignora y la fila arranca apagada: antes se guardaba siempre en `true`
+   * con cualquier cambio de anchos, aunque nadie la hubiera elegido. */
+  filtrosElegidos?: boolean;
+}
+
+/** Fila de filtros por columna al abrir la grilla: apagada salvo que la
+ * persona la haya prendido a mano (auditoría 2026-11-14, U6). */
+export function filtrosVisiblesIniciales(guardado: EstadoGuardado | null): boolean {
+  return guardado?.filtrosElegidos === true ? guardado.filtrosVisibles === true : false;
+}
+
+/** Columnas ocultas al abrir: las que eligió la persona o, si nunca tocó la
+ * grilla, las que el código marca `hide: true` (opcionales, ej. "Dio
+ * ingreso" en Activos). */
+export function ocultasIniciales(
+  guardado: EstadoGuardado | null,
+  columnas: ColDef<unknown>[],
+): string[] {
+  if (guardado) return guardado.ocultas;
+  return columnas
+    .filter((columna) => columna.hide === true)
+    .map(identidad)
+    .filter((clave): clave is string => clave !== undefined);
 }
 
 export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {

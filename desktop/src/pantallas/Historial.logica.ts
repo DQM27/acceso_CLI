@@ -15,14 +15,16 @@ export interface PropsHistorialClase {
   onRango: (desde: string, hasta: string) => void;
 }
 
-/** "pc"/"mobile" (`dispositivos.tipo`) → sólo el ícono para la columna
- * "Dispositivo" -- ícono+palabra ("💻 PC"/"📱 Celular") quedaba desparejo
- * visualmente (una palabra bastante más larga que la otra). Cualquier otro
- * valor (o `null`) se muestra tal cual / como "—", nunca se inventa un tipo
- * que no vino. */
+/** "pc"/"mobile" (`dispositivos.tipo`) → el nombre: es lo que usan el
+ * filtro de la columna "Dispositivo" y el Excel/PDF. En la celda se ve sólo
+ * el ícono (`IconoDispositivo` en HistorialContratistas.tsx), porque ícono
+ * más palabra quedaba desparejo. Antes devolvía un emoji, que se veía
+ * distinto al resto de los íconos y llegaba así al Excel (auditoría
+ * 2026-11-14). Cualquier otro valor (o `null`) se muestra tal cual / como
+ * "—", nunca se inventa un tipo que no vino. */
 export function textoDispositivo(tipo: string | null): string {
-  if (tipo === "pc") return "💻";
-  if (tipo === "mobile") return "📱";
+  if (tipo === "pc") return "PC";
+  if (tipo === "mobile") return "Celular";
   return tipo ?? "—";
 }
 

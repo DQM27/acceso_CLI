@@ -242,11 +242,11 @@ export default function NuevoIngresoModal({
                 <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
                   {seleccion.contratista.nombre}
                 </p>
-                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                   {seleccion.contratista.cedula} · {seleccion.contratista.empresa_nombre}
                 </p>
               </div>
-              <button type="button" className="boton" style={{ fontSize: "0.8rem" }} onClick={cambiarSeleccion}>
+              <button type="button" className="boton" style={{ fontSize: "var(--tam-xs)" }} onClick={cambiarSeleccion}>
                 Cambiar
               </button>
             </div>
@@ -266,13 +266,13 @@ export default function NuevoIngresoModal({
                 style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}
               >
                 {seleccion.preparacion.aviso_praind && (
-                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "var(--tam-sm)" }}>
                     ⚠ {seleccion.preparacion.aviso_praind}
                   </p>
                 )}
 
                 {seleccion.preparacion.gafetes_deuda.length > 0 && (
-                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "var(--tam-sm)" }}>
                     ⚠ Este contratista debe el gafete{" "}
                     {seleccion.preparacion.gafetes_deuda
                       .map((numero) => `#${String(numero).padStart(2, "0")}`)

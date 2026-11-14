@@ -46,7 +46,7 @@ export default function HistorialGafeteModal({
         )}
 
         {!error && historial.length > 0 && (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--tam-sm)" }}>
             <thead>
               <tr>
                 <Encabezado>Fecha</Encabezado>

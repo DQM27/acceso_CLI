@@ -110,7 +110,7 @@ export default function ReconectarEquipoModal({
         }}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
-        <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.9rem" }}>
+        <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-base)" }}>
           Escriba el código de reconexión que le dio un administrador desde el panel. Sirve una sola
           vez y vence en pocos minutos.
         </p>

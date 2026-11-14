@@ -7,7 +7,14 @@ import type { Tema } from "./SelectorTema.logica";
 const sesion: UsuarioSesion = { id: 1, cedula: "100000000", nombre: "Daniel", rol: "Root" };
 
 function montar(
-  props: { colapsado?: boolean; tema?: Tema; alternar?: () => void; cerrar?: () => void } = {},
+  props: {
+    colapsado?: boolean;
+    tema?: Tema;
+    alternar?: () => void;
+    cerrar?: () => void;
+    personalizar?: (posicion: { x: number; y: number }) => void;
+    buscar?: () => void;
+  } = {},
 ) {
   return render(
     <MenuUsuario
@@ -16,6 +23,9 @@ function montar(
       tema={props.tema ?? "tokyo-day"}
       onAlternarTema={props.alternar ?? (() => {})}
       onCerrarSesion={props.cerrar ?? (() => {})}
+      onPersonalizarMenu={props.personalizar ?? (() => {})}
+      onBuscarActualizacion={props.buscar ?? (() => {})}
+      buscandoActualizacion={false}
     />,
   );
 }
@@ -36,7 +46,7 @@ describe("MenuUsuario", () => {
   it("al pulsarlo ofrece tema, cambiar contraseña y cerrar sesión", () => {
     montar();
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
-    expect(screen.getByText("Tema: Tokyo Day")).toBeTruthy();
+    expect(screen.getByText("Tema: Claro")).toBeTruthy();
     expect(screen.getByText("Cambiar contraseña")).toBeTruthy();
     expect(screen.getByText("Cerrar sesión")).toBeTruthy();
   });
@@ -45,7 +55,7 @@ describe("MenuUsuario", () => {
     const alternar = vi.fn();
     montar({ tema: "tokyo-night", alternar });
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
-    fireEvent.click(screen.getByText("Tema: Tokyo Night"));
+    fireEvent.click(screen.getByText("Tema: Oscuro"));
     expect(alternar).toHaveBeenCalledTimes(1);
   });
 
@@ -62,5 +72,22 @@ describe("MenuUsuario", () => {
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText("Cerrar sesión")).toBeNull());
+  });
+
+  it("«Personalizar menú» abre el menú de secciones y cierra el de la cuenta", async () => {
+    const personalizar = vi.fn();
+    montar({ personalizar });
+    fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
+    fireEvent.click(screen.getByText("Personalizar menú"));
+    expect(personalizar).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByText("Cerrar sesión")).toBeNull());
+  });
+
+  it("«Buscar actualización» está en el menú de la cuenta", () => {
+    const buscar = vi.fn();
+    montar({ buscar });
+    fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
+    fireEvent.click(screen.getByText(/Buscar actualización/));
+    expect(buscar).toHaveBeenCalledTimes(1);
   });
 });

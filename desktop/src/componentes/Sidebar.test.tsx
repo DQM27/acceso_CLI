@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CalendarDays, Users } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -9,8 +10,10 @@ const secciones: { id: Seccion; etiqueta: string; Icono: typeof CalendarDays }[]
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
 ];
 
-function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}) {
-  return render(
+/** El menú de secciones lo controla `Shell`; acá, un estado local igual. */
+function SidebarDePrueba(props: Partial<React.ComponentProps<typeof Sidebar>>) {
+  const [posicion, setPosicion] = useState<{ x: number; y: number } | null>(null);
+  return (
     <Sidebar
       secciones={secciones}
       ocultas={[]}
@@ -21,11 +24,15 @@ function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}
       onReordenar={() => {}}
       onCambiarVisibilidad={() => {}}
       onRestablecer={() => {}}
-      onBuscarActualizacion={() => {}}
-      buscandoActualizacion={false}
+      posicionMenuSecciones={posicion}
+      onPosicionMenuSecciones={setPosicion}
       {...props}
-    />,
+    />
   );
+}
+
+function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}) {
+  return render(<SidebarDePrueba {...props} />);
 }
 
 describe("Sidebar", () => {
@@ -36,21 +43,7 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByLabelText("Colapsar menú"));
     expect(onToggleColapsado).toHaveBeenCalledTimes(1);
 
-    rerender(
-      <Sidebar
-        secciones={secciones}
-        ocultas={[]}
-        seccionActual="activos"
-        onCambiarSeccion={() => {}}
-        colapsado
-        onToggleColapsado={onToggleColapsado}
-        onReordenar={() => {}}
-        onCambiarVisibilidad={() => {}}
-        onRestablecer={() => {}}
-        onBuscarActualizacion={() => {}}
-        buscandoActualizacion={false}
-      />,
-    );
+    rerender(<SidebarDePrueba colapsado onToggleColapsado={onToggleColapsado} />);
     fireEvent.click(screen.getByLabelText("Expandir menú"));
     expect(onToggleColapsado).toHaveBeenCalledTimes(2);
   });

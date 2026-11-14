@@ -6,7 +6,13 @@ import {
   compararFechaYMD,
   identidad,
   leerEstadoGuardado,
+  filtrosVisiblesIniciales,
+  ocultasIniciales,
+  plegar,
+  plegarConCache,
+  tamanoCachePlegado,
   textoTooltip,
+  TOPE_CACHE_PLEGADO,
 } from "./Tabla.logica";
 import type { ITooltipParams } from "ag-grid-community";
 import type { EstadoGuardado } from "./Tabla.logica";
@@ -126,5 +132,63 @@ describe("compararFechaYMD", () => {
   it("un valor que no es fecha (ej. Activo) queda antes de cualquier fecha", () => {
     expect(compararFechaYMD(filtro, "Activo")).toBeLessThan(0);
     expect(compararFechaYMD(filtro, null)).toBeLessThan(0);
+  });
+});
+
+describe("plegar", () => {
+  it("quita tildes y pasa a mayúsculas, igual que PLEGAR de SQLite", () => {
+    expect(plegar("Sánchez Ureña")).toBe("SANCHEZ URENA");
+    expect(plegar("ÁLVAREZ")).toBe("ALVAREZ");
+  });
+});
+
+describe("plegarConCache", () => {
+  it("devuelve lo mismo que plegar", () => {
+    expect(plegarConCache("José Pablo Jiménez")).toBe(plegar("José Pablo Jiménez"));
+  });
+
+  it("recuerda cada texto una sola vez", () => {
+    const antes = tamanoCachePlegado();
+    plegarConCache("texto único de prueba á");
+    plegarConCache("texto único de prueba á");
+    expect(tamanoCachePlegado()).toBe(antes + 1);
+  });
+
+  it("al llegar al tope se vacía en vez de crecer sin límite", () => {
+    for (let i = 0; i <= TOPE_CACHE_PLEGADO; i++) plegarConCache(`fila ${i}`);
+    expect(tamanoCachePlegado()).toBeLessThanOrEqual(TOPE_CACHE_PLEGADO);
+    expect(plegarConCache("Peña")).toBe("PENA");
+  });
+});
+
+describe("filtrosVisiblesIniciales", () => {
+  it("sin nada guardado, la fila de filtros arranca apagada", () => {
+    expect(filtrosVisiblesIniciales(null)).toBe(false);
+  });
+
+  it("un layout viejo con filtrosVisibles en true pero sin elección explícita arranca apagado", () => {
+    expect(filtrosVisiblesIniciales({ ocultas: [], columnas: [], filtrosVisibles: true })).toBe(false);
+  });
+
+  it("respeta lo que la persona eligió a mano", () => {
+    const base = { ocultas: [], columnas: [], filtrosElegidos: true };
+    expect(filtrosVisiblesIniciales({ ...base, filtrosVisibles: true })).toBe(true);
+    expect(filtrosVisiblesIniciales({ ...base, filtrosVisibles: false })).toBe(false);
+  });
+});
+
+describe("ocultasIniciales", () => {
+  const columnas = [
+    { field: "nombre" },
+    { field: "usuario_ingreso_nombre", hide: true },
+    { colId: "tiempo", hide: false },
+  ] as ColDef<unknown>[];
+
+  it("sin layout guardado oculta las columnas marcadas hide en el código", () => {
+    expect(ocultasIniciales(null, columnas)).toEqual(["usuario_ingreso_nombre"]);
+  });
+
+  it("con layout guardado manda lo que eligió la persona", () => {
+    expect(ocultasIniciales({ ocultas: ["nombre"], columnas: [] }, columnas)).toEqual(["nombre"]);
   });
 });
