@@ -14,7 +14,8 @@ export const temaBrisas = themeQuartz.withParams({
   fontFamily: "var(--fuente)",
   accentColor: "var(--acento)",
   selectedRowBackgroundColor: "var(--acento-suave)",
-  oddRowBackgroundColor: "var(--campo-fondo)",
+  // Sin cebra: con filas de 36 px y líneas entre filas alcanza, y así los
+  // resaltados se distinguen de una fila normal (auditoría 2026-11-14, U7).
   borderRadius: "var(--radio-chico)",
   wrapperBorderRadius: "var(--radio)",
 });

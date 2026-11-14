@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { temaBrisas } from "./temaTabla";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
-import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
+import { ChevronDown, RotateCcw, SlidersHorizontal, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   ColumnMovedEvent,
@@ -16,6 +16,7 @@ import type {
   NewColumnsLoadedEvent,
   IDatasource,
   IGetRowsParams,
+  ModelUpdatedEvent,
   PaginationChangedEvent,
   SortChangedEvent,
   TextMatcherParams,
@@ -25,7 +26,14 @@ import { useSeccionActiva } from "../contexto/SeccionActivaContexto";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
 import FiltroFechaTabla from "./FiltroFechaTabla";
-import { compararFechaYMD, textoTooltip } from "./Tabla.logica";
+import {
+  compararFechaYMD,
+  filtrosVisiblesIniciales,
+  ocultasIniciales,
+  plegar,
+  plegarConCache,
+  textoTooltip,
+} from "./Tabla.logica";
 import { useDebounced } from "./useDebounced";
 import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 
@@ -43,17 +51,6 @@ import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
  * El tema vive en `temaTabla.ts` (lo comparte la tabla del lienzo).
  */
 
-/** Sin tildes y en mayúsculas -- mismo criterio de "sin tildes/mayúsculas no
- * importa" que el buscador del núcleo. El `quickFilterText` propio de AG Grid
- * sólo hace `.toUpperCase()`, sin tocar diacríticos: buscar "Sanches" no
- * encontraba a "Sánchez". */
-function plegar(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase();
-}
-
 /** `quickFilterParser`/`quickFilterMatcher`: el parser pliega cada palabra
  * tecleada, el matcher pliega el texto agregado de la fila antes de comparar.
  * Mismo AND implícito que el default de AG Grid: todas las palabras tienen
@@ -65,7 +62,9 @@ function quickFilterParser(texto: string): string[] {
 }
 
 function quickFilterMatcher(partes: string[], textoFila: string): boolean {
-  const plegado = plegar(textoFila);
+  // Con `cacheQuickFilter` el texto de cada fila es el mismo en cada
+  // búsqueda: se pliega una sola vez (`plegarConCache`).
+  const plegado = plegarConCache(textoFila);
   return partes.every((parte) => plegado.includes(parte));
 }
 
@@ -112,7 +111,10 @@ const columnaPorDefecto: ColDef = {
   tooltipValueGetter: textoTooltip,
 };
 
-const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
+/** Avisos propios de AG Grid que se reemplazan por `mensajeSinFilas` en las
+ * tablas que filtran en el navegador. Constante de módulo: un arreglo nuevo
+ * en cada render sería un cambio de opción para la grilla. */
+const OVERLAYS_SUPRIMIDOS: ("noRows" | "noMatchingRows")[] = ["noRows", "noMatchingRows"];
 
 /** `type: "fecha"` / `type: "numero"` en la definición de una columna: filtro de
  * fecha o de número en vez del de texto -- compara "igual a" (fecha exacta,
@@ -156,6 +158,9 @@ export interface EstadoGuardado {
    * se toma como visible (comportamiento de siempre) para no ocultarle a
    * nadie los filtros sin que lo haya pedido. */
   filtrosVisibles?: boolean;
+  /** `true` desde que la persona prendió o apagó la fila de filtros a mano
+   * (ver `filtrosVisiblesIniciales`). */
+  filtrosElegidos?: boolean;
   /** Filas por página elegidas en el selector (sólo grillas paginadas en el
    * servidor); `undefined` = el tamaño por defecto de la pantalla. */
   filasPorPagina?: number;
@@ -263,6 +268,14 @@ export interface TablaProps<T> {
    * localStorage el orden, ancho, orden de columnas (sort) y cuáles están
    * ocultas. */
   id?: string;
+  /** Qué decir cuando no hay ninguna fila y nadie está buscando ni filtrando
+   * (ej. "No hay nadie adentro."). Sólo en tablas que filtran en el
+   * navegador (auditoría 2026-11-14, U8). */
+  mensajeVacio?: string;
+  /** Columnas que la pantalla oculta según su propio estado (ej. "Tipo" de
+   * Activos con una clase elegida), sin tocar lo que eligió la persona y sin
+   * moverlas de lugar. Arreglo estable o memoizado. */
+  columnasOcultasPorPantalla?: string[];
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -300,6 +313,8 @@ function TablaBase<T>(
     idFila,
     origenServidor,
     id,
+    mensajeVacio = "No hay registros.",
+    columnasOcultasPorPantalla,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -312,11 +327,15 @@ function TablaBase<T>(
   // sólo lo que le llega a AG Grid.
   const busquedaDebounced = useDebounced(busqueda, 250);
   const [ocultas, setOcultas] = useState<Set<string>>(
-    () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
+    () => new Set(ocultasIniciales(leerEstadoGuardado(idGrilla), columnas)),
   );
-  const [filtrosVisibles, setFiltrosVisibles] = useState(
-    () => leerEstadoGuardado(idGrilla)?.filtrosVisibles ?? true,
+  // Fila de filtros apagada por defecto (ver `filtrosVisiblesIniciales`).
+  const [filtrosVisibles, setFiltrosVisibles] = useState(() =>
+    filtrosVisiblesIniciales(leerEstadoGuardado(idGrilla)),
   );
+  const filtrosElegidos = useRef(leerEstadoGuardado(idGrilla)?.filtrosElegidos === true);
+  // Filas a la vista tras filtros y búsqueda (para `mensajeSinFilas`).
+  const [filasMostradas, setFilasMostradas] = useState<{ visibles: number; filtrando: boolean } | null>(null);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
@@ -369,7 +388,8 @@ function TablaBase<T>(
       columnas.map((original) => {
         const clave = identidad(original as ColDef<unknown>);
         const { type, ...resto } = original;
-        let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        const oculta = clave !== undefined && (ocultas.has(clave) || columnasOcultasPorPantalla?.includes(clave) === true);
+        let columna: ColDef<T> = clave ? { ...resto, hide: oculta } : resto;
         // Columna sin dato (botones "Acción" de Telemetría, etc.): AG Grid la
         // refresca a la fuerza en CADA actualización de filas -- no tiene un
         // valor que comparar -- y con `enableCellChangeFlash` destellaba en
@@ -382,7 +402,7 @@ function TablaBase<T>(
         if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
         return columna;
       }),
-    [columnas, ocultas, conFiltro],
+    [columnas, ocultas, conFiltro, columnasOcultasPorPantalla],
   );
 
   // Depende de SI hay `idFila`, no de su identidad: un `defaultColDef` nuevo
@@ -466,6 +486,7 @@ function TablaBase<T>(
       ocultas: Array.from(ocultasActual),
       columnas: columnState,
       filtrosVisibles: filtrosVisiblesActual,
+      filtrosElegidos: filtrosElegidos.current,
       filasPorPagina: enServidor ? filasPorPaginaActual : undefined,
     };
     try {
@@ -477,6 +498,7 @@ function TablaBase<T>(
   }
 
   function alternarFiltrosVisibles() {
+    filtrosElegidos.current = true;
     setFiltrosVisibles((actual) => {
       const siguiente = !actual;
       guardarLayout(ocultas, siguiente);
@@ -563,6 +585,18 @@ function TablaBase<T>(
     guardarLayout(ocultas);
   }
 
+  // Sin filas a la vista: si se está buscando, lo dice con el texto buscado;
+  // si no, el mensaje de la pantalla. Sólo en tablas que filtran acá.
+  const buscandoTexto = (busquedaDebounced ?? "").trim();
+  const mensajeSinFilas =
+    !enServidor && filasMostradas?.visibles === 0
+      ? buscandoTexto
+        ? `Nada coincide con «${buscandoTexto}».`
+        : filasMostradas.filtrando || (filas?.length ?? 0) > 0
+          ? "Nada coincide con los filtros."
+          : mensajeVacio
+      : null;
+
   return (
     <div className="flex h-full flex-col">
       <div
@@ -577,63 +611,43 @@ function TablaBase<T>(
         <div className="flex items-center gap-1.5">
           {accionesDerecha}
 
-          {/* Filtros y anchos de columna en una sola pieza de íconos
-              (`.segmentado`), como en escritorio. El embudo es un interruptor
-              (relleno de acento con los filtros visibles); los otros dos son
-              acciones, y el último abre la lista de columnas visibles. */}
-          <div
-            ref={selectorRef}
-            className="segmentado"
-            role="group"
-            aria-label="Columnas: filtros, anchos y visibles"
-          >
-            {filtrosPorColumna && (
-              <button
-                type="button"
-                className="segmentado-interruptor"
-                title={filtrosVisibles ? "Ocultar filtros" : "Mostrar filtros"}
-                aria-label="Filtros por columna"
-                aria-pressed={filtrosVisibles}
-                onClick={alternarFiltrosVisibles}
-              >
-                <Funnel size={16} aria-hidden="true" />
-              </button>
-            )}
+          {/* Un solo botón "Tabla" con todo lo que configura la grilla:
+              filtros por columna, anchos y columnas visibles. Antes eran
+              cuatro íconos sueltos (auditoría 2026-11-14, U5, igual que en
+              escritorio). */}
+          <div ref={selectorRef}>
             <button
               type="button"
-              title="Ajustar anchos al contenido"
-              aria-label="Ajustar anchos al contenido"
-              onClick={ajustarAnchos}
-            >
-              <UnfoldHorizontal size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Restablecer anchos"
-              aria-label="Restablecer anchos"
-              onClick={restablecerAnchos}
-            >
-              <RotateCcw size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Columnas visibles"
-              aria-label="Columnas visibles"
+              className="boton boton-icono"
+              title="Opciones de la tabla: filtros, anchos y columnas"
+              aria-haspopup="menu"
               aria-expanded={selectorAbierto}
-              aria-pressed={selectorAbierto}
-              className="segmentado-interruptor"
               onClick={() => setSelectorAbierto((a) => !a)}
             >
-              <Columns3 size={16} aria-hidden="true" />
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              Tabla
+              <ChevronDown size={14} aria-hidden="true" />
             </button>
           </div>
 
           {selectorAbierto && posicionSelector && (
-            <ListaFlotante posicion={posicionSelector} ancho={220} alinear="derecha">
-              <div
-                ref={popoverRef}
-                className="flex flex-col gap-[0.4rem] px-4 py-3"
-              >
+            <ListaFlotante posicion={posicionSelector} ancho={250} alinear="derecha">
+              <div ref={popoverRef} className="menu-tabla" role="menu">
+                {filtrosPorColumna && (
+                  <label className="menu-tabla-opcion">
+                    <input type="checkbox" checked={filtrosVisibles} onChange={alternarFiltrosVisibles} />
+                    Filtros por columna
+                  </label>
+                )}
+                <button type="button" role="menuitem" className="menu-tabla-accion" onClick={ajustarAnchos}>
+                  <UnfoldHorizontal size={15} aria-hidden="true" />
+                  Ajustar anchos al contenido
+                </button>
+                <button type="button" role="menuitem" className="menu-tabla-accion" onClick={restablecerAnchos}>
+                  <RotateCcw size={15} aria-hidden="true" />
+                  Restablecer anchos
+                </button>
+                <p className="menu-tabla-titulo">Columnas visibles</p>
                 {columnas
                   .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
                   .filter(
@@ -641,16 +655,15 @@ function TablaBase<T>(
                       entrada.clave !== undefined,
                   )
                   .map(({ columna, clave }) => (
-                    <label
-                      key={clave}
-                      className="flex items-center gap-2"
-                    >
+                    <label key={clave} className="menu-tabla-opcion">
                       <input
                         type="checkbox"
                         checked={!ocultas.has(clave)}
                         onChange={() => alternar(clave)}
                       />
-                      {columna.headerName ?? clave}
+                      {(typeof columna.headerTooltip === "string" ? columna.headerTooltip : null) ??
+                        columna.headerName ??
+                        clave}
                     </label>
                   ))}
               </div>
@@ -659,7 +672,7 @@ function TablaBase<T>(
         </div>
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         <AgGridReact<T>
           theme={temaBrisas}
           defaultColDef={columnaBase}
@@ -683,20 +696,32 @@ function TablaBase<T>(
             : {
                 rowData: filas ?? [],
                 quickFilterText: busquedaDebounced,
+                // AG Grid arma el texto de búsqueda de cada fila una vez y lo
+                // guarda hasta que cambian sus datos.
+                cacheQuickFilter: true,
                 quickFilterParser,
                 quickFilterMatcher,
                 // "Álvarez" junto a las A, no al final de la lista.
                 accentedSort: true,
+                // El mensaje de "no hay nada" es propio (`mensajeSinFilas`).
+                suppressOverlays: OVERLAYS_SUPRIMIDOS,
+                onModelUpdated: (evento: ModelUpdatedEvent<T>) => {
+                  const conteo = {
+                    visibles: evento.api.getDisplayedRowCount(),
+                    filtrando: evento.api.isAnyFilterPresent(),
+                  };
+                  setFilasMostradas((actual) =>
+                    actual?.visibles === conteo.visibles && actual.filtrando === conteo.filtrando ? actual : conteo,
+                  );
+                },
               })}
           getRowId={idFila ? (p: GetRowIdParams<T>) => idFila(p.data) : undefined}
           columnDefs={columnasConVisibilidad}
-          overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           localeText={AG_GRID_LOCALE_ES}
           // Sin el recuadro de foco al hacer clic en una celda (se veía feo y
           // no copiaba nada) -- a cambio no hay navegación por flechas dentro
           // de la grilla.
           suppressCellFocus
-          columnHoverHighlight
           tooltipShowMode="whenTruncated"
           tooltipShowDelay={400}
           // Sin la "×" de borrar dentro de los inputs de filtro: AG Grid 36 le
@@ -736,6 +761,11 @@ function TablaBase<T>(
             onFilaDobleClic ? (evento) => evento.data && onFilaDobleClic(evento.data) : undefined
           }
         />
+        {mensajeSinFilas && (
+          <div className="tabla-sin-filas" role="status">
+            {mensajeSinFilas}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ describe("Usuarios -- alta", () => {
     );
     await waitFor(() => expect(mocks.listarUsuarios).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText("+ Nuevo"));
+    fireEvent.click(screen.getByText("Nuevo usuario"));
     fireEvent.change(screen.getByLabelText("Cédula"), { target: { value: "123456789" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Alguien" } });
     fireEvent.click(screen.getByRole("button", { name: "Crear usuario" }));

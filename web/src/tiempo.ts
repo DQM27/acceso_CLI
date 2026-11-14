@@ -121,3 +121,14 @@ export function interpretarFechaDDMMAAAA(texto: string): Date | null {
 export function textoFechaDDMMAAAA(fecha: Date): string {
   return textoFechaDDMMYYYY(fechaYMD(fecha));
 }
+
+/** Instante de entrada en una sola columna: la hora si fue hoy, y si no
+ * "DD/MM HH:MM" (en Activos casi todo es de hoy: la fecha completa repetía el
+ * mismo valor en cada fila). Igual que `desktop/src/tiempo.ts`. */
+export function textoIngresoCorto(iso: string, ahora: Date = new Date()): string {
+  const hora = textoHora(iso);
+  const ymd = fechaLocalYMD(iso);
+  if (ymd === fechaYMD(ahora)) return hora;
+  const [, mes, dia] = ymd.split("-");
+  return `${dia}/${mes} ${hora}`;
+}

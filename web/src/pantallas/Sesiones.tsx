@@ -173,21 +173,6 @@ export default function Sesiones() {
             idFila={idPorId}
             controles={
               <>
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Usuario, cédula, unidad…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-                <span role="status">
-                  {filas.length.toLocaleString("es-CR")} sesiones · {abiertas.toLocaleString("es-CR")} abiertas
-                </span>
-              </>
-            }
-            accionesDerecha={
-              <>
                 <SelectorRangoFecha
                   desde={desde}
                   hasta={hasta}
@@ -196,6 +181,21 @@ export default function Sesiones() {
                     setHasta(nuevoHasta);
                   }}
                 />
+                <span role="status">
+                  {filas.length.toLocaleString("es-CR")} sesiones · {abiertas.toLocaleString("es-CR")} abiertas
+                </span>
+              </>
+            }
+            accionesDerecha={
+              <>
+                <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
+                  <input
+                    placeholder="Usuario, cédula, unidad…"
+                    value={busqueda}
+                    disabled={cargando}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
                 <div className="segmentado" role="group" aria-label="Exportar">
                   <button
                     type="button"

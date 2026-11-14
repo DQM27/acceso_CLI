@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 
 /** Lo que dura la animación de salida (`.modal-velo-saliendo` en
  * index.css): `onCerrar` llega cuando termina. */
@@ -108,9 +109,15 @@ export default function Modal({
             marginBottom: "1rem",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--acento)" }}>{titulo}</h2>
-          <button type="button" className="boton" onClick={cerrar} aria-label="Cerrar" title="Cerrar">
-            ✕
+          <h2 style={{ margin: 0, fontSize: "var(--tam-titulo)", color: "var(--texto)" }}>{titulo}</h2>
+          <button
+            type="button"
+            className="boton boton-discreto boton-icono"
+            onClick={cerrar}
+            aria-label="Cerrar"
+            title="Cerrar (Esc)"
+          >
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         {children}

@@ -752,3 +752,29 @@ código en un proyecto aparte porque el crate no compila en Linux.
 de color (`CeldaAdentro`); «Dispositivo» de Historial con ícono de lucide y
 el nombre («PC» / «Celular») para el filtro y el Excel/PDF, en vez de un
 emoji.
+
+### Panel web con el mismo diseño (rama `ux/panel-web-mismo-diseno`, sobre `mejoras/conexion-y-detalles`, 2026-11-14)
+
+Pedido del dueño: llevar al panel web los mismos cambios visuales, «que
+prácticamente son una calca». No es copia literal (la grilla del panel
+tiene paginación en el servidor y pantallas propias), así que se adaptó
+pieza por pieza:
+
+| Escritorio | Panel web |
+| --- | --- |
+| Menú «Tabla», filtros apagados, sin cebra ni resaltado de columna | Igual (`Tabla.tsx`, `temaTabla.ts`; el tema también lo usa el lienzo) |
+| Mensaje propio con la tabla vacía, buscador con caché | Igual en las tablas que filtran en el navegador; las paginadas en el servidor no cambian |
+| Misma barra en una línea: acción y filtros a la izquierda, buscador y «Tabla» a la derecha | Igual en Activos, Contratistas, Usuarios, Dispositivos, Empresas proveedoras, Sesiones, Telemetría e Historial. En Activos el buscador iba primero (pedido del 2026-10-26); el dueño pidió igualar al escritorio |
+| «Nuevo contratista» con ícono | «Nuevo contratista», «Nuevo usuario», «Nuevo dispositivo» |
+| Activos: «Ingreso» corto, «Tiempo», «Clase» sólo con «Todas», «Dio ingreso» opcional | Igual con «Entrada» y «Tipo» (el panel ya tenía «Tiempo adentro»; es de sólo lectura, sin «Salida») |
+| Período que se abre hacia abajo | Igual |
+| Tokyo en el login, «Claro»/«Oscuro», acento, mayúsculas, 4 tamaños, X del modal | Igual. La pantalla del Asistente conserva su tipografía propia |
+| «Personalizar menú» en el menú de la cuenta | Igual (el panel no tiene «Buscar actualización») |
+| «Dispositivo» con ícono | Igual (`IconoDispositivo`) |
+
+Comprobado: `tsc --noEmit`, lint, 67 archivos de test (508 tests), `npm run
+build` y capturas con una sesión simulada (todas las peticiones a Supabase
+interceptadas, ninguna salió de la sesión) en claro y oscuro. Para
+instalar las dependencias se usó un sustituto local de `xlsx`, cuyo
+servidor está bloqueado en esta sesión (no se subió nada de eso); el
+botón Excel no se pudo probar aquí y lo valida el CI.

@@ -5,6 +5,12 @@ import App from "./App";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import "./index.css";
 import { iniciarReglas } from "./reglas";
+import { leerTema } from "./componentes/useTema";
+
+// Tema antes del primer render: el login se ve con la misma paleta que el
+// panel (antes se veía la paleta por defecto y al entrar cambiaba de color;
+// auditoría 2026-11-14, igual que el escritorio).
+document.documentElement.setAttribute("data-theme", leerTema());
 
 const raiz = document.getElementById("root");
 if (!raiz) {
