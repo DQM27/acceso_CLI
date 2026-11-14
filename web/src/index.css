@@ -164,10 +164,12 @@ textarea::placeholder {
    oscuro y esquinas redondeadas horneadas en el asset — el contenedor sólo
    lo tamaña/recorta, sin agregar un segundo fondo/borde que se vería como un
    marco doble alrededor del ícono. */
+/* Logo del login (`marca.png`, el de la "L" con el nombre): mismo tamaño que
+   en el escritorio. */
 .marca-sello {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 8rem;
+  height: 8rem;
   flex-shrink: 0;
   place-items: center;
   overflow: hidden;
