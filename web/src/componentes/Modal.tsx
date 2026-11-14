@@ -109,7 +109,7 @@ export default function Modal({
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--acento)" }}>{titulo}</h2>
-          <button type="button" className="boton" onClick={cerrar}>
+          <button type="button" className="boton" onClick={cerrar} aria-label="Cerrar" title="Cerrar">
             ✕
           </button>
         </div>

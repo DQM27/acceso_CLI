@@ -32,8 +32,10 @@ describe("Modal", () => {
         <p>x</p>
       </Modal>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     expect(onCerrar).not.toHaveBeenCalled();
+    // Diálogo con su título como nombre, para los lectores de pantalla.
+    expect(screen.getByRole("dialog")).toBeTruthy();
     await waitFor(() => expect(onCerrar).toHaveBeenCalledOnce());
   });
 
@@ -44,7 +46,7 @@ describe("Modal", () => {
         <p>x</p>
       </Modal>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(onCerrar).toHaveBeenCalled());
     await new Promise((resolver) => setTimeout(resolver, DURACION_SALIDA_MODAL_MS + 50));

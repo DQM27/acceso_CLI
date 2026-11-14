@@ -22,7 +22,7 @@ describe("Modal", () => {
         <p>x</p>
       </Modal>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     expect(onCerrar).not.toHaveBeenCalled();
     await waitFor(() => expect(onCerrar).toHaveBeenCalledOnce());
   });
@@ -34,7 +34,7 @@ describe("Modal", () => {
         <p>x</p>
       </Modal>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(onCerrar).toHaveBeenCalled());
     await new Promise((resolver) => setTimeout(resolver, DURACION_SALIDA_MODAL_MS + 50));
@@ -51,6 +51,16 @@ describe("Modal", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(velo.classList.contains("modal-velo-saliendo")).toBe(true);
     await waitFor(() => expect(velo.classList.contains("modal-velo-saliendo")).toBe(false));
+  });
+
+  it("es un diálogo con su título como nombre, y la X se anuncia como Cerrar", () => {
+    render(
+      <Modal titulo="Editar usuario" onCerrar={() => {}}>
+        <p>x</p>
+      </Modal>,
+    );
+    expect(screen.getByRole("dialog", { name: "Editar usuario" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeTruthy();
   });
 
   it("click en el backdrop NO cierra -- decisión explícita, no accidental", () => {

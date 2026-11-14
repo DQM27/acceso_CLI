@@ -581,6 +581,47 @@ textarea::placeholder {
   animation: modal-salir 150ms ease-in forwards;
 }
 
+/* Modales: título, etiquetas de campos y botones en mayúsculas, igual que en
+   el escritorio (`.modal` en desktop/src/index.css, pedido del usuario
+   2026-09-23) -- en el panel faltaba (auditoría 2026-11-14). Las etiquetas
+   van chicas y un poco espaciadas. Los ejemplos (placeholder) y los
+   mensajes dentro de una etiqueta (`span`) quedan en texto normal. Lo que se
+   escribe en los campos va en mayúscula por la regla global de `input`. */
+.modal-tarjeta h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal-tarjeta .campo {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.modal-tarjeta .campo select,
+.modal-tarjeta .campo span {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Hereda el espaciado de la etiqueta, pero no le quita la mayúscula (la pone
+   la regla global de `input`). */
+.modal-tarjeta .campo input,
+.modal-tarjeta .campo textarea {
+  letter-spacing: normal;
+}
+
+/* Opciones (radio/checkbox) dentro de un `.campo`: en mayúsculas como el
+   resto, pero con su tamaño normal (son opciones, no etiquetas). */
+.modal-tarjeta .campo label {
+  font-size: 0.85rem;
+  letter-spacing: normal;
+}
+
+.modal-tarjeta .boton {
+  text-transform: uppercase;
+}
+
 @keyframes velo-entrar {
   from {
     opacity: 0;
