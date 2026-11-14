@@ -45,13 +45,27 @@
         object-fit: cover;
       }
 
+      /* Colores de Tokyo Day / Night (design/brisas.json): mismo acento que la
+         app. Sigue al sistema porque este HTML no puede leer la preferencia
+         guardada (la CSP no admite scripts en línea). La tarjeta queda blanca
+         en los dos: el logo tiene fondo blanco. */
       .anillo {
         width: 28px;
         height: 28px;
         border-radius: 50%;
-        border: 3px solid #d9dee3;
-        border-top-color: #0b7eb0;
+        border: 3px solid #cfd4e1;
+        border-top-color: #2959aa;
         animation: girar 0.8s linear infinite;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .tarjeta {
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+        }
+
+        .anillo {
+          border-top-color: #3d59a1;
+        }
       }
 
       @keyframes girar {

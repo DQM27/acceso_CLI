@@ -8,7 +8,9 @@ const d = JSON.parse(leer('design/brisas.json'));
 const comprobar = process.argv.includes('--check');
 const salidas = new Map();
 const aviso = 'Generado desde design/brisas.json. Editar la fuente y ejecutar node design/generar.mjs.';
-if (JSON.stringify(Object.keys(d.temas.light)) !== JSON.stringify(Object.keys(d.temas.dark))) throw Error('Los temas deben tener los mismos roles.');
+for (const tema of Object.values(d.temas)) {
+  if (JSON.stringify(Object.keys(tema)) !== JSON.stringify(Object.keys(d.temas.light))) throw Error('Los temas deben tener los mismos roles.');
+}
 for (const tema of Object.values(d.temas)) for (const [rol, valor] of Object.entries(tema)) {
   if (!['sombra-panel', 'velo'].includes(rol) && !/^#[0-9A-F]{6}$/.test(valor)) throw Error(`Color inválido: ${rol}`);
 }
@@ -43,6 +45,21 @@ ${declaraciones(d.temas.dark)}
   color-scheme: dark;
 }
 `;
+// Temas que elige cada persona en escritorio y panel web (menú de la cuenta):
+// Tokyo Day (claro) y Tokyo Night (oscuro), sobre los mismos roles. Desde el
+// 2026-11-14 salen de acá, con la misma verificación de contraste, en vez de
+// escribirse a mano en cada app. `:root[data-theme=…]` (especificidad 0,2,0)
+// y se importan después de diseno.css: así ganan también con el sistema en
+// oscuro, donde `:root:not([data-theme="light"])` tiene la misma.
+const TEMAS_APP = { 'tokyo-day': 'light', 'tokyo-night': 'dark' };
+const cssTemasApp = `/* ${aviso} */
+${Object.entries(TEMAS_APP).map(([nombre, esquema]) => `:root[data-theme="${nombre}"] {
+${declaraciones(d.temas[nombre])}
+  color-scheme: ${esquema};
+}`).join('\n')}
+`;
+salidas.set('desktop/src/tokyo.css', cssTemasApp);
+salidas.set('web/src/tokyo.css', cssTemasApp);
 salidas.set('design/paleta.js', `// ${aviso}\nwindow.Brisas = ${JSON.stringify(d, null, 2)};\n`);
 salidas.set('desktop/src/diseno.css', css);
 salidas.set('desktop/src/controles.css', leer('design/controles.css'));
@@ -52,7 +69,7 @@ salidas.set('web/src/controles.css', leer('design/controles.css'));
 // 2026-10-05: misma familia visual, un solo lugar para cambiar un color.
 salidas.set('web-visitas/src/diseno.css', css);
 salidas.set('web-visitas/src/controles.css', leer('design/controles.css'));
-salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
+salidas.set('design/brisas.css', css + '\n' + cssTemasApp + '\n' + leer('design/controles.css'));
 
 // Android/mobile YA NO sale de acá (2026-09-15) -- tiene su propia identidad
 // visual (estilo "Kash": acento verde-azulado, fondo lavanda, esquinas más

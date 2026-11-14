@@ -1,7 +1,7 @@
 import { leerPreferencia } from "../preferencias";
 
 /** Los dos temas de la app: Tokyo Day (claro) y Tokyo Night (oscuro).
- * Se definen en `tokyo-day.css` y `tokyo-night.css`. */
+ * Se generan desde `design/brisas.json` en `tokyo.css`. */
 export type Tema = "tokyo-day" | "tokyo-night";
 
 export function temaDelSistema(): Tema {
@@ -13,6 +13,12 @@ export function temaDelSistema(): Tema {
 }
 
 export const CLAVE_TEMA = "escritorio:tema";
+
+/** Último tema que se usó en esta PC, de cualquier usuario: es el que se ve
+ * antes de iniciar sesión (ver `temaInicial`). Clave aparte de `CLAVE_TEMA`
+ * porque `leerPreferencia` cae a la clave global si el usuario no guardó la
+ * suya, y no debe heredar el tema de otra persona por eso. */
+export const CLAVE_TEMA_ULTIMO = "escritorio:tema-ultimo";
 
 /** Nombre con que se muestra cada tema en el menú de usuario. */
 export const NOMBRE_TEMA: Record<Tema, string> = {
@@ -38,6 +44,15 @@ export function leerTema(usuarioId: number | null = null): Tema {
   const guardado = leerPreferencia(CLAVE_TEMA, usuarioId) ?? "";
   if (TEMAS.includes(guardado as Tema)) return guardado as Tema;
   return TEMAS_ANTERIORES[guardado] ?? temaDelSistema();
+}
+
+/** Tema del login, el primer arranque y la pantalla de carga: el último que
+ * se usó en esta PC o, si nunca se eligió ninguno, el del sistema. Antes ahí
+ * se veía la paleta Brisas y al entrar cambiaba a Tokyo: un salto de color
+ * en cada inicio de sesión (auditoría 2026-11-14, fase 2). */
+export function temaInicial(): Tema {
+  const guardado = leerPreferencia(CLAVE_TEMA_ULTIMO, null) ?? "";
+  return TEMAS.includes(guardado as Tema) ? (guardado as Tema) : temaDelSistema();
 }
 
 export function siguienteTema(actual: Tema): Tema {

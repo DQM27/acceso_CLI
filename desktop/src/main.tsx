@@ -6,6 +6,7 @@ import NieveNavidena from "./componentes/NieveNavidena";
 import "./index.css";
 import { instalarCapturaDeErrores } from "./errores";
 import { iniciarTelemetria } from "./telemetria";
+import { temaInicial } from "./componentes/SelectorTema.logica";
 
 // El menú contextual nativo del WebView (Atrás/Actualizar/Guardar como/
 // Imprimir/Más herramientas) es el de un navegador -- no aplica a esta app
@@ -16,6 +17,10 @@ import { iniciarTelemetria } from "./telemetria";
 // `preventDefault()` igual y abre su menú antes de que este listener
 // corra en la fase de burbujeo, así que no compiten.
 document.addEventListener("contextmenu", (evento) => evento.preventDefault());
+
+// Tema antes del primer render: el login y la pantalla de carga se ven con
+// la misma paleta que la app (ver `temaInicial`), sin un cuadro con otra.
+document.documentElement.setAttribute("data-theme", temaInicial());
 
 // Antes de montar React: un error del primer render también se reporta.
 instalarCapturaDeErrores();

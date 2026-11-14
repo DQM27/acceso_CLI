@@ -13,6 +13,15 @@ Abrir **[catalogo.html](catalogo.html)** en el navegador para comparar temas, co
 
 En escritorio están disponibles `npm run design:generate` y `npm run design:check`. CI comprueba que las salidas coincidan con la fuente y verifica contraste. Cambiar el archivo maestro requiere regenerar y reconstruir la aplicación correspondiente; no es una configuración remota ni se modifica una instalación ya distribuida.
 
+## Temas
+
+| Tema | Dónde | Archivo generado |
+| --- | --- | --- |
+| `light` / `dark` | Página de visitas de anfitriones y valores por defecto de escritorio y panel antes de aplicar la preferencia | `diseno.css` |
+| `tokyo-day` / `tokyo-night` | Escritorio y panel web: los temas que cada persona elige en el menú de su cuenta (Claro / Oscuro). Escritorio los aplica también en el login y el splash | `tokyo.css` |
+
+Los cuatro tienen los mismos roles y pasan la misma verificación de contraste (`verificar.mjs`), que además comprueba que las filas resaltadas por larga permanencia se distingan de una fila normal. Antes del 2026-11-14 los temas Tokyo se escribían a mano en cada app y no se verificaban: fallaban 10 combinaciones.
+
 ## Colores y superficies
 
 | Rol | Uso |

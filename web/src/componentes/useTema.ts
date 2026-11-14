@@ -3,7 +3,7 @@ import { useLayoutEffect, useState } from "react";
 const CLAVE_TEMA = "web:tema";
 
 /** Los dos temas del panel, los mismos de escritorio: Tokyo Day (claro) y
- * Tokyo Night (oscuro). Se definen en `tokyo-day.css` y `tokyo-night.css`. */
+ * Tokyo Night (oscuro). Se generan desde `design/brisas.json` en `tokyo.css`. */
 export type Tema = "tokyo-day" | "tokyo-night";
 
 export const NOMBRE_TEMA: Record<Tema, string> = {
