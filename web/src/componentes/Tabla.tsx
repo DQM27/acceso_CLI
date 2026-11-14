@@ -17,7 +17,6 @@ import type {
   IDatasource,
   IGetRowsParams,
   PaginationChangedEvent,
-  RowClassParams,
   SortChangedEvent,
   TextMatcherParams,
 } from "ag-grid-community";
@@ -263,12 +262,6 @@ export interface TablaProps<T> {
    * localStorage el orden, ancho, orden de columnas (sort) y cuáles están
    * ocultas. */
   id?: string;
-  /** Clase CSS extra para una fila según sus datos (ej. resaltar a quien
-   * lleva más de 12 horas adentro), como en escritorio. Como puede depender
-   * de la hora actual, la grilla se redibuja sola cada minuto mientras esto
-   * esté puesto. Debe ser una función estable (definida fuera del
-   * componente). */
-  claseFila?: (fila: T) => string | undefined;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -306,7 +299,6 @@ function TablaBase<T>(
     idFila,
     origenServidor,
     id,
-    claseFila,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -326,14 +318,6 @@ function TablaBase<T>(
   );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
-  // `claseFila` puede depender del reloj (ej. "más de 12 horas adentro"):
-  // sin esto, una fila que cruza el umbral no cambiaba hasta el próximo
-  // refresco de datos.
-  useEffect(() => {
-    if (!claseFila) return;
-    const intervalo = window.setInterval(() => apiRef.current?.redrawRows(), 60_000);
-    return () => window.clearInterval(intervalo);
-  }, [claseFila]);
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
   const popoverRef = useRef<HTMLDivElement>(null);
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
@@ -711,7 +695,6 @@ function TablaBase<T>(
                 accentedSort: true,
               })}
           getRowId={idFila ? (p: GetRowIdParams<T>) => idFila(p.data) : undefined}
-          getRowClass={claseFila ? (p: RowClassParams<T>) => (p.data ? claseFila(p.data) : undefined) : undefined}
           columnDefs={columnasConVisibilidad}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           localeText={AG_GRID_LOCALE_ES}

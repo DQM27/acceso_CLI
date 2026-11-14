@@ -6,7 +6,7 @@ import Tabla from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
-import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, nivelPermanencia, textoTiempoAdentro } from "../api/adentro";
+import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, textoTiempoAdentro } from "../api/adentro";
 import type { PersonaAdentro, TipoAdentro } from "../api/adentro";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
@@ -60,15 +60,6 @@ function opcionesFiltroGafete(conteo: { todos: number; con: number; sin: number 
   ];
 }
 
-/** Resaltado de la fila según cuánto lleva adentro: la misma regla y los
- * mismos colores que escritorio (más de 12 h aviso, más de 14 h crítico).
- * Fuera del componente: `claseFila` tiene que ser una función estable. */
-function claseFilaActivo(fila: PersonaAdentro): string | undefined {
-  const nivel = nivelPermanencia(fila.hora_entrada);
-  if (nivel === "critico") return "fila-permanencia-critico";
-  if (nivel === "aviso") return "fila-permanencia-aviso";
-  return undefined;
-}
 
 /**
  * Activos: quién está adentro ahora en cada unidad (contratistas, proveedores,
@@ -175,7 +166,6 @@ export default function Activos() {
             busqueda={busqueda}
             filtrosPorColumna
             idFila={idPorTipoEId}
-            claseFila={claseFilaActivo}
             controles={
               <>
                 {/* Primero el buscador y después los filtros (pedido del

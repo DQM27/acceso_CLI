@@ -952,19 +952,6 @@ textarea::placeholder {
   }
 }
 
-/* Larga permanencia (Activos, `claseFilaActivo`), igual que en escritorio.
-   Aviso (más de 12 h): fondo suave de advertencia y marca a la izquierda.
-   Crítico (más de 14 h): lo mismo en rojo. */
-.ag-row.fila-permanencia-aviso {
-  background: var(--advertencia-suave);
-  box-shadow: inset 3px 0 0 var(--advertencia);
-}
-
-.ag-row.fila-permanencia-critico {
-  background: var(--error-suave);
-  box-shadow: inset 3px 0 0 var(--error);
-}
-
 /* Botones dentro de una celda de la grilla (Dispositivos, Usuarios). Van en CSS
    propio y no en clases de Tailwind porque `.boton` no esta en una capa y gana
    sobre `px-*`, `py-*` y `text-*`. Despues de `.boton`, misma especificidad. */
