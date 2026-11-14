@@ -638,3 +638,46 @@ Ganancia estimada: ~50 ms por recarga de Activos. Prioridad baja.
 - **Móvil:** tasa baja (3 %), casi toda en un teléfono (`b5e22be5…`, 66 de
   `no_autenticado`): la sesión no estaba lista al conectar y el reintento
   la resuelve. No requiere acción por ahora.
+
+### Fase 3 (rama `ux/escritorio-fase-3`, sobre `perf/escritorio-fase-1`, 2026-11-14)
+
+Decisiones del dueño: 8.7 propuesta completa de columnas de Activos, 8.6
+filtros por columna apagados por defecto, 8.4 llevar la personalización del
+menú al menú de la cuenta. Y una regla nueva, que manda sobre U3:
+
+> **Toda la barra de herramientas en una sola línea.** Por eso los filtros
+> de clase y de gafete y la exportación son íconos con número; su nombre
+> está en el título (al pasar el mouse). Una segunda línea sólo con una
+> justificación muy fuerte.
+
+Se probó poner las clases con nombre en una fila de pestañas aparte y se
+descartó por esa regla. Todas las pantallas se verificaron a 1366 px: una
+sola línea.
+
+| Punto | Estado | Qué se hizo |
+| --- | --- | --- |
+| U1 | Hecho | «Acción» fijada a la derecha en Activos: el botón «Salida» siempre se ve |
+| U2 | Hecho | Activos: «Clase» sólo con «Todas» (`columnasOcultasPorPantalla`, no se mueve de lugar), «Ingreso» (hora, y fecha si no es hoy), «Tiempo» (tiempo adentro, se recalcula cada minuto con `refrescarColumnas`), «Dio ingreso» oculta por defecto. Entra a 1366 px sin desplazamiento horizontal |
+| U3 | **Revertido en parte** | Por la regla de una línea, las clases, el gafete y la exportación siguen con íconos. Sí llevan texto los botones de crear («Nuevo contratista», «Nueva empresa», «Nuevo gafete»), donde sobra lugar |
+| U5 | Hecho | Misma barra en todas las pantallas: acción y filtros a la izquierda, buscador y menú «Tabla» a la derecha. Los cuatro íconos de configuración de la grilla pasaron a un solo botón «Tabla» |
+| U6 | Hecho | Fila de filtros por columna apagada por defecto. Los layouts viejos la tenían guardada en `true` sin que nadie la eligiera: sólo cuenta si la persona la tocó (`filtrosElegidos`) |
+| U7 | Hecho | Sin cebra ni resaltado de columna |
+| U8 | Hecho | Mensaje propio con la tabla vacía: texto buscado, filtros, o el que pasa cada pantalla (`mensajeVacio`). Los avisos de AG Grid, suprimidos (`suppressOverlays`) |
+| U9 | Hecho | «Sin internet — se guarda en esta PC» y «Sin conexión en vivo» en ámbar, no en rojo |
+| U10 | Hecho | «Personalizar menú» en el menú de la cuenta; el clic derecho sigue; pista de arrastrar |
+| U11 | Hecho en parte | «Registrar N salidas», cierre de modal con ícono X, «Buscar actualización» en el menú de la cuenta (la versión del pie es sólo texto), tema «Claro»/«Oscuro», `lang="es"`. **Corrección:** la columna «Estado» de Contratistas no sale vacía con datos reales (dice «Puede entrar»): fue un efecto de los datos simulados. Quedan sin tocar: «SÍ» en negrita de «Adentro» y el emoji de «Dispositivo» en Historial |
+
+Comprobado: lint, `tsc --noEmit`, 71 archivos de test (537 tests),
+`npm run build`, y capturas con Tauri simulado a 1366, 1440 y 1920 px en
+claro y oscuro.
+
+**Falta comprobar en Windows** con datos reales: anchos de columnas de
+Activos con nombres largos y que «Tiempo» se actualice cada minuto.
+
+### Pendiente para después: interfaz en inglés y español
+
+El dueño pidió verlo más adelante. Medición rápida (2026-11-14): ~750
+textos en español en 73 archivos del frontend; ~800 mensajes en el núcleo
+Rust (errores, avisos, textos de Excel/PDF), que hoy llegan ya redactados
+en español; y el manual de Ayuda (`docs/manual`). Complejidad estimada 7/10
+(ver la conversación del 2026-11-14 para el desglose).
