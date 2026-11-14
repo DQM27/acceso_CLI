@@ -10,12 +10,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.BusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PreparacionIngreso
@@ -211,6 +214,20 @@ fun PantallaActivos(
                 buscando = false
                 viewModel.cambiarTexto("")
             }
+            // Tras elegir a alguien, lo escrito se borra cuando el buscador ya
+            // terminó de irse: borrándolo en el acto, los resultados se
+            // cambiaban por el "Busque a quien entra o sale" mientras se
+            // desvanecían, justo en el cuadro en que sube la hoja. Si esta
+            // lista se va antes (ingreso bloqueado), lo borra el ViewModel al
+            // volver (`cancelarSeleccionIngreso`).
+            val alcance = rememberCoroutineScope()
+            val cerrarBusquedaTrasElegir = {
+                buscando = false
+                alcance.launch {
+                    delay(MS_SALIDA.toLong())
+                    if (!buscando) viewModel.cambiarTexto("")
+                }
+            }
             BuscadorInferior(
                 visible = buscando,
                 texto = viewModel.texto,
@@ -227,7 +244,7 @@ fun PantallaActivos(
                             onElegirContratista = { contratista ->
                                 // `elegir` no depende del texto: limpiarlo no lo corta.
                                 viewModel.elegir(contratista.id)
-                                cerrarBusqueda()
+                                cerrarBusquedaTrasElegir()
                             },
                             onNuevoContratista = { escrito ->
                                 cerrarBusqueda()
@@ -240,7 +257,7 @@ fun PantallaActivos(
                         enviando = viewModel.enviandoGafetes,
                         onElegir = { fila ->
                             viewModel.elegirSeleccionSalida(fila)
-                            cerrarBusqueda()
+                            cerrarBusquedaTrasElegir()
                         },
                         onRegistrarSalidaGafetes = {
                             // Toma las coincidencias en el acto; el resultado

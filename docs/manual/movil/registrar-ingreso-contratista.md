@@ -16,8 +16,8 @@ Sección **Contratistas** (es la que se ve al entrar).
 
 ## Pasos — escaneando el documento (lo más rápido)
 
-1. En **Contratistas**, toque el botón redondo de la cámara (**Escanear
-   documento**).
+1. En **Contratistas**, toque el botón redondo azul **+**, abajo a la
+   derecha: se abre la cámara.
 2. Coloque la cédula (o el carnet) **dentro del recuadro**.
 3. Si la app reconoce a la persona, pasa directo al formulario de ingreso.
    Si hay varias parecidas, lo leído queda en la búsqueda: elija la

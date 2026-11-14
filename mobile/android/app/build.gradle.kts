@@ -49,8 +49,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 58
-        versionName = "1.8.13"
+        versionCode = 59
+        versionName = "1.8.14"
 
         buildConfigField("String", "DSN_ERRORES", "\"$dsnErrores\"")
 
@@ -105,7 +105,7 @@ android {
         release {
             isMinifyEnabled = true
             // Quita del APK los recursos que el código ya no referencia
-            // (íconos de material-icons-extended, recursos de librerías). Corre
+            // (recursos de librerías). Corre
             // después de R8, así que sólo saca lo que de verdad nadie usa.
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -117,6 +117,25 @@ android {
                 "URL_MANIFIESTO_ACTUALIZACION",
                 "\"https://lt.megabrisas.com/android/latest.json\"",
             )
+        }
+        // Build para MEDIR rendimiento en el teléfono: compilado igual que
+        // release (R8, sin `debuggable`) porque un build de debug corre sin
+        // optimizaciones y da tiempos peores que los reales. Firmado con la
+        // llave de debug (no requiere la de producción), apunta al sandbox
+        // (staging) y manda telemetría a su tabla `telemetria_diagnostico`
+        // (qué se mide lo decide el panel por equipo, ver Telemetria.kt).
+        // Sufijo propio: convive con la app real y con el build de debug sin
+        // pisarlos. `./gradlew assembleDiagnostico`. Existió hasta 384ce27b y
+        // se repuso el 2026-11-14 para medir el rediseño del móvil.
+        create("diagnostico") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".diag"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
+            // Sin actualizador: tiene otro paquete y no puede instalar el APK real.
+            buildConfigField("String", "URL_MANIFIESTO_ACTUALIZACION", "\"\"")
+            manifestPlaceholders["etiquetaApp"] = "Lattis DIAG"
         }
     }
 
@@ -159,8 +178,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.material:material-icons-extended")
+    // Sin material-icons-core/-extended (2026-11-14): todos los íconos son los
+    // Lucide del escritorio, en IconosLucide.kt (ver
+    // docs/handoff-rediseno-movil-ux.md, fase 2).
     implementation("androidx.compose.ui:ui-tooling-preview")
     // 1.6: CameraX corre sobre CameraPipe, el mismo motor de la cámara de los
     // Pixel (2026-10-27, para bajar lo que tarda en abrir; se mide con

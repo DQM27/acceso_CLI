@@ -16,21 +16,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +36,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Reconectar este teléfono retirado en el panel, con el código de
 /// reconexión que dio un administrador (ver
@@ -97,7 +93,7 @@ fun PantallaReconectarEquipo(
                 onClick = { if (paso is PasoReconexion.Confirmar) viewModel.volverAlCodigo() else onVolver() },
                 modifier = Modifier.offset(x = (-12).dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(IconosLucide.Volver, contentDescription = null, modifier = Modifier.size(16.dp))
                 Text("Volver")
             }
         }
@@ -117,25 +113,24 @@ fun PantallaReconectarEquipo(
                 ) {
                     Text("Escanear código QR")
                 }
-                OutlinedTextField(
-                    value = codigo,
-                    onValueChange = { codigo = CodigoVinculacion.formatear(it) },
-                    label = { Text("Código de reconexión") },
-                    placeholder = { Text("XXXX-XXXX-XX") },
-                    singleLine = true,
-                    enabled = !viewModel.enviando,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Ascii,
-                        capitalization = KeyboardCapitalization.Characters,
-                        autoCorrectEnabled = false,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { viewModel.reconectar(codigo, onReconectado = onReconectado) }),
-                    textStyle = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // Agrupado como el resto de los formularios (2026-11-14).
+                GrupoCampos {
+                    CampoAgrupado(
+                        valor = codigo,
+                        onCambiar = { codigo = CodigoVinculacion.formatear(it) },
+                        ayuda = "XXXX-XXXX-XX",
+                        etiqueta = "Código",
+                        habilitado = !viewModel.enviando,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            capitalization = KeyboardCapitalization.Characters,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { viewModel.reconectar(codigo, onReconectado = onReconectado) }),
+                        estiloTexto = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
+                    )
+                }
                 BotonDiscretoBrisas(
                     onClick = { viewModel.reconectar(codigo, onReconectado = onReconectado) },
                     enabled = !viewModel.enviando && CodigoVinculacion.completo(codigo),
@@ -188,13 +183,13 @@ fun PantallaReconectarEquipo(
 @Composable
 fun FranjaEquipoRetirado(onReconectar: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(IconosLucide.Advertencia, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Text(
                 "Este teléfono fue retirado en el panel.",

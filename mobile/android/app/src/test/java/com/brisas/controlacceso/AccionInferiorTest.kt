@@ -1,8 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.mutableStateOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -11,7 +8,7 @@ import org.junit.Test
 
 class AccionInferiorTest {
     private fun accion(descripcion: String, alTocar: () -> Unit = {}) =
-        AccionInferior(Icons.Default.Search, descripcion, mutableStateOf(alTocar))
+        AccionInferior(IconosLucide.Lupa, descripcion, mutableStateOf(alTocar))
 
     @Test
     fun `sin acciones el boton no se muestra`() {
@@ -58,7 +55,7 @@ class AccionInferiorTest {
     fun `tocar usa la accion vigente`() {
         var tocado = ""
         val alTocar = mutableStateOf<() -> Unit>({ tocado = "primera" })
-        val accion = AccionInferior(Icons.Default.PhotoCamera, "Escanear", alTocar)
+        val accion = AccionInferior(IconosLucide.Camara, "Escanear", alTocar)
 
         alTocar.value = { tocado = "actualizada" }
         accion.tocar()

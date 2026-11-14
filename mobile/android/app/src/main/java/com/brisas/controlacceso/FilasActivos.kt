@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import uniffi.control_acceso_mobile.AvisoAcceso
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -174,25 +175,26 @@ internal fun TarjetaActivo(
 }
 
 /// El número de gafete en un cuadro de esquinas redondeadas (pedido del
-/// usuario 2026-10-27: cuadrado, no píldora), en el color de la sección;
-/// "S/G" en gris si entró sin gafete.
+/// usuario 2026-10-27: cuadrado, no píldora); "S/G" en gris si entró sin
+/// gafete. Neutro y no en el color de la sección (2026-11-14): es lo que se
+/// coteja en la salida, y el acento sobre su tinte quedaba en 3:1.
 @Composable
 private fun CuadroGafete(gafeteNumero: Long?) {
     val conGafete = gafeteNumero != null
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 44.dp, minHeight = 30.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (conGafete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(RADIO_CHICO))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 8.dp)
             .semantics(mergeDescendants = true) { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             gafeteNumero?.toString() ?: "S/G",
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = if (conGafete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (conGafete) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }
@@ -250,8 +252,11 @@ internal fun marcaContratista(contratista: ContratistaResumen): MarcaContratista
 /// En la búsqueda salen juntos quienes pueden entrar, quienes ya están
 /// adentro y quienes no pueden entrar. Se distinguen sin leer (antes era una
 /// línea de texto al final), con fondo, franja, ícono y una palabra:
-/// adentro en ámbar con la señal de "ya está adentro"; acceso denegado y
-/// PRAIND vencido en rojo, con el "prohibido" o el calendario con una X.
+/// adentro en el azul de salida, con la flecha que se aleja (igual que las
+/// tarjetas de la búsqueda por gafete: tocarla abre la salida); acceso
+/// denegado y PRAIND vencido en rojo, con el "prohibido" o el calendario con
+/// una X. Adentro iba en ámbar hasta 2026-11-14: estar adentro es lo normal,
+/// y el ámbar se leía como advertencia.
 @Composable
 internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
     val marca = marcaContratista(contratista)
@@ -263,7 +268,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
             .clip(MaterialTheme.shapes.medium)
             .fondoTarjeta(
                 when (marca) {
-                    MarcaContratista.ADENTRO -> paleta.tinteAdentro
+                    MarcaContratista.ADENTRO -> paleta.tinteSalida
                     MarcaContratista.DENEGADO, MarcaContratista.VENCIDO -> paleta.tinteBloqueado
                     null -> null
                 },
@@ -305,7 +310,14 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         if (marca != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 when (marca) {
-                    MarcaContratista.ADENTRO -> SenalAdentro()
+                    // La misma flecha de la hoja de salida ([IconoPaso]),
+                    // en espejo para que se aleje hacia la izquierda.
+                    MarcaContratista.ADENTRO -> Icon(
+                        IconosLucide.Salida,
+                        contentDescription = null,
+                        tint = paleta.acento,
+                        modifier = Modifier.size(24.dp).graphicsLayer { scaleX = -1f },
+                    )
                     MarcaContratista.DENEGADO -> IconoMarca(IconosLucide.Prohibido, paleta.textoBloqueado)
                     MarcaContratista.VENCIDO -> IconoMarca(IconosLucide.CalendarioConX, paleta.textoBloqueado)
                 }
@@ -313,7 +325,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                     marca.palabra,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (adentro) paleta.textoAdentro else paleta.textoBloqueado,
+                    color = if (adentro) paleta.acento else paleta.textoBloqueado,
                 )
             }
         }

@@ -12,8 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,13 +56,15 @@ private fun ListaCorreoActivos(
     onSincronizar: () -> Unit,
     contentPadding: PaddingValues,
     onElegir: (FilaCorreoActiva) -> Unit,
+    pista: String? = null,
 ) {
     ListaConEstados(
+        pista = pista,
         filas = filas,
         clave = { it.clave() },
         cargando = cargando,
-        tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
-        detalleVacio = if (busqueda.isBlank()) "Cuando alguien ingrese, aparece aquí." else "Pruebe con otro dato de la persona.",
+        tituloVacio = if (busqueda.isBlank()) "Nadie adentro por correo" else "Sin resultados",
+        detalleVacio = if (busqueda.isBlank()) DETALLE_VACIO_INGRESO else "Pruebe con otra cédula, nombre o motivo.",
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = contentPadding,
@@ -222,12 +222,13 @@ fun PantallaPorCorreo(
                             onSincronizar = onSincronizar,
                             contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
                             onElegir = { filaParaSalida = it },
+                            pista = pistaListaAdentro(viewModel.activos.size),
                         )
                     }
 
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = {
+                    AccionPrincipal(IconosLucide.Mas, "Nuevo ingreso por correo", onClick = {
                         mostrandoFormulario = true
                         escaneando = true
                         escaneoDirecto = true
@@ -310,7 +311,7 @@ private fun FormularioNuevoIngresoCorreo(
     // `imePadding()` en un Column SIN `fillMaxSize`, mismo motivo que en
     // [FormularioNuevoIngresoProveedor].
     PantallaConGestoVolver(onVolver = onVolver) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
         val scrollState = rememberScrollState()
         val scope = rememberCoroutineScope()
         Column(modifier = Modifier.verticalScroll(scrollState).imePadding()) {

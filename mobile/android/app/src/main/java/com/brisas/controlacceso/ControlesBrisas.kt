@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.selectable
@@ -27,11 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -45,9 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -78,11 +73,13 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.control_acceso_mobile.EncargadoRuta
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
  * que el mockup, que usa esquinas visibles, no un óvalo completo. */
-internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
+internal val FormaCampoBrisas = RoundedCornerShape(RADIO_CONTROL)
 
 /** Altura de los campos de búsqueda "filled" (~10% más bajo que la altura
  * por defecto de un `TextField` sin label, pedido explícito 2026-09-15) --
@@ -93,7 +90,7 @@ internal val AlturaBusquedaBrisas = 50.dp
 
 // Antes que [FormaPildoraBrisas]: las propiedades de un archivo se inicializan
 // en orden.
-private val RADIO_PILDORA = 12.dp
+private val RADIO_PILDORA = RADIO_CONTROL
 
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
  * completa (percent=50), se veía más redondeada que el mockup, que usa
@@ -156,7 +153,7 @@ internal fun CampoBusquedaBrisas(
             visualTransformation = VisualTransformation.None,
             interactionSource = interaccion,
             placeholder = { Text(ayuda, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = { Icon(IconosLucide.Lupa, contentDescription = null) },
             trailingIcon = if (valor.isEmpty()) {
                 null
             } else {
@@ -173,7 +170,7 @@ internal fun CampoBusquedaBrisas(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.Cancel,
+                            IconosLucide.BorrarTexto,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
@@ -207,10 +204,10 @@ internal val FormaBusquedaBrisas: Shape get() = FormaPiezaEntera
 // una ranura fina.
 
 /** Radio de las esquinas de afuera de las piezas de abajo. */
-internal val RADIO_PIEZA = 18.dp
+internal val RADIO_PIEZA = RADIO_TARJETA
 
 /** Radio de las esquinas del corte, donde se juntan dos piezas. */
-internal val RADIO_CORTE = 6.dp
+internal val RADIO_CORTE = RADIO_CHICO
 
 /** La ranura entre las dos mitades de una pieza cortada. */
 internal val ESPACIO_CORTE = 4.dp
@@ -293,16 +290,17 @@ internal suspend fun ScrollState.seguirFondoMientrasAbreTeclado() {
 /// Lo que tarda el teclado en abrirse, con margen.
 private const val MS_APERTURA_TECLADO = 600L
 
-/** Acciones principales: forma y área táctil comunes en todas las pantallas.
- * Dentro de una sección, en su color ([LocalRellenoBotones]). */
+/** Acciones principales: forma y área táctil comunes en todas las pantallas,
+ * siempre en el azul de la app (también dentro de una sección, ver
+ * `AcentoSeccion.kt`). */
 @Composable
 fun BotonBrisas(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(
-        containerColor = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas,
-        contentColor = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas,
+        containerColor = ColorRellenoBrisas,
+        contentColor = ColorSobreRellenoBrisas,
     ),
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -317,7 +315,7 @@ fun BotonBrisas(
     )
 }
 
-/** Acciones de menor jerarquía, con la misma forma y área táctil. */
+/** Acciones de menor jerarquía, con la misma forma y un poco más bajas. */
 @Composable
 fun BotonDiscretoBrisas(
     onClick: () -> Unit,
@@ -327,7 +325,7 @@ fun BotonDiscretoBrisas(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = AlturaControlBrisas),
+        modifier = modifier.heightIn(min = AlturaControlDiscretoBrisas),
         enabled = enabled,
         shape = FormaControlBrisas,
         contentPadding = PaddingValues(horizontal = EspacioControlBrisas),
@@ -390,7 +388,7 @@ fun FilaPildoras(
             val activo = indice == seleccionado
             val colorTexto by animateColorAsState(
                 targetValue = if (activo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+                animationSpec = tween(MS_FUNDIDO_ENTRADA),
                 label = "textoPildora",
             )
             Box(
@@ -420,31 +418,19 @@ fun FilaPildoras(
     }
 }
 
-private const val DURACION_FUNDIDO_PILDORA_MS = 300
 
-/** Avatar circular con inicial, para el header de [PantallaPrincipal]. */
-@Composable
-fun AvatarBrisas(inicial: String, modifier: Modifier = Modifier, tamano: Dp = 48.dp) {
-    Box(
-        modifier = modifier.size(tamano).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            inicial.uppercase(),
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleLarge,
-        )
-    }
-}
-
-/// Lado de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra de
-/// arriba ocupe menos (pedido del usuario 2026-10-29); sigue sobre el mínimo
-/// táctil con el aire alrededor.
+/// Lado visible de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra
+/// de arriba ocupe menos (pedido del usuario 2026-10-29).
 internal val TAMANO_BOTON_CUADRADO = 36.dp
 
+/// Aire tocable alrededor del cuadradito: el área que responde al dedo mide
+/// 44dp (2026-11-14, fase 2 de `docs/handoff-rediseno-movil-ux.md`; con
+/// guantes, 36dp se erraba) sin que el cuadradito crezca.
+internal val MARGEN_TACTIL_BOTON_CUADRADO = 4.dp
+
 /** Botón de icono dentro de un cuadradito blanco redondeado -- reemplaza el
- * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. */
+ * `IconButton` plano de Material3 en el header de [PantallaPrincipal]. Se
+ * toca en un área de 44dp; el cuadradito y su onda siguen de 36dp. */
 @Composable
 fun BotonIconoCuadradoBrisas(
     onClick: () -> Unit,
@@ -452,15 +438,23 @@ fun BotonIconoCuadradoBrisas(
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val interaccion = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .size(TAMANO_BOTON_CUADRADO)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = interaccion, indication = null, enabled = enabled, onClick = onClick)
+            .padding(MARGEN_TACTIL_BOTON_CUADRADO),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .size(TAMANO_BOTON_CUADRADO)
+                .clip(RoundedCornerShape(RADIO_CONTROL))
+                .background(MaterialTheme.colorScheme.surface)
+                .indication(interaccion, ripple()),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
     }
 }
 
@@ -508,7 +502,7 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+        Icon(IconosLucide.Cerrar, contentDescription = "Cancelar", tint = Color.White)
     }
 }
 
@@ -530,9 +524,9 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(IconosLucide.Lapiz, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
 }

@@ -1,18 +1,12 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,9 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -71,7 +62,7 @@ import androidx.compose.ui.unit.dp
 // desde abajo, como la app Teléfono de iOS 26 (pedido del usuario 2026-10-21).
 
 /// Lo que hace el botón redondo de abajo: lo pone la pantalla a la vista
-/// (cámara en Ingreso, lupa en Salida y KOF, "+" en Proveedores y Correo).
+/// (un "+" de nuevo ingreso en todas las secciones desde 2026-11-14).
 internal class AccionInferior(
     val icono: ImageVector,
     val descripcion: String,
@@ -163,8 +154,8 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
             .fillMaxWidth()
             .height(ALTO_PILDORA_BUSQUEDA)
             .clip(FormaBusquedaBrisas)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, FormaBusquedaBrisas)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(ANCHO_BORDE_PIEZA, paletaActual.bordeSuave, FormaBusquedaBrisas)
             .clickable(onClick = busqueda::abrir)
             .semantics {
                 contentDescription = busqueda.ayuda
@@ -174,12 +165,12 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.Default.Search,
+            IconosLucide.Lupa,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
             busqueda.ayuda,
             style = MaterialTheme.typography.bodyLarge,
@@ -193,41 +184,35 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
 /// Alto de [PildoraBusqueda].
 internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 
-/// Botón redondo de vidrio junto a la barra de secciones, del mismo alto y el
-/// mismo vidrio que ella. Al cambiar de acción, el ícono nuevo entra con
-/// rebote.
+/// Botón redondo junto a la barra de secciones, del mismo alto que ella. Es
+/// la acción principal de la pantalla (registrar un ingreso, entregar un
+/// gafete), así que va relleno del azul de los botones, con el ícono en
+/// blanco (2026-11-14, fase 2 de `docs/handoff-rediseno-movil-ux.md`): antes
+/// era del mismo vidrio que la barra y se perdía junto a ella. Al cambiar de
+/// acción cambia el ícono, sin animar.
 @Composable
 internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
     // Redondo, no la mitad de una pieza (pedido del usuario 2026-10-29): la
     // barra sí queda cortada de su lado, y esa asimetría se ve mejor.
-    BotonRedondoVidrio(
-        tamano = tamano,
-        descripcion = accion.descripcion,
-        onClick = accion::tocar,
-        modifier = modifier,
-        forma = CircleShape,
-    ) {
-        // Por acción y no por ícono: rebota en cada cambio de sección, también
-        // entre dos con el mismo ícono (Proveedores y Correo).
-        AnimatedContent(
-            targetState = accion,
-            transitionSpec = {
-                (fadeIn(tween(MS_FUNDIDO_ENTRADA)) + scaleIn(ResorteBoton, initialScale = 0.4f)) togetherWith
-                    (fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.4f)) using null
+    Box(
+        modifier = modifier
+            .size(tamano)
+            .clip(CircleShape)
+            .background(ColorRellenoBrisas)
+            .clickable(onClick = accion::tocar)
+            .semantics {
+                contentDescription = accion.descripcion
+                role = Role.Button
             },
-            label = "iconoAccion",
-        ) { mostrada ->
-            Icon(mostrada.icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-        }
+        contentAlignment = Alignment.Center,
+    ) {
+        // Sin rebote al cambiar de sección (2026-11-14): desde que es el
+        // mismo "+" en las cuatro, el rebote sólo distraía.
+        Icon(accion.icono, contentDescription = null, tint = ColorSobreRellenoBrisas, modifier = Modifier.size(24.dp))
     }
 }
 
-/// Opacidad del fondo de la barra de secciones y del botón redondo: casi
-/// opaco, para que el texto se lea sin desenfocar lo de atrás (ver
-/// `BarraSecciones`).
-internal const val ALFA_VELO = 0.94f
-
-/// Botón cuadrado con el mismo velo que la barra de secciones ([ALFA_VELO]);
+/// Botón cuadrado de la misma superficie y borde que la barra de secciones;
 /// [forma] dice de qué lado va el corte cuando forma pieza con otra.
 @Composable
 internal fun BotonRedondoVidrio(
@@ -243,8 +228,8 @@ internal fun BotonRedondoVidrio(
         modifier = modifier
             .size(tamano)
             .clip(forma)
-            .background(superficie.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
+            .background(superficie)
+            .border(ANCHO_BORDE_PIEZA, paletaActual.bordeSuave, forma)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = descripcion
@@ -327,7 +312,7 @@ internal fun BuscadorInferior(
                 }
             }
             if (encabezado != null) {
-                Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
                     encabezado()
                 }
             }
@@ -355,14 +340,10 @@ internal fun BuscadorInferior(
                     onClick = onCerrar,
                     forma = FormaPiezaFin,
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = null)
+                    Icon(IconosLucide.Cerrar, contentDescription = null)
                 }
             }
         }
     }
 }
 
-private val ResorteBoton = spring<Float>(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
-    stiffness = Spring.StiffnessMediumLow,
-)

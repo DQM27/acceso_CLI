@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -61,14 +56,14 @@ internal fun FranjaEstado(texto: String, tipo: TipoEstado, modifier: Modifier = 
     }
     val (fondo, contenido) = coloresEstado(tipo)
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = fondo,
         contentColor = contenido,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconoEstado(tipo)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 texto,
                 style = MaterialTheme.typography.bodyMedium,
@@ -86,10 +81,10 @@ private fun IconoEstado(tipo: TipoEstado) {
     }
     Icon(
         when (tipo) {
-            TipoEstado.ERROR -> Icons.Default.ErrorOutline
-            TipoEstado.AVISO -> Icons.Default.Warning
-            TipoEstado.EXITO -> Icons.Default.CheckCircle
-            else -> Icons.Default.Info
+            TipoEstado.ERROR -> IconosLucide.Error
+            TipoEstado.AVISO -> IconosLucide.Advertencia
+            TipoEstado.EXITO -> IconosLucide.Confirmado
+            else -> IconosLucide.Informacion
         },
         contentDescription = null,
         modifier = Modifier.size(20.dp),
@@ -99,8 +94,12 @@ private fun IconoEstado(tipo: TipoEstado) {
 @Composable
 private fun coloresEstado(tipo: TipoEstado): Pair<Color, Color> {
     val esquema = MaterialTheme.colorScheme
+    val paleta = paletaActual
     return when (tipo) {
-        TipoEstado.ERROR, TipoEstado.AVISO -> esquema.errorContainer to esquema.onErrorContainer
+        TipoEstado.ERROR -> esquema.errorContainer to esquema.onErrorContainer
+        // Ámbar, no rojo: "se reintenta solo" o "PRAIND por vencer" no son un
+        // fallo y se leían igual que uno.
+        TipoEstado.AVISO -> paleta.advertenciaSuave to paleta.textoAdvertencia
         TipoEstado.EXITO -> lerp(esquema.surface, ColorExitoBrisas, 0.16f) to ColorExitoBrisas
         TipoEstado.INFO, TipoEstado.CARGANDO -> esquema.surface to esquema.onSurfaceVariant
     }
@@ -161,15 +160,16 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
             // claros quedaban fluorescentes (ver `PaletaLattis.kt`).
             color = when (aviso.tipo) {
                 TipoEstado.EXITO -> paleta.rellenoExito
-                TipoEstado.ERROR, TipoEstado.AVISO -> paleta.rellenoError
-                TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.rellenoInfo
+                TipoEstado.ERROR -> paleta.rellenoError
+                TipoEstado.AVISO -> paleta.rellenoAdvertencia
+                TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.relleno
             },
             contentColor = paleta.sobreRelleno,
             modifier = Modifier.clickable { avisos.ocultar(aviso.id) },
         ) {
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconoEstado(aviso.tipo)
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
                     aviso.texto,
                     style = MaterialTheme.typography.bodyMedium,

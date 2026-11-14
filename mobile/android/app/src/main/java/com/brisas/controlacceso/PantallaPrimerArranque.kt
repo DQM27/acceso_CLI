@@ -21,21 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import uniffi.control_acceso_mobile.Nucleo
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Única pantalla cuando la base está vacía
 /// (`nucleo.requiereConfiguracionInicial()` en [MainActivity]) -- sin login
@@ -119,10 +114,10 @@ fun PantallaPrimerArranque(
                 label = "iconoVinculacion",
             ) { actual ->
                 when (actual) {
-                    PasoVinculacion.CODIGO -> IconoPorteria(Icons.Outlined.QrCodeScanner, compacto)
-                    PasoVinculacion.SINCRONIZANDO -> IconoPorteria(Icons.Outlined.CloudSync, compacto)
+                    PasoVinculacion.CODIGO -> IconoPorteria(IconosLucide.EscanearQr, compacto)
+                    PasoVinculacion.SINCRONIZANDO -> IconoPorteria(IconosLucide.NubeSincronizando, compacto)
                     PasoVinculacion.LISTO -> IconoPorteria(
-                        Icons.Outlined.CheckCircle,
+                        IconosLucide.Confirmado,
                         compacto,
                         fondo = ColorExitoBrisas.copy(alpha = 0.16f),
                         tinte = ColorExitoBrisas,
@@ -163,7 +158,7 @@ private const val MS_CONFIRMACION_VINCULADO = 1400L
 /// Tres rayitas: la del paso actual más larga y en color.
 @Composable
 private fun IndicadorPasos(actual: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(PasoVinculacion.entries.size) { indice ->
             val color by animateColorAsState(
                 if (indice <= actual) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
@@ -211,24 +206,23 @@ private fun ColumnScope.PasoCodigo(
     }
     AnimatedVisibility(visible = escribiendo, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         Column {
-            OutlinedTextField(
-                value = codigo,
-                onValueChange = onCodigo,
-                label = { Text("Código de vinculación") },
-                placeholder = { Text("XXXX-XXXX-XX") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                    capitalization = KeyboardCapitalization.Characters,
-                    autoCorrectEnabled = false,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { if (CodigoVinculacion.completo(codigo)) onVincular() }),
-                textStyle = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            )
+            // Agrupado como el resto de los formularios (2026-11-14).
+            GrupoCampos(modifier = Modifier.padding(top = 16.dp), fondo = MaterialTheme.colorScheme.surfaceVariant) {
+                CampoAgrupado(
+                    valor = codigo,
+                    onCambiar = onCodigo,
+                    ayuda = "XXXX-XXXX-XX",
+                    etiqueta = "Código",
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        capitalization = KeyboardCapitalization.Characters,
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (CodigoVinculacion.completo(codigo)) onVincular() }),
+                    estiloTexto = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
+                )
+            }
             BotonDiscretoBrisas(
                 onClick = onVincular,
                 enabled = CodigoVinculacion.completo(codigo),

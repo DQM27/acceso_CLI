@@ -13,10 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,7 +66,7 @@ internal fun SeccionFormulario(
                 titulo.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
             )
         }
         GrupoCampos(contenido = contenido)
@@ -80,7 +76,7 @@ internal fun SeccionFormulario(
                 style = MaterialTheme.typography.bodySmall,
                 color = if (pieEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = if (pieEsError) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
             )
         }
     }
@@ -96,28 +92,28 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 12.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(MaterialTheme.colorScheme.primaryContainer)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.DocumentScanner, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(IconosLucide.EscanearDocumento, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(titulo, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            IconosLucide.FlechaDerecha,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
@@ -159,7 +155,7 @@ internal fun FilaSelector(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            IconosLucide.FlechaDerecha,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -229,7 +225,7 @@ internal fun FilaCrear(texto: String, etiqueta: String = "Crear «$texto»", onC
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Icon(IconosLucide.MasEnCirculo, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(12.dp))
         Text(
             etiqueta,

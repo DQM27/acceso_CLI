@@ -21,11 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,10 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.animation.AnimatedVisibility
@@ -56,7 +49,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -73,6 +65,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Menú de la cuenta de quien tiene la sesión, mismo lugar que el menú de
 /// usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`): la
@@ -100,6 +94,9 @@ fun MenuCuenta(
     unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
+    // Alta de un contratista sin buscarlo antes (desde 2026-11-14 ya no hay
+    // botón propio arriba, ver `PantallaPrincipal`).
+    onNuevoContratista: () -> Unit,
     onAyuda: () -> Unit,
     onCerrarSesion: () -> Unit,
     actualizador: ActualizacionViewModel,
@@ -151,7 +148,7 @@ fun MenuCuenta(
                 )
             }
         }
-        if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp))
+        if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = (-1).dp, y = 1.dp))
 
         if (visible.currentState || visible.targetState) {
             // Debajo del botón, alineado a su borde derecho.
@@ -162,15 +159,16 @@ fun MenuCuenta(
                 onDismissRequest = ::cerrar,
                 properties = PopupProperties(focusable = true),
             ) {
-                // Como los menús de iOS 26: el panel brota del botón (crece
-                // desde su esquina, con un resorte que se pasa un poco) y al
-                // cerrarse se encoge de vuelta hacia él.
+                // El panel brota del botón (crece desde su esquina) y al
+                // cerrarse se encoge de vuelta hacia él: dice de dónde salió.
+                // Sin resorte ni filas escalonadas desde 2026-11-14 (fase 3):
+                // el guardia lo abre muchas veces por turno.
                 AnimatedVisibility(
                     visibleState = visible,
                     enter = fadeIn(tween(MS_SALIDA)) +
-                        scaleIn(ResorteMenu, initialScale = 0.25f, transformOrigin = OrigenEsquina),
+                        scaleIn(tween(MS_ENTRADA, easing = CurvaEntrada), initialScale = 0.25f, transformOrigin = OrigenEsquina),
                     exit = fadeOut(tween(MS_SALIDA)) +
-                        scaleOut(tween(MS_SALIDA + 40), targetScale = 0.25f, transformOrigin = OrigenEsquina),
+                        scaleOut(tween(MS_SALIDA), targetScale = 0.25f, transformOrigin = OrigenEsquina),
                     label = "panelCuenta",
                 ) {
                     PanelCuenta(
@@ -178,6 +176,10 @@ fun MenuCuenta(
                         unidad = unidad,
                         temaElegido = temaElegido,
                         onElegirTema = onElegirTema,
+                        onNuevoContratista = {
+                            cerrar()
+                            onNuevoContratista()
+                        },
                         onAyuda = {
                             cerrar()
                             onAyuda()
@@ -207,35 +209,35 @@ fun MenuCuenta(
 /// El contenido del menú, a la manera de iOS: tarjeta de esquinas grandes con
 /// sombra suave; en cada opción el texto a la izquierda y el ícono a la
 /// derecha; un separador grueso aparta "Cerrar sesión", en rojo, del resto.
-/// Las filas entran escalonadas, una tras otra.
 @Composable
 private fun PanelCuenta(
     sesion: UsuarioSesion,
     unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
+    onNuevoContratista: () -> Unit,
     onAyuda: () -> Unit,
     actualizacion: OpcionActualizacion?,
     onActualizacion: (AccionActualizacion) -> Unit,
     onCerrarSesion: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(RADIO_TARJETA),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         // Angosto a propósito: a 260dp tapaba media pantalla.
         modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 230.dp),
     ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
-            FilaEscalonada(indice = 0) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            Box {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(RADIO_CHICO))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -270,23 +272,35 @@ private fun PanelCuenta(
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 1) {
-                // El menú queda abierto: se ve el cambio de tema en el acto.
-                SelectorTema(elegido = temaElegido, onElegir = onElegirTema)
-            }
-            SeparadorFino()
-            FilaEscalonada(indice = 2) {
-                // El manual de uso, sin internet (ver [PantallaAyuda]).
-                OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
+            Box {
+                // Una ficha y no una persona con "+": ése es el ícono de
+                // "nuevo ingreso" en Proveedores y Correo.
+                OpcionMenu(texto = "Nuevo contratista", onClick = onNuevoContratista) {
                     Icon(
-                        Icons.AutoMirrored.Filled.HelpOutline,
+                        IconosLucide.Ficha,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 3) {
+            Box {
+                // El menú queda abierto: se ve el cambio de tema en el acto.
+                SelectorTema(elegido = temaElegido, onElegir = onElegirTema)
+            }
+            SeparadorFino()
+            Box {
+                // El manual de uso, sin internet (ver [PantallaAyuda]).
+                OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
+                    Icon(
+                        IconosLucide.Ayuda,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            SeparadorFino()
+            Box {
                 if (actualizacion != null) {
                     OpcionMenu(
                         texto = actualizacion.texto,
@@ -301,7 +315,7 @@ private fun PanelCuenta(
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tinte)
                         } else {
                             Icon(
-                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
+                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) IconosLucide.Descargar else IconosLucide.Actualizar,
                                 contentDescription = null,
                                 tint = tinte,
                             )
@@ -321,9 +335,9 @@ private fun PanelCuenta(
                     .height(6.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
-            FilaEscalonada(indice = 4) {
+            Box {
                 OpcionMenu(texto = "Cerrar sesión", color = MaterialTheme.colorScheme.error, onClick = onCerrarSesion) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(IconosLucide.Salida, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -370,7 +384,7 @@ private fun OpcionMenu(
                 val avance by animateFloatAsState(progreso, label = "progresoActualizacion")
                 LinearProgressIndicator(
                     progress = { avance },
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(2.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(RADIO_CHICO)),
                 )
             }
         }
@@ -386,8 +400,8 @@ private fun SelectorTema(elegido: TemaApp?, onElegir: (TemaApp?) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(3.dp),
     ) {
@@ -396,10 +410,10 @@ private fun SelectorTema(elegido: TemaApp?, onElegir: (TemaApp?) -> Unit) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(RoundedCornerShape(RADIO_CHICO))
                     .background(if (activa) MaterialTheme.colorScheme.surface else Color.Transparent)
                     .selectable(selected = activa, role = Role.RadioButton, onClick = { onElegir(tema) })
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val color = if (activa) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -430,25 +444,6 @@ private fun SeparadorFino() {
     )
 }
 
-/// Cada fila entra un poco después que la anterior, subiendo apenas y
-/// fundiéndose: el menú se "arma" en vez de aparecer de golpe.
-@Composable
-private fun FilaEscalonada(indice: Int, contenido: @Composable () -> Unit) {
-    val avance = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(indice * MS_ESCALON)
-        avance.animateTo(1f, tween(MS_FUNDIDO_ENTRADA))
-    }
-    Box(
-        modifier = Modifier.graphicsLayer {
-            alpha = avance.value
-            translationY = (1f - avance.value) * 8.dp.toPx()
-        },
-    ) {
-        contenido()
-    }
-}
-
 /// Sol (claro) o luna (oscuro), los íconos del escritorio ([IconosLucide]).
 /// Al cambiar, con rebote (pedido del usuario 2026-10-21): el nuevo entra
 /// creciendo y girando, se pasa un poco y vuelve; el que se va se encoge con
@@ -476,19 +471,12 @@ internal fun IconoTema(tema: TemaApp) {
     }
 }
 
-/// Alto de [BotonIconoCuadradoBrisas]: el panel se abre justo debajo.
-private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO
+/// Dónde termina el cuadradito visible de [BotonIconoCuadradoBrisas], medido
+/// desde arriba de su área tocable: el panel se abre justo debajo.
+private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO + MARGEN_TACTIL_BOTON_CUADRADO
 
 /// El panel crece desde la esquina superior derecha, donde está el botón.
 private val OrigenEsquina = TransformOrigin(1f, 0f)
-
-private const val MS_ESCALON = 35L
-
-/// Resorte del panel al brotar: rápido y con un rebote corto.
-private val ResorteMenu = spring<Float>(
-    dampingRatio = 0.7f,
-    stiffness = Spring.StiffnessMedium,
-)
 
 /// Puntito sobre la inicial: late unas veces al aparecer (llama la atención
 /// una vez) y queda fijo. Si el sistema tiene las animaciones apagadas, las

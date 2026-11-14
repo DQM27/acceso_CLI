@@ -14,11 +14,11 @@ Cualquier usuario con sesión abierta.
 - El **nombre de la sección** (**Contratistas**, **Proveedores**,
   **Correo** o **KOF**). Cuántos hay adentro lo dice el globito de cada
   sección en la barra de abajo.
-- **Persona con un +**: [Nuevo contratista](nuevo-contratista.md).
 - **Campanita**: [avisos de la administración](avisos-de-la-administracion.md).
   Un globito dice cuántos hay sin leer.
 - **Cuadrito con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md),
-  con su nombre y la **unidad** (el sitio) del teléfono.
+  con su nombre, la **unidad** (el sitio) del teléfono y
+  [Nuevo contratista](nuevo-contratista.md).
 
 ## Abajo, al alcance del pulgar
 
@@ -32,8 +32,9 @@ Cualquier usuario con sesión abierta.
   Para cambiar de sección, toque su ícono o **deslice el dedo de lado**
   sobre la pantalla (desde el centro, no desde el borde). Con una cámara,
   un formulario o la búsqueda abiertos no se cambia de sección al deslizar.
-- **Botón redondo**, a la derecha de la barra: la acción principal de la
-  sección (escanear un documento, entregar un gafete o un nuevo ingreso).
+- **Botón redondo azul +**, a la derecha de la barra: el nuevo ingreso de
+  la sección (en **Contratistas** abre la cámara para escanear el
+  documento; en **KOF** entrega un gafete).
 - **Búsqueda**, encima de la barra: tóquela para buscar en la sección. El
   campo sube con el teclado y lo que coincide se marca en la lista. En
   **KOF**, **Proveedores** y **Correo** sólo aparece cuando hay alguien en

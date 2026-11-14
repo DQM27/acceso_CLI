@@ -119,7 +119,7 @@ fun PantallaRutas(nucleo: Nucleo) {
     val puedeConfirmar =
         paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
         // Scroll propio para este bloque -- sin esto, el teclado tapaba el
         // input de "Placa o número de unidad" (paso 3) sin forma de
         // deslizar hasta él (reportado 2026-09-20). No se puede envolver
@@ -137,10 +137,10 @@ fun PantallaRutas(nucleo: Nucleo) {
             "Registrar salida",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp),
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PasoEncargado(
                 completado = paso1Completo,
                 texto = viewModel.textoEncargado,
@@ -237,13 +237,13 @@ fun PantallaRutas(nucleo: Nucleo) {
             "Rutas activas",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
         )
 
         ListaConDesvanecido {
             LazyColumn(
-                contentPadding = PaddingValues(top = 5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                contentPadding = PaddingValues(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(viewModel.activas, key = { it.id }) { salida ->
                     FilaSalidaRuta(

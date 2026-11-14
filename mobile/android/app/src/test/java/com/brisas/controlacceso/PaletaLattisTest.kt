@@ -41,26 +41,9 @@ class PaletaLattisTest {
         for ((tema, p) in paletas) {
             exigir("$tema botón general", p.relleno, p.sobreRelleno, 4.5)
             exigir("$tema aviso de éxito", p.rellenoExito, p.sobreRelleno, 4.5)
-            exigir("$tema aviso de información", p.rellenoInfo, p.sobreRelleno, 4.5)
             exigir("$tema aviso de error", p.rellenoError, p.sobreRelleno, 4.5)
             exigir("$tema texto sobre acento", p.acento, p.sobreAcento, 4.5)
         }
-    }
-
-    @Test
-    fun laTarjetaDeAdentroSeLeeYSeDistingue() {
-        for ((tema, p) in paletas) {
-            exigir("$tema texto adentro", p.texto, p.adentroSuave, 4.5)
-            exigir("$tema secundario adentro", p.textoSecundario, p.adentroSuave, 4.5)
-            exigir("$tema error adentro", p.error, p.adentroSuave, 4.5)
-            exigir("$tema palabra ADENTRO", p.textoAdentro, p.adentroSuave, 4.5)
-            // La franja, contra el fondo de la propia tarjeta (elemento
-            // gráfico: 3:1).
-            exigir("$tema franja adentro", p.franjaAdentro, p.adentroSuave, 3.0)
-        }
-        // Que no se confunda con una tarjeta normal.
-        assertTrue(PaletaDia.adentroSuave != PaletaDia.tarjeta)
-        assertTrue(PaletaNoche.adentroSuave != PaletaNoche.tarjeta)
     }
 
     @Test
@@ -72,23 +55,55 @@ class PaletaLattisTest {
             exigir("$tema franja bloqueado", p.franjaBloqueado, p.bloqueadoSuave, 3.0)
         }
         for (p in listOf(PaletaDia, PaletaNoche)) {
-            assertTrue(p.bloqueadoSuave != p.adentroSuave)
             assertTrue(p.bloqueadoSuave != p.salidaSuave)
             assertTrue(p.bloqueadoSuave != p.tarjeta)
         }
     }
 
     @Test
-    fun laTarjetaDeSalidaPorGafeteSeLee() {
+    fun laTarjetaDeSalidaSeLee() {
+        // La búsqueda por gafete y quien ya está adentro en la de
+        // contratistas: la palabra ADENTRO y su flecha van en el acento, y el
+        // aviso de acceso del núcleo en rojo.
         for ((tema, p) in paletas) {
             exigir("$tema texto salida", p.texto, p.salidaSuave, 4.5)
             exigir("$tema secundario salida", p.textoSecundario, p.salidaSuave, 4.5)
             // La hora de otro día sale en ámbar.
             exigir("$tema hora de otro día salida", p.textoAdvertencia, p.salidaSuave, 4.5)
+            exigir("$tema palabra ADENTRO", p.acento, p.salidaSuave, 4.5)
+            exigir("$tema aviso de acceso", p.error, p.salidaSuave, 4.5)
             exigir("$tema franja salida", p.franjaSalida, p.salidaSuave, 3.0)
+            assertTrue("$tema salida distinta de la tarjeta", p.salidaSuave != p.tarjeta)
         }
-        assertTrue(PaletaDia.salidaSuave != PaletaDia.adentroSuave)
-        assertTrue(PaletaNoche.salidaSuave != PaletaNoche.adentroSuave)
+    }
+
+    @Test
+    fun laAdvertenciaSeLeeYNoSeConfundeConElError() {
+        for ((tema, p) in paletas) {
+            exigir("$tema franja de advertencia", p.textoAdvertencia, p.advertenciaSuave, 4.5)
+            exigir("$tema aviso breve de advertencia", p.rellenoAdvertencia, p.sobreRelleno, 4.5)
+            assertTrue("$tema advertencia distinta del error", p.advertenciaSuave != p.errorSuave)
+            assertTrue("$tema relleno de advertencia distinto del de error", p.rellenoAdvertencia != p.rellenoError)
+        }
+    }
+
+    @Test
+    fun losCamposYElGafeteSeLeen() {
+        // El número de gafete va en texto principal sobre `variante`, y los
+        // textos de ayuda de los campos en secundario.
+        for ((tema, p) in paletas) {
+            exigir("$tema gafete", p.texto, p.variante, 7.0)
+            exigir("$tema secundario sobre campo", p.textoSecundario, p.variante, 4.5)
+            exigir("$tema secundario sobre fondo", p.textoSecundario, p.fondo, 4.5)
+        }
+    }
+
+    @Test
+    fun enClaroLaTarjetaSeSeparaDelFondo() {
+        // Con Tokyo Day el fondo y la tarjeta daban 1,13:1; tarjeta blanca
+        // sobre gris muy claro más el borde suave las separa.
+        assertTrue(PaletaDia.tarjeta != PaletaDia.fondo)
+        exigir("borde suave contra tarjeta", PaletaDia.bordeSuave, PaletaDia.tarjeta, 1.4)
     }
 
     @Test

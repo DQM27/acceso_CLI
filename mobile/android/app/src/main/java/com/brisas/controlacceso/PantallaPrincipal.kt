@@ -27,19 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.NotificationImportant
-import androidx.compose.material.icons.filled.Route
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -47,40 +34,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -93,25 +64,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.control_acceso_mobile.EstadoBandeja
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// App limitada a registros rápidos + historial (decisión 2026-09-06),
 /// con una única excepción reincorporada el 2026-09-12: el alta de
-/// contratista (`PantallaNuevoContratista`, ícono "+" de la barra
-/// superior), ahora con OCR de carnet PRAIND además del formulario manual
+/// contratista (`PantallaNuevoContratista`, desde el menú de la cuenta o
+/// al no encontrar a nadie en la búsqueda), ahora con OCR de carnet PRAIND además del formulario manual
 /// original. El resto de la decisión sigue en pie -- empresa y usuario
 /// nuevos siguen sin pantalla propia acá (escritorio/web/CLI), y tampoco
 /// volvió la pestaña de nube.
 ///
-/// `mostrarNuevoContratista`, `mostrarAvisos` (bandeja de la campanita,
-/// 2026-10-18) y `mostrarAyuda` (2026-10-24) son toda la navegación que hace
-/// falta -- con pocas pantallas
-/// adicionales que nunca se abren a la vez no se justifica un enum
-/// `Pantalla` como el que existió antes: la que está en `true` reemplaza por
-/// completo la Column de pestañas, igual que hacía aquel enum, sin la
-/// indirección de más.
+/// La navegación es una sola variable, `panel` ([PanelPrincipal]): las
+/// pestañas o una pantalla que se abre encima y las reemplaza por completo
+/// (bandeja de avisos, "Nuevo contratista", Ayuda, reconexión). Con tan pocas
+/// pantallas no hace falta Navigation-Compose.
 @Composable
 fun PantallaPrincipal(
     nucleo: Nucleo,
@@ -125,20 +94,17 @@ fun PantallaPrincipal(
 ) {
     RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
-    var mostrarNuevoContratista by remember { mutableStateOf(false) }
-    // Lo que se buscó en Activos sin encontrar a nadie, para arrancar el alta
-    // con eso (vacío desde el ícono de arriba).
+    // Qué ocupa la pantalla debajo de la barra de arriba: las pestañas o una
+    // de las pantallas que se abren encima (bandeja de avisos, "Nuevo
+    // contratista", Ayuda, reconexión). Una sola variable: antes eran cuatro
+    // sí/no y cada apertura tenía que apagar las otras tres a mano.
+    var panel by remember { mutableStateOf(PanelPrincipal.PESTANAS) }
+    // Lo que se buscó en Contratistas sin encontrar a nadie, para arrancar el
+    // alta con eso (vacío desde el menú de la cuenta).
     var textoNuevoContratista by remember { mutableStateOf("") }
-    // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
-    // pestañas, igual que `mostrarNuevoContratista`.
-    var mostrarAvisos by remember { mutableStateOf(false) }
-    // La Ayuda (manual de uso, desde el menú de la cuenta): otra más, igual.
-    var mostrarAyuda by remember { mutableStateOf(false) }
-    // Reconectar este teléfono retirado en el panel (ver
-    // `PantallaReconectarEquipo`): otra más. `equipoRetirado` lo decide el
-    // núcleo; se vuelve a preguntar tras cada sincronización y al llegar la
-    // expulsión en vivo.
-    var mostrarReconexion by remember { mutableStateOf(false) }
+    // Teléfono retirado en el panel (ver `PantallaReconectarEquipo`): lo
+    // decide el núcleo; se vuelve a preguntar tras cada sincronización y al
+    // llegar la expulsión en vivo.
     var equipoRetirado by remember { mutableStateOf(false) }
     // La pestaña elegida. Vive acá y no junto a las pestañas: al abrir la
     // bandeja o "Nuevo contratista" las pestañas salen de la composición, y
@@ -148,12 +114,11 @@ fun PantallaPrincipal(
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
     // 2026-09-19, pedido explícito del usuario: doble tap para salir, mismo
-    // patrón estándar de Android). `enabled = !mostrarNuevoContratista`
-    // para no competir con el BackHandler propio de esa pantalla cuando
-    // está abierta.
+    // patrón estándar de Android). Sólo con las pestañas a la vista: las
+    // pantallas de encima tienen su propio BackHandler.
     val contexto = LocalContext.current
     var ultimoTapAtras by remember { mutableLongStateOf(0L) }
-    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos && !mostrarAyuda && !mostrarReconexion) {
+    BackHandler(enabled = panel == PanelPrincipal.PESTANAS) {
         val ahora = System.currentTimeMillis()
         if (ahora - ultimoTapAtras < 2000) {
             (contexto as? Activity)?.finish()
@@ -193,15 +158,14 @@ fun PantallaPrincipal(
     val aperturaAvisos by avisosViewModel.aperturaSolicitada.collectAsState()
     LaunchedEffect(aperturaAvisos) {
         if (aperturaAvisos) {
-            mostrarNuevoContratista = false
-            mostrarAyuda = false
-            mostrarAvisos = true
+            panel = PanelPrincipal.AVISOS
             avisosViewModel.aperturaAtendida()
         }
     }
     // Con la bandeja a la vista, que "hace 5 min" avance.
-    LaunchedEffect(mostrarAvisos) {
-        while (mostrarAvisos) {
+    val enAvisos = panel == PanelPrincipal.AVISOS
+    LaunchedEffect(enAvisos) {
+        while (enAvisos) {
             delay(60_000)
             avisosViewModel.refrescar()
         }
@@ -230,15 +194,23 @@ fun PantallaPrincipal(
     // de Toasts que salían abajo tapando la barra de secciones.
     val avisosBreves = remember { AvisosBreves() }
     val scope = rememberCoroutineScope()
+    // El último aviso en vivo ya guardado en la base local; lo atiende el
+    // efecto de más abajo, que tiene a mano los ViewModels de cada sección.
+    var cambioEnVivo by remember { mutableStateOf<CambioEnVivo?>(null) }
     val realtime = remember(nucleo, scope, sesion) {
         NubeRealtime(
             nucleo = nucleo,
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
-            // Aviso en vivo con la fila ya guardada: refresca Activos al
-            // instante, sin esperar la sincronización.
-            onCambioAplicado = { refrescarNube += 1 },
+            // Aviso en vivo con la fila ya guardada: refresca al instante,
+            // sin esperar la sincronización, sólo la sección de esa tabla
+            // (2026-11-14, fase 5 de `docs/handoff-rediseno-movil-ux.md`):
+            // antes cada aviso recargaba las cuatro, ocho lecturas al núcleo
+            // por el mismo candado.
+            onCambioAplicado = { tabla ->
+                cambioEnVivo = CambioEnVivo(seccionDeTabla(tabla), (cambioEnVivo?.id ?: 0L) + 1)
+            },
             // El canal corre en `scope` (hilo principal): el aviso puede
             // mostrarse directo. El trabajo local sigue disponible.
             onExpulsado = {
@@ -366,7 +338,7 @@ fun PantallaPrincipal(
     val totalCorreo = correoViewModel.activos.size
     val adentro = remember(totalActivos, totalKof, totalProveedores, totalCorreo) {
         mapOf(
-            SeccionPrincipal.ACTIVOS to totalActivos,
+            SeccionPrincipal.CONTRATISTAS to totalActivos,
             SeccionPrincipal.KOF to totalKof,
             SeccionPrincipal.PROVEEDORES to totalProveedores,
             SeccionPrincipal.CORREO to totalCorreo,
@@ -385,22 +357,28 @@ fun PantallaPrincipal(
     // atrasado.
     LaunchedEffect(refrescarNube) {
         if (refrescarNube == 0) return@LaunchedEffect
-        val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-        val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda || mostrarReconexion
-        if (seccion != SeccionPrincipal.ACTIVOS || fueraDePestanas) activosViewModel.refrescar()
+        val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.CONTRATISTAS }
+        val fueraDePestanas = panel != PanelPrincipal.PESTANAS
+        if (seccion != SeccionPrincipal.CONTRATISTAS || fueraDePestanas) activosViewModel.refrescar()
         if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
         if (seccion != SeccionPrincipal.PROVEEDORES || fueraDePestanas) proveedoresViewModel.refrescarActivos()
         if (seccion != SeccionPrincipal.CORREO || fueraDePestanas) correoViewModel.refrescarActivos()
     }
+    // Un aviso en vivo ya guardado: sólo su sección, esté o no a la vista (la
+    // pantalla lee del mismo ViewModel). Tabla desconocida: todas, como una
+    // sincronización.
+    LaunchedEffect(cambioEnVivo) {
+        val cambio = cambioEnVivo ?: return@LaunchedEffect
+        when (cambio.seccion) {
+            SeccionPrincipal.CONTRATISTAS -> activosViewModel.refrescar()
+            SeccionPrincipal.KOF -> gafetesViewModel.refrescarActivos()
+            SeccionPrincipal.PROVEEDORES -> proveedoresViewModel.refrescarActivos()
+            SeccionPrincipal.CORREO -> correoViewModel.refrescarActivos()
+            SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS, null -> refrescarNube += 1
+        }
+    }
 
     // Qué ocupa la pantalla debajo de la barra superior.
-    val panel = when {
-        mostrarAvisos -> PanelPrincipal.AVISOS
-        mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
-        mostrarAyuda -> PanelPrincipal.AYUDA
-        mostrarReconexion -> PanelPrincipal.RECONEXION
-        else -> PanelPrincipal.PESTANAS
-    }
     // Cámaras y formularios dentro de las pestañas (ver [OcultarBarraSecciones]):
     // esconden la barra de secciones de abajo y también la de arriba.
     val pantallasCompletas = remember { PantallasCompletas() }
@@ -416,7 +394,7 @@ fun PantallaPrincipal(
     val listaDesplazada = remember { mutableStateOf(false) }
     // La que está a la vista: cambia a mitad del deslizamiento, así el título,
     // el color y la barra acompañan al dedo.
-    val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.ACTIVOS }
+    val seccion = SECCIONES_VISIBLES.getOrElse(paginas.currentPage) { SeccionPrincipal.CONTRATISTAS }
 
     // Alto de la barra de arriba, para que la nieve sepa dónde termina.
     var altoBarraSuperiorPx by remember { mutableIntStateOf(0) }
@@ -432,7 +410,10 @@ fun PantallaPrincipal(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { altoBarraSuperiorPx = it.height }
-                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+                // Los botones de la derecha traen su propio aire tocable
+                // (`MARGEN_TACTIL_BOTON_CUADRADO`, 4dp por lado): se descuenta
+                // acá para que la barra mida y se alinee igual que antes.
+                .padding(start = 16.dp, end = 16.dp - MARGEN_TACTIL_BOTON_CUADRADO, top = 0.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -454,20 +435,15 @@ fun PantallaPrincipal(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonIconoCuadradoBrisas(onClick = {
-                    mostrarAvisos = false
-                    mostrarAyuda = false
-                    textoNuevoContratista = ""
-                    mostrarNuevoContratista = true
-                }) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
-                }
-                CampanitaAvisos(bandeja, onClick = {
-                    mostrarNuevoContratista = false
-                    mostrarAyuda = false
-                    mostrarAvisos = true
-                })
+            // Sin separación propia: los 8dp entre cuadraditos los ponen sus
+            // márgenes tocables.
+            // Sin botón "Nuevo contratista" (2026-11-14, decisión del dueño):
+            // su ícono era el mismo que "nuevo ingreso" de Proveedores y
+            // Correo, y dar de alta sin buscar antes dejaba duplicados. El
+            // alta se ofrece al buscar o escanear a alguien que no está
+            // registrado (`ResultadosIngreso`) y queda en el menú de la cuenta.
+            Row {
+                CampanitaAvisos(bandeja, onClick = { panel = PanelPrincipal.AVISOS })
                 // Sin botón "Sincronizar": cada lista sincroniza tirando hacia
                 // abajo (ver `ListaConEstados`), y además está el pulso
                 // periódico y Realtime.
@@ -480,11 +456,11 @@ fun PantallaPrincipal(
                     unidad = textoUnidad,
                     temaElegido = GestorTema.temaForzado,
                     onElegirTema = GestorTema::elegir,
-                    onAyuda = {
-                        mostrarAvisos = false
-                        mostrarNuevoContratista = false
-                        mostrarAyuda = true
+                    onNuevoContratista = {
+                        textoNuevoContratista = ""
+                        panel = PanelPrincipal.NUEVO_CONTRATISTA
                     },
+                    onAyuda = { panel = PanelPrincipal.AYUDA },
                     onCerrarSesion = onCerrarSesion,
                     actualizador = actualizador,
                 )
@@ -507,28 +483,19 @@ fun PantallaPrincipal(
         // Arriba de todo lo demás: una emergencia sin leer es lo primero que
         // tiene que ver quien opera.
         val emergencia = bandeja?.emergenciaSinLeer
-        if (emergencia != null && !mostrarAvisos) {
+        if (emergencia != null && panel != PanelPrincipal.AVISOS) {
             FranjaEmergencia(
                 emergencia,
-                onAbrir = {
-                    mostrarNuevoContratista = false
-                    mostrarAyuda = false
-                    mostrarAvisos = true
-                },
+                onAbrir = { panel = PanelPrincipal.AVISOS },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
 
         // Teléfono retirado en el panel: la franja queda fija con el botón
         // para reconectarlo con un código del panel.
-        if (equipoRetirado && !mostrarReconexion) {
+        if (equipoRetirado && panel != PanelPrincipal.RECONEXION) {
             FranjaEquipoRetirado(
-                onReconectar = {
-                    mostrarAvisos = false
-                    mostrarNuevoContratista = false
-                    mostrarAyuda = false
-                    mostrarReconexion = true
-                },
+                onReconectar = { panel = PanelPrincipal.RECONEXION },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
@@ -587,7 +554,7 @@ fun PantallaPrincipal(
                     onLeerTodos = avisosViewModel::leerTodos,
                     onArchivar = { id -> avisosViewModel.archivar(id, sesion.nombre) },
                     onBorrar = { id -> avisosViewModel.borrar(id, sesion.nombre) },
-                    onVolver = { mostrarAvisos = false },
+                    onVolver = { panel = PanelPrincipal.PESTANAS },
                 )
             } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
                 // Con `LocalPantallasCompletas`, su cámara avisa que está a la
@@ -595,7 +562,7 @@ fun PantallaPrincipal(
                 CompositionLocalProvider(LocalPantallasCompletas provides pantallasCompletas) {
                     PantallaNuevoContratista(
                         nucleo,
-                        onVolver = { mostrarNuevoContratista = false },
+                        onVolver = { panel = PanelPrincipal.PESTANAS },
                         // Recién dado de alta, directo a su ingreso en Contratistas:
                         // antes volvía a la lista y había que buscarlo de nuevo. Se
                         // espera a que el formulario de ingreso esté listo y recién
@@ -605,27 +572,27 @@ fun PantallaPrincipal(
                         onGuardado = { id ->
                             scope.launch {
                                 activosViewModel.elegir(id).join()
-                                pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.ACTIVOS)
-                                mostrarNuevoContratista = false
+                                pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.CONTRATISTAS)
+                                panel = PanelPrincipal.PESTANAS
                             }
                         },
                         textoInicial = textoNuevoContratista,
                     )
                 }
             } else if (mostrado == PanelPrincipal.AYUDA) {
-                PantallaAyuda(onVolver = { mostrarAyuda = false })
+                PantallaAyuda(onVolver = { panel = PanelPrincipal.PESTANAS })
             } else if (mostrado == PanelPrincipal.RECONEXION) {
                 PantallaReconectarEquipo(
                     nucleo = nucleo,
                     metadata = metadata,
                     onReconectado = { unidad ->
-                        mostrarReconexion = false
+                        panel = PanelPrincipal.PESTANAS
                         equipoRetirado = false
                         avisosBreves.mostrar("Teléfono reconectado en $unidad", TipoEstado.EXITO)
                         // Lo que quedó pendiente mientras estuvo retirado sube ya.
                         nubeViewModel.sincronizar()
                     },
-                    onVolver = { mostrarReconexion = false },
+                    onVolver = { panel = PanelPrincipal.PESTANAS },
                 )
             } else {
                 // Las secciones van en una barra flotante abajo (ver
@@ -701,19 +668,17 @@ fun PantallaPrincipal(
                             // `when` exhaustivo sobre el enum: agregar una sección sin
                             // su pantalla no compila (antes eran textos y un `else`
                             // que caía en Activos en silencio ante un error de tipeo).
-                            // Cada página con su propio acento.
-                            TemaSeccion(seccionMostrada) {
+                            // El color de la sección sólo va en su pestaña (ver
+                            // `AcentoSeccion.kt`): la página usa el azul de la app.
                                 when (seccionMostrada) {
-                                    SeccionPrincipal.ACTIVOS -> PantallaActivos(
+                                    SeccionPrincipal.CONTRATISTAS -> PantallaActivos(
                                         nucleo,
                                         refrescarNube,
                                         sincronizando = nubeViewModel.sincronizando,
                                         onSincronizar = nubeViewModel::sincronizar,
                                         onNuevoContratista = { texto ->
-                                            mostrarAvisos = false
-                                            mostrarAyuda = false
                                             textoNuevoContratista = texto
-                                            mostrarNuevoContratista = true
+                                            panel = PanelPrincipal.NUEVO_CONTRATISTA
                                         },
                                     )
                                     SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
@@ -737,7 +702,6 @@ fun PantallaPrincipal(
                                     )
                                     SeccionPrincipal.VISITAS -> PantallaVisitas(nucleo, refrescarNube)
                                 }
-                            }
                             }
                         }
                     }
@@ -823,173 +787,6 @@ fun PantallaPrincipal(
 /// un temblor del dedo no la hace aparecer y desaparecer.
 private const val UMBRAL_REPLIEGUE_PX = 6f
 
-/// Campanita de la barra superior: el globito (qué número, si se ve) y si
-/// hay una emergencia pendiente lo decide el núcleo (`EstadoBandeja`). El
-/// globito va sobre la esquina del botón, no adentro: el cuadradito recorta
-/// su contenido.
-@Composable
-private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
-    val contador = bandeja?.contador
-    val hayEmergencia = bandeja?.emergenciaSinLeer != null
-    BadgedBox(badge = { if (contador != null) Badge { Text(contador) } }) {
-        BotonIconoCuadradoBrisas(onClick = onClick) {
-            Icon(
-                if (hayEmergencia) Icons.Default.NotificationImportant else Icons.Default.Notifications,
-                contentDescription = if (contador == null) "Avisos" else "Avisos, ${bandeja?.noLeidos} sin leer",
-                tint = if (hayEmergencia) MaterialTheme.colorScheme.error else LocalContentColor.current,
-            )
-        }
-    }
-}
-
-/// Las secciones en una cápsula flotante abajo (como la barra nueva de
-/// WhatsApp, pedido del usuario 2026-10-21), en vez de la fila de píldoras
-/// arriba: se cambia de sección con el pulgar y arriba queda una sola fila de
-/// opciones. Más baja que la `NavigationBar` de Material 3 (80dp) y separada
-/// de los bordes.
-///
-/// - El fondo: un velo casi opaco del color de la superficie ([ALFA_VELO]).
-///   Sin desenfoque a propósito (Haze, 2026-10-22): redibujar el contenido
-///   desenfocado detrás de la barra en cada frame duplicó el render de
-///   Activos (p90 de 5,5 a 10,1 ms) y subió los frames trabados.
-/// - La pestaña elegida: una píldora gris suave que acompaña al carrusel de
-///   secciones ([posicion], en páginas: se mueve con el dedo al deslizar y
-///   con la animación al tocar); su ícono y su nombre van en el acento de la
-///   sección (ver `AcentoSeccion.kt`).
-/// - Cada sección lleva un globito con cuántos hay adentro.
-///
-/// "KOF" a secas, no "Gafetes KOF" (pedido explícito del usuario
-/// 2026-09-19). "Rutas" no aparece (pedido del usuario 2026-09-23: control de
-/// rutas sin terminar); `PantallaRutas` sigue intacta y para volver a
-/// mostrarla basta con sacarla de `enDesarrollo` en [SeccionPrincipal].
-@Composable
-private fun BarraSecciones(
-    seleccionada: SeccionPrincipal,
-    // Se lee al dibujar: seguir al dedo no recompone la barra en cada frame.
-    posicion: () -> Float,
-    adentro: Map<SeccionPrincipal, Int>,
-    onSeleccionar: (SeccionPrincipal) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val oscuro = temaActual().oscuro
-    val superficie = MaterialTheme.colorScheme.surface
-    val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
-    // Menos redonda que una cápsula e igual de los dos lados (pedidos del
-    // usuario 2026-10-29). La píldora de la sección elegida, concéntrica: el
-    // radio de afuera menos el margen interior, así las curvas quedan
-    // paralelas.
-    val forma = FormaPiezaEntera
-    val radioPildora = RADIO_PIEZA - MARGEN_INTERIOR_BARRA
-    val formaPildora = RoundedCornerShape(radioPildora)
-    val hapticos = rememberHapticos()
-    Row(
-        modifier = modifier
-            .height(ALTO_BARRA_SECCIONES)
-            .clip(forma)
-            .background(superficie.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
-            .padding(MARGEN_INTERIOR_BARRA)
-            .drawBehind {
-                val cantidad = SECCIONES_VISIBLES.size
-                val ancho = size.width / cantidad
-                val actual = posicion()
-                val radio = radioPildora.toPx()
-                drawRoundRect(
-                    color = colorPildora,
-                    topLeft = Offset(actual * ancho, 0f),
-                    size = Size(ancho, size.height),
-                    cornerRadius = CornerRadius(radio),
-                )
-            },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SECCIONES_VISIBLES.forEach { seccion ->
-            val elegida = seccion == seleccionada
-            val acento = acentoDeSeccion(seccion, oscuro)?.color ?: MaterialTheme.colorScheme.primary
-            val color by animateColorAsState(
-                targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(MS_FUNDIDO_ENTRADA),
-                label = "colorSeccion",
-            )
-            val cantidad = adentro[seccion] ?: 0
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(formaPildora)
-                    .selectable(
-                        selected = elegida,
-                        role = Role.Tab,
-                        onClick = {
-                            if (!elegida) hapticos(Haptico.SELECCION)
-                            onSeleccionar(seccion)
-                        },
-                    )
-                    .semantics { if (cantidad > 0) stateDescription = "$cantidad adentro" },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                // Globito gris, no rojo: es una cuenta, no algo que pida
-                // atención (en iOS el rojo es para lo pendiente, como la
-                // campanita de avisos).
-                BadgedBox(
-                    badge = {
-                        if (cantidad > 0) {
-                            Badge(
-                                containerColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.surface,
-                            ) { Text("$cantidad") }
-                        }
-                    },
-                ) {
-                    Icon(iconoSeccion(seccion), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-                }
-                Text(
-                    seccion.etiqueta,
-                    color = color,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (elegida) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
-}
-
-private val ALTO_BARRA_SECCIONES = 58.dp
-private val MARGEN_INTERIOR_BARRA = 5.dp
-/// El mismo margen que las tarjetas de las listas: con 12dp la barra y la
-/// búsqueda sobresalían 4dp de cada lado (pruebas del usuario 2026-10-29).
-private val MARGEN_LATERAL_BARRA = 16.dp
-/// Despegada del borde (pedido del usuario 2026-10-21): pegada abajo quedaba
-/// incómoda para el pulgar. 18dp se sentía bajo y 28dp alto; 24dp, y 20dp
-/// desde que la barra dejó de ser una cápsula (2026-10-29).
-private val MARGEN_INFERIOR_BARRA = 20.dp
-private val MARGEN_SUPERIOR_BARRA = 6.dp
-
-/// Entre la píldora de búsqueda y la barra de secciones: la misma ranura del
-/// corte entre la barra y su botón, así se leen como un solo bloque (eran
-/// 8dp).
-private val ESPACIO_PILDORA_BARRA = ESPACIO_CORTE
-
-/// Lo que tapa la barra flotante con la píldora de búsqueda encima (altos +
-/// margen de abajo + un respiro), para [LocalMargenBarraInferior]. Fijo
-/// aunque la píldora se repliegue al desplazar: si cambiara, la lista
-/// saltaría mientras se la desliza.
-private val MARGEN_BARRA_SECCIONES =
-    ALTO_BARRA_SECCIONES + ALTO_PILDORA_BUSQUEDA + ESPACIO_PILDORA_BARRA + MARGEN_INFERIOR_BARRA + 6.dp
-
-/// Los mismos íconos que el escritorio (ver [IconosLucide]).
-private fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccion) {
-    SeccionPrincipal.ACTIVOS -> IconosLucide.UsuarioConCheck
-    SeccionPrincipal.KOF -> IconosLucide.InsigniaConCheck
-    SeccionPrincipal.PROVEEDORES -> IconosLucide.Cajas
-    SeccionPrincipal.CORREO -> IconosLucide.Sobre
-    // Ocultas de la barra (en desarrollo).
-    SeccionPrincipal.RUTAS -> Icons.Default.Route
-    SeccionPrincipal.VISITAS -> Icons.Default.Event
-}
-
 /// Qué ocupa la pantalla principal debajo de la barra superior.
 private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, AYUDA, RECONEXION, PESTANAS }
 
@@ -999,28 +796,3 @@ private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, AYUDA, RECONEXION
 /// casi siempre. 25 minutos cubre esas pausas y sigue cerrando la sesión de
 /// un teléfono olvidado.
 private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
-
-/// Secciones de la pantalla principal, en el orden de la barra de abajo
-/// (punto M5 de la auditoría móvil: antes eran textos sueltos).
-/// `enDesarrollo` las oculta de la barra sin borrar su pantalla (ver
-/// [BarraSecciones]).
-enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
-    // "Contratistas" y no "Activos" (pedido del usuario 2026-10-26): la
-    // pestaña es sólo de contratistas; KOF, Proveedores y Correo también
-    // tienen gente adentro.
-    // En el orden de lo que más se usa (pedido del usuario 2026-10-29).
-    ACTIVOS("Contratistas"),
-    RUTAS("Rutas", enDesarrollo = true),
-    // Proveedores y Correo eran una sola sección, "Externos", con un
-    // selector adentro; se separaron (pedido del usuario 2026-10-29): con el
-    // deslizamiento entre secciones, cada una queda a un gesto y con su
-    // propio globito.
-    PROVEEDORES("Proveedores"),
-    CORREO("Correo"),
-    KOF("KOF"),
-    // Visitas agendadas en la web (`PantallaVisitas`): oculta desde
-    // 2026-10-17; para volver a mostrarla basta con sacarla de `enDesarrollo`.
-    VISITAS("Visitas", enDesarrollo = true),
-}
-
-private val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }

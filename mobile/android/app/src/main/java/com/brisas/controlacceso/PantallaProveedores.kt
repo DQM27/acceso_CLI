@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -53,13 +51,15 @@ private fun ListaProveedoresActivos(
     onSincronizar: () -> Unit,
     contentPadding: PaddingValues,
     onElegir: (FilaProveedorActiva) -> Unit,
+    pista: String? = null,
 ) {
     ListaConEstados(
+        pista = pista,
         filas = filas,
         clave = { it.clave() },
         cargando = cargando,
         tituloVacio = if (busqueda.isBlank()) "Ningún proveedor adentro" else "Sin resultados",
-        detalleVacio = if (busqueda.isBlank()) "Cuando entre uno, aparece aquí." else "Pruebe con otra cédula, nombre o empresa.",
+        detalleVacio = if (busqueda.isBlank()) DETALLE_VACIO_INGRESO else "Pruebe con otra cédula, nombre, empresa o placa.",
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = contentPadding,
@@ -244,12 +244,13 @@ fun PantallaProveedores(
                             onSincronizar = onSincronizar,
                             contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
                             onElegir = { filaParaSalida = it },
+                            pista = pistaListaAdentro(viewModel.activos.size),
                         )
                     }
 
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = {
+                    AccionPrincipal(IconosLucide.Mas, "Nuevo ingreso de proveedor", onClick = {
                         mostrandoFormulario = true
                         escaneando = true
                         escaneoDirecto = true

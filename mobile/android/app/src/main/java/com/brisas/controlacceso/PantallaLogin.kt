@@ -107,8 +107,8 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
             if (textoUnidad != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 ) {
                     PuntoConexion(estadoRed)
                     Text(
@@ -194,7 +194,7 @@ private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
             mensaje,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(start = 16.dp, top = 6.dp),
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp),
         )
     }
 

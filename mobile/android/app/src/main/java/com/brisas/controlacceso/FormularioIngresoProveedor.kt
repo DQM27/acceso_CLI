@@ -13,9 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,7 +78,7 @@ internal fun FormularioNuevoIngresoProveedor(
     // Atrás del sistema (con su gesto) va al mismo lugar que "‹ Volver": sin
     // esto se escapaba a la Activity (hallazgo 2026-09-19).
     PantallaConGestoVolver(onVolver = onVolver) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     Column(
@@ -165,9 +162,9 @@ internal fun FormularioNuevoIngresoProveedor(
                 resultados.none { it.nombre == texto.uppercase() } &&
                 viewModel.empresaSeleccionada?.nombre != texto.uppercase()
             if (texto.isEmpty()) {
-                EstadoVacio("Busque la empresa", "Escriba el nombre; si no existe, la puede crear aquí.", Icons.Default.Business)
+                EstadoVacio("Busque la empresa", "Escriba el nombre; si no existe, la puede crear aquí.", IconosLucide.Empresa)
             } else {
-                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (ofrecerCrear && resultados.isEmpty()) {
                         item(key = "crear") {
                             FilaCrear(texto.uppercase()) {
@@ -263,7 +260,7 @@ internal fun SeccionVehiculoYGafete(
             etiqueta = "Placa",
             ayuda = "Opcional",
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-            alFinal = { BotonIconoFila(Icons.Default.PhotoCamera, "Escanear placa", onEscanearPlaca) },
+            alFinal = { BotonIconoFila(IconosLucide.Camara, "Escanear placa", onEscanearPlaca) },
         )
         DivisorGrupo()
         CampoAgrupado(

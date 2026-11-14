@@ -15,6 +15,9 @@ Arriba a la derecha de la pantalla principal: el cuadrito con la inicial de
 su nombre. Al tocarlo se abre un panel con su nombre y, debajo, la unidad
 (el sitio) del teléfono.
 
+Además del tema y cerrar sesión, ahí están **Nuevo contratista** (ver
+[Nuevo contratista](nuevo-contratista.md)), **Ayuda** y la versión de la app.
+
 ## Pasos — cambiar el tema
 
 1. Toque el cuadrito con su inicial.

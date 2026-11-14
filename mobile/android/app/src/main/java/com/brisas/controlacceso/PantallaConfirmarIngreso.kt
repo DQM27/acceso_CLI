@@ -1,5 +1,9 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,22 +14,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -52,11 +53,15 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.SheetValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import android.view.WindowManager
 import android.content.Context
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -64,6 +69,8 @@ import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.SalidaPorOtraVia
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Lo que lleva escrito el formulario de ingreso. Vive afuera de
 /// [HojaIngreso] (lo guarda [PantallaActivos]): la cámara de placa ocupa
@@ -127,13 +134,51 @@ internal fun HojaIngreso(
     onCerrada: () -> Unit,
 ) {
     RegistrarPantalla("confirmar_ingreso")
-    // Con el teclado del buscador todavía bajando, la hoja espera.
-    if (!rememberTecladoCerrado()) return
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val teclado = LocalSoftwareKeyboardController.current
     val hapticos = rememberHapticos()
+
+    // El teclado del gafete se abre solo. Para que la hoja no suba en dos
+    // tiempos (a su alto y otra vez empujada por el teclado, 2026-10-27),
+    // sube de una vez con el lugar del teclado ya reservado abajo, con el
+    // alto que tuvo la vez anterior ([AltoTeclado]); el teclado después
+    // ocupa ese hueco sin mover nada. La primera vez no se sabe el alto:
+    // el teclado se pide enseguida y sube junto con la hoja.
+    //
+    // Eligiendo desde el buscador, su teclado sigue a la vista
+    // ([tecladoDelBuscador]) y la hoja no lo espera (2026-11-14: esperaba a
+    // que bajara para después volver a subirlo). Si va a pedir el gafete, sube
+    // ya con el hueco reservado y toma el foco enseguida, así el teclado no
+    // llega a irse; si no, sube sin mirarlo mientras termina de bajar
+    // ([tecladoAjeno]).
+    val contexto = LocalContext.current
+    val densidad = LocalDensity.current
+    val tecladoDelBuscador = rememberAltoTecladoAlAbrir()
+    val abriraTeclado = remember { preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty() }
+    val reservaTeclado = remember {
+        if (abriraTeclado) AltoTeclado.leer(contexto).takeIf { it > 0 } ?: tecladoDelBuscador else 0
+    }
+    // Lugar fijo (px) debajo de la hoja, en vez del alto del teclado cuadro a
+    // cuadro: al abrir, el reservado; al cerrar, el que tenía el teclado.
+    var huecoFijo by remember { mutableIntStateOf(reservaTeclado) }
+    var tecladoAjeno by remember { mutableStateOf(tecladoDelBuscador > 0 && !abriraTeclado) }
+    var cerrando by remember { mutableStateOf(false) }
+    // Alto del teclado ahora, visto desde la ventana de la hoja. No es estado
+    // de Compose: sólo se lee al cerrar.
+    val altoTecladoAhora = remember { intArrayOf(0) }
+    if (tecladoAjeno) {
+        LaunchedEffect(Unit) {
+            teclado?.hide()
+            delay(MS_CIERRE_TECLADO_AJENO)
+            tecladoAjeno = false
+        }
+    }
     LaunchedEffect(abierta) {
         if (abierta) return@LaunchedEffect
+        // La hoja baja entera, con el hueco del teclado fijo: si se achicara
+        // cuadro a cuadro junto con el teclado mientras baja, daba tirones.
+        cerrando = true
+        huecoFijo = maxOf(huecoFijo, altoTecladoAhora[0])
         teclado?.hide()
         estado.hide()
         onCerrada()
@@ -156,31 +201,32 @@ internal fun HojaIngreso(
         if (puedeRegistrar) onRegistrar(campos.medio, campos.gafeteTexto, campos.placaTexto)
     }
 
-    // El teclado del gafete se abre solo. Para que la hoja no suba en dos
-    // tiempos (a su alto y otra vez empujada por el teclado, 2026-10-27),
-    // sube de una vez con el lugar del teclado ya reservado abajo, con el
-    // alto que tuvo la vez anterior ([AltoTeclado]); el teclado después
-    // ocupa ese hueco sin mover nada. La primera vez no se sabe el alto:
-    // el teclado se pide enseguida y sube junto con la hoja.
-    val contexto = LocalContext.current
-    val densidad = LocalDensity.current
-    val abriraTeclado = remember { preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty() }
-    val reservaTeclado = remember { if (abriraTeclado) AltoTeclado.leer(contexto) else 0 }
-    var reservar by remember { mutableStateOf(reservaTeclado > 0) }
-
-    val arriba = rememberHojaArriba(estado)
     ModalBottomSheet(
         onDismissRequest = onCancelar,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = {
-            if (reservar) {
-                BottomSheetDefaults.windowInsets.union(WindowInsets(bottom = reservaTeclado))
-            } else {
-                BottomSheetDefaults.windowInsets
+            when {
+                huecoFijo > 0 -> BottomSheetDefaults.windowInsets.union(WindowInsets(bottom = huecoFijo))
+                tecladoAjeno -> WindowInsets.navigationBars
+                else -> BottomSheetDefaults.windowInsets
             }
         },
     ) {
+        // El teclado que venía del buscador se queda para el gafete: sin esto
+        // el sistema lo esconde cuando la ventana de la hoja toma el foco, y
+        // hay que volver a subirlo. Si no llegara a aplicarse, sólo baja y
+        // vuelve; la hoja no se mueve, tiene el hueco reservado.
+        if (tecladoDelBuscador > 0 && abriraTeclado) {
+            val ventana = (LocalView.current.parent as? DialogWindowProvider)?.window
+            DisposableEffect(ventana) {
+                ventana?.setSoftInputMode(
+                    (ventana.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE.inv()) or
+                        WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED,
+                )
+                onDispose { }
+            }
+        }
         // Acá adentro y no afuera: la hoja es su propia ventana, y el teclado
         // se abre para ella; la ventana de la app no lo ve y el alto no se
         // guardaba nunca.
@@ -188,29 +234,32 @@ internal fun HojaIngreso(
         val imeFinal = WindowInsets.imeAnimationTarget
         LaunchedEffect(ime, imeFinal) {
             snapshotFlow { ime.getBottom(densidad) to imeFinal.getBottom(densidad) }.collect { (alto, altoFinal) ->
+                altoTecladoAhora[0] = alto
                 // Terminó de abrirse: de acá en más manda el teclado de verdad.
-                if (alto > 0 && alto == altoFinal) {
+                // No con el del buscador, que es de otra ventana y se va.
+                if (alto > 0 && alto == altoFinal && !tecladoAjeno && !cerrando) {
                     AltoTeclado.guardar(contexto, alto)
-                    reservar = false
+                    huecoFijo = 0
                 }
             }
         }
         val focoGafete = remember { FocusRequester() }
         LaunchedEffect(Unit) {
             if (!abriraTeclado) return@LaunchedEffect
-            if (reservaTeclado > 0) {
+            if (reservaTeclado > 0 && tecladoDelBuscador == 0) {
                 // Con el lugar reservado: primero la hoja, después el teclado.
                 snapshotFlow { estado.currentValue }.first { it == SheetValue.Expanded }
             } else {
                 // Un cuadro: el campo ya tiene que estar en pantalla para
-                // poder tomar el foco.
+                // poder tomar el foco. Con el teclado del buscador a la vista
+                // no se espera a la hoja: se queda para el gafete.
                 withFrameNanos { }
             }
             runCatching { focoGafete.requestFocus() }
             // Si el teclado no llega a abrirse (uno físico, por ejemplo), el
             // hueco no se queda para siempre.
             delay(MS_ESPERA_TECLADO)
-            reservar = false
+            if (!cerrando) huecoFijo = 0
         }
         // Si lo de abajo no entra (nombre largo, vehículo con placa y el
         // teclado abierto), la hoja se corre sola hasta el fondo: los botones
@@ -235,8 +284,8 @@ internal fun HojaIngreso(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconoPaso(Paso.INGRESO, arriba = arriba, tamano = 48.dp)
-                Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
+                IconoPaso(Paso.INGRESO, tamano = 48.dp)
+                Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                     Text(preparacion.nombre, style = MaterialTheme.typography.titleLarge)
                     Text(
                         "${preparacion.cedula} · ${preparacion.empresaNombre}",
@@ -277,75 +326,69 @@ internal fun HojaIngreso(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             )
 
-            if (campos.medio == MedioIngreso.VEHICULO) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = campos.placaTexto,
-                        onValueChange = { campos.placaTexto = it },
-                        label = { Text("Placa del vehículo") },
-                        singleLine = true,
-                        // Con gafete por escribir, ✓ pasa a él; si no, registra.
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = if (preparacion.requiereGafete && !campos.sinGafete) ImeAction.Next else ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focoGafete.requestFocus() },
-                            onDone = { registrarSiListo() },
-                        ),
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f),
-                    )
-                    // La misma cámara que lee placas en Proveedores y Rutas
-                    // (`LectorVehiculoRuta.kt`), pedido del usuario 2026-10-21.
-                    // La abre [PantallaActivos], que tapa la hoja mientras tanto.
-                    // `top` por la etiqueta flotante del campo, que corre su
-                    // marco hacia abajo: así el botón queda a la par del marco.
-                    BotonCuadradoBordeBrisas(
-                        icono = Icons.Default.PhotoCamera,
-                        descripcion = "Escanear placa",
-                        onClick = onEscanearPlaca,
-                        tamano = 56.dp,
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                    )
-                }
-            }
-
-            if (preparacion.requiereGafete) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = campos.gafeteTexto,
-                        onValueChange = { campos.gafeteTexto = it.filter(Char::isDigit) },
-                        label = { Text("Número de gafete") },
-                        singleLine = true,
-                        enabled = !campos.sinGafete,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { registrarSiListo() }),
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f).focusRequester(focoGafete),
-                    )
-                    // "S/G" de dos estados en lugar de la cámara (escanear el
-                    // número del gafete casi no se usaba y estorbaba) y de la
-                    // casilla "Sin gafete" que iba debajo (pedido del usuario
-                    // 2026-10-21). Encenderlo borra el número tipeado: sin número
-                    // el núcleo registra el ingreso S/G.
-                    BotonSinGafete(
-                        activo = campos.sinGafete,
-                        onAlternar = {
-                            campos.sinGafete = !campos.sinGafete
-                            hapticos(if (campos.sinGafete) Haptico.ACTIVAR else Haptico.DESACTIVAR)
-                            if (campos.sinGafete) campos.gafeteTexto = ""
-                            onLimpiarError()
-                        },
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                    )
+            // Placa y gafete agrupados como el resto de los formularios
+            // (`GrupoCampos`, 2026-11-14, fase 2 de
+            // `docs/handoff-rediseno-movil-ux.md`): etiqueta a la izquierda,
+            // valor a la derecha, y la cámara o el S/G al final del renglón.
+            val conPlaca = campos.medio == MedioIngreso.VEHICULO
+            if (conPlaca || preparacion.requiereGafete) {
+                GrupoCampos(modifier = Modifier.padding(bottom = 16.dp)) {
+                    if (conPlaca) {
+                        CampoAgrupado(
+                            valor = campos.placaTexto,
+                            onCambiar = { campos.placaTexto = it },
+                            ayuda = "ABC-123",
+                            etiqueta = "Placa",
+                            // Con gafete por escribir, ✓ pasa a él; si no, registra.
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                imeAction = if (preparacion.requiereGafete && !campos.sinGafete) ImeAction.Next else ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focoGafete.requestFocus() },
+                                onDone = { registrarSiListo() },
+                            ),
+                            // La misma cámara que lee placas en Proveedores y
+                            // Rutas (`LectorVehiculoRuta.kt`), pedido del usuario
+                            // 2026-10-21. La abre [PantallaActivos], que tapa la
+                            // hoja mientras tanto.
+                            alFinal = {
+                                IconButton(onClick = onEscanearPlaca) {
+                                    Icon(IconosLucide.Camara, contentDescription = "Escanear placa", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                        )
+                    }
+                    if (conPlaca && preparacion.requiereGafete) DivisorGrupo()
+                    if (preparacion.requiereGafete) {
+                        CampoAgrupado(
+                            valor = campos.gafeteTexto,
+                            onCambiar = { campos.gafeteTexto = it.filter(Char::isDigit) },
+                            ayuda = if (campos.sinGafete) "Sin gafete" else "Número",
+                            etiqueta = "Gafete",
+                            habilitado = !campos.sinGafete,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { registrarSiListo() }),
+                            modifier = Modifier.focusRequester(focoGafete),
+                            // "S/G" de dos estados en lugar de la cámara (escanear
+                            // el número del gafete casi no se usaba y estorbaba) y
+                            // de la casilla "Sin gafete" que iba debajo (pedido del
+                            // usuario 2026-10-21). Encenderlo borra el número
+                            // tipeado: sin número el núcleo registra el ingreso S/G.
+                            alFinal = {
+                                BotonSinGafete(
+                                    activo = campos.sinGafete,
+                                    onAlternar = {
+                                        campos.sinGafete = !campos.sinGafete
+                                        hapticos(if (campos.sinGafete) Haptico.ACTIVAR else Haptico.DESACTIVAR)
+                                        if (campos.sinGafete) campos.gafeteTexto = ""
+                                        onLimpiarError()
+                                    },
+                                    modifier = Modifier.padding(end = 8.dp),
+                                )
+                            },
+                        )
+                    }
                 }
             }
 
@@ -416,7 +459,7 @@ internal fun PantallaBloqueoIngreso(
     onRegistrarSalida: () -> Unit = {},
 ) {
     PantallaConGestoVolver(onVolver = onVolver) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
             EncabezadoPantalla(
                 titulo = titulo,
                 subtitulo = subtitulo,
@@ -477,20 +520,22 @@ private fun DetalleSalidaOtraVia(salida: SalidaPorOtraVia, modifier: Modifier = 
 @Composable
 private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Modifier = Modifier) {
     val acento = MaterialTheme.colorScheme.primary
-    val relleno = LocalRellenoBotones.current?.relleno ?: ColorRellenoBrisas
-    val sobreRelleno = LocalRellenoBotones.current?.sobreRelleno ?: ColorSobreRellenoBrisas
+    val relleno = ColorRellenoBrisas
+    val sobreRelleno = ColorSobreRellenoBrisas
     val fondo by animateColorAsState(if (activo) relleno else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
     val texto by animateColorAsState(
         if (activo) sobreRelleno else acento,
         tween(MS_FUNDIDO_ENTRADA),
         label = "textoSinGafete",
     )
+    // Del alto del renglón de [CampoAgrupado], que lo lleva al final.
+    val forma = RoundedCornerShape(RADIO_CHICO)
     Box(
         modifier = modifier
-            .size(width = 64.dp, height = 56.dp)
-            .clip(FormaCampoBrisas)
+            .size(width = 56.dp, height = 36.dp)
+            .clip(forma)
             .background(fondo)
-            .border(1.dp, if (activo) relleno else acento, FormaCampoBrisas)
+            .border(1.dp, if (activo) relleno else acento, forma)
             .toggleable(value = activo, role = Role.Switch, onValueChange = { onAlternar() })
             .semantics { contentDescription = "Sin gafete" },
         contentAlignment = Alignment.Center,

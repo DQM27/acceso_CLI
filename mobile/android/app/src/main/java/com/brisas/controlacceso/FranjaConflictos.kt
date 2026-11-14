@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.SyncProblem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,7 +49,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
     val varios = mensajes.size > 1
     var desplegada by rememberSaveable { mutableStateOf(false) }
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         modifier = modifier
@@ -63,7 +59,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.SyncProblem, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(IconosLucide.NubeConProblema, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
                 Text(
                     if (varios) tituloConflictos(mensajes.size) else mensajes.first(),
@@ -73,7 +69,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
                 )
                 if (varios) {
                     Icon(
-                        if (desplegada) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        if (desplegada) IconosLucide.FlechaArriba else IconosLucide.FlechaAbajo,
                         contentDescription = if (desplegada) "Ocultar detalle" else "Ver detalle",
                     )
                 }
@@ -86,7 +82,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
                         .padding(start = 32.dp, top = 8.dp)
                         .heightIn(max = 220.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     mensajes.forEach { mensaje ->
                         Text(mensaje, style = MaterialTheme.typography.bodySmall)

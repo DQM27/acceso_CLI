@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,8 +43,8 @@ fun AvisoActualizacion(
         contentColor = if (urgente) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onTertiaryContainer,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = EspacioControlBrisas, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = EspacioControlBrisas, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -69,7 +67,7 @@ fun AvisoActualizacion(
                         }
                         if (estado is EstadoActualizacion.Disponible && !estado.novedad.obligatoria) {
                             BotonIconoCuadradoBrisas(onClick = onPosponer) {
-                                Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                                Icon(IconosLucide.Cerrar, contentDescription = "Cerrar")
                             }
                         }
                     }

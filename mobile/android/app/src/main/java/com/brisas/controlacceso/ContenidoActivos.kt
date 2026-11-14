@@ -6,18 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonSearch
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -25,14 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +35,8 @@ import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.GafeteSinPortador
 import uniffi.control_acceso_mobile.SituacionGafete
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
 // contenido por modo y la ficha de salida (sacado de `PantallaActivos.kt`,
@@ -55,9 +52,13 @@ internal const val AYUDA_BUSQUEDA_ACTIVOS = "Nombre, cédula o gafete"
 /// documento, para entrar o, si ya está adentro, para salir (lo decide
 /// [ActivosViewModel.elegir]). El escáner de gafetes se desconectó con las
 /// pestañas: en la práctica los gafetes se escriben.
+///
+/// Con el "+" de "nuevo ingreso" de todas las secciones y no una cámara
+/// (decisión del dueño, 2026-11-14): el mismo gesto en las cuatro; acá el
+/// ingreso empieza por la cámara.
 @Composable
 internal fun AccionActivos(onEscanearCedula: () -> Unit) {
-    AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
+    AccionPrincipal(IconosLucide.Mas, "Nuevo ingreso: escanear documento", onEscanearCedula)
 }
 
 /// Fallas de consulta, el resultado de una salida por gafetes y el
@@ -93,8 +94,8 @@ internal fun ContenidoListaActivos(
     ListaActivos(
         activos = activos,
         cargando = cargando,
-        tituloVacio = "Nadie adentro por ahora",
-        detalleVacio = "Cuando alguien ingrese, aparece aquí.",
+        tituloVacio = "Ningún contratista adentro",
+        detalleVacio = DETALLE_VACIO_INGRESO,
         onClick = onElegirActivo,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
@@ -117,7 +118,7 @@ internal fun ResultadosIngreso(
     onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre, una cédula o un gafete.", Icons.Default.PersonSearch)
+        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre, una cédula o un gafete.", IconosLucide.BuscarPersona)
         return
     }
     if (resultadosBusqueda.isEmpty() && !cargando) {
@@ -126,7 +127,7 @@ internal fun ResultadosIngreso(
             EstadoVacio(
                 "No está registrado",
                 "Regístrelo con su carnet PRAIND y enseguida se le da el ingreso.",
-                Icons.Default.PersonSearch,
+                IconosLucide.BuscarPersona,
             )
         }
         return
@@ -140,7 +141,7 @@ internal fun ResultadosIngreso(
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = PADDING_RESULTADOS,
-        iconoVacio = Icons.Default.PersonSearch,
+        iconoVacio = IconosLucide.BuscarPersona,
     ) { contratista ->
         FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
     }
@@ -169,7 +170,7 @@ internal fun ResultadosGafete(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PADDING_RESULTADOS,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // El núcleo ya quitó los números repetidos: cada gafete es su clave.
             items(coincidencias, key = { it.numero }) { coincidencia ->
@@ -215,7 +216,7 @@ private fun FilaGafeteSinIngreso(numero: Int, sinPortador: GafeteSinPortador?) {
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(if (libre) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -255,7 +256,8 @@ private fun ListaActivos(
         detalleVacio = detalleVacio,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
-        contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
+        contentPadding = contentPadding ?: PaddingValues(top = 4.dp, bottom = EspacioPieLista),
+        pista = pistaListaAdentro(activos.size),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
     }
@@ -303,7 +305,7 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// demasiado para confirmar una salida). Lo comparten contratistas,
 /// proveedores, correo, visitas y KOF.
 ///
-/// Al abrir, la flecha entra hacia la izquierda ([IconoPaso]). Al confirmar,
+/// La flecha apunta hacia la izquierda ([IconoPaso]). Al confirmar,
 /// el panel baja primero y recién entonces avisa: si el que llama lo quitara
 /// de la composición en el acto, desaparecería de golpe. `confirmado` evita
 /// que un segundo toque registre dos veces mientras baja.
@@ -322,12 +324,15 @@ internal fun DialogoRegistrarSalida(
     accion: String = "Registrar salida",
     aviso: String? = null,
 ) {
-    // Con el teclado del buscador todavía bajando, la hoja espera.
-    if (!rememberTecladoCerrado()) return
+    // Si se eligió desde el buscador, su teclado baja mientras la hoja sube:
+    // no se lo espera (ver [rememberAltoTecladoAlAbrir]).
+    if (rememberAltoTecladoAlAbrir() > 0) {
+        val teclado = LocalSoftwareKeyboardController.current
+        LaunchedEffect(Unit) { teclado?.hide() }
+    }
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
-    val arriba = rememberHojaArriba(estado)
     fun cerrarY(accionAlCerrar: () -> Unit) {
         alcance.launch { estado.hide() }.invokeOnCompletion { accionAlCerrar() }
     }
@@ -335,7 +340,8 @@ internal fun DialogoRegistrarSalida(
         onDismissRequest = onDismiss,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
-        // Sin el lugar del teclado: no tiene campos.
+        // Sin el lugar del teclado: no tiene campos, y así tampoco la mueve
+        // el del buscador mientras termina de bajar.
         contentWindowInsets = { WindowInsets.navigationBars },
     ) {
         Column(
@@ -345,9 +351,9 @@ internal fun DialogoRegistrarSalida(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (aviso != null) {
-                SenalAdvertencia(arriba = arriba)
+                SenalAdvertencia()
             } else {
-                IconoPaso(Paso.SALIDA, arriba = arriba)
+                IconoPaso(Paso.SALIDA)
             }
             if (aviso != null) {
                 Text(
@@ -355,7 +361,7 @@ internal fun DialogoRegistrarSalida(
                     style = MaterialTheme.typography.labelLarge,
                     color = ColorTextoAdvertenciaBrisas,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             Text(

@@ -52,8 +52,9 @@ class NubeRealtime(
     // sincronizar todo (al (re)suscribirse, para recuperar lo perdido).
     private val onCambio: (tabla: String?) -> Unit = { tabla -> CambiosNube.solicitar(tabla) },
     // Se guardó en la base local la fila que trajo un aviso en vivo: la
-    // pantalla puede refrescarse sin esperar la sincronización.
-    private val onCambioAplicado: () -> Unit = {},
+    // pantalla puede refrescarse sin esperar la sincronización. Con la tabla
+    // del aviso, para refrescar sólo su sección.
+    private val onCambioAplicado: (tabla: String?) -> Unit = {},
     // Este teléfono fue retirado en el panel (ver `ExpulsionNube.kt`); el
     // canal en vivo ya no se reconecta. Corre en el hilo del canal: quien
     // lo recibe publica a la pantalla.
@@ -185,7 +186,7 @@ class NubeRealtime(
                             }
                             Telemetria.realtime?.aplicado(aplicado, System.nanoTime() - inicioAplicar)
                             if (aplicado) {
-                                onCambioAplicado()
+                                onCambioAplicado(tabla)
                                 return@onEach
                             }
                         }

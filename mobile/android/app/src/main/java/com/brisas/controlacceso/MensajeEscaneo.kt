@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CenterFocusWeak
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -71,7 +66,7 @@ fun MensajeEscaneo(texto: String, tono: TonoEscaneo, modifier: Modifier = Modifi
     Row(
         modifier = modifier
             .drawBehind { drawRoundRect(fondo, cornerRadius = CornerRadius(size.height / 2)) }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -86,7 +81,7 @@ fun MensajeEscaneo(texto: String, tono: TonoEscaneo, modifier: Modifier = Modifi
         ) { (textoMostrado, tonoMostrado) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(iconoDeTono(tonoMostrado), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
                     textoMostrado,
                     color = Color.White,
@@ -107,10 +102,10 @@ private fun colorDeTono(tono: TonoEscaneo): Color = when (tono) {
 }
 
 private fun iconoDeTono(tono: TonoEscaneo): ImageVector = when (tono) {
-    TonoEscaneo.GUIA -> Icons.Default.CenterFocusWeak
-    TonoEscaneo.EXITO -> Icons.Default.CheckCircle
-    TonoEscaneo.ERROR -> Icons.Default.ErrorOutline
-    TonoEscaneo.ADVERTENCIA -> Icons.Default.Schedule
+    TonoEscaneo.GUIA -> IconosLucide.Encuadre
+    TonoEscaneo.EXITO -> IconosLucide.Confirmado
+    TonoEscaneo.ERROR -> IconosLucide.Error
+    TonoEscaneo.ADVERTENCIA -> IconosLucide.Reloj
 }
 
 private const val DURACION_FONDO_MS = 200

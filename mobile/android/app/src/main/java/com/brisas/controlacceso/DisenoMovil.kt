@@ -25,13 +25,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-internal val FormaControlBrisas = RoundedCornerShape(16.dp)
+// Los únicos tres radios de la app, más el círculo y la cápsula (2026-11-14,
+// fase 3 de `docs/handoff-rediseno-movil-ux.md`; antes eran doce). No usar
+// `RoundedCornerShape(n.dp)` suelto en una pantalla. Los espacios siguen la
+// escala 4, 8, 12, 16, 24.
+/// Cuadros chicos: el número de gafete, el S/G, la inicial del menú.
+internal val RADIO_CHICO = 8.dp
+/// Controles: botones, campos, franjas, el selector.
+internal val RADIO_CONTROL = 12.dp
+/// Tarjetas, hojas, menús y las piezas de abajo.
+internal val RADIO_TARJETA = 20.dp
+
+internal val FormaControlBrisas = RoundedCornerShape(RADIO_CONTROL)
 internal val FormasBrisas = Shapes(
     extraSmall = FormaControlBrisas,
     small = FormaControlBrisas,
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(RADIO_TARJETA),
+    large = RoundedCornerShape(RADIO_TARJETA),
+    extraLarge = RoundedCornerShape(RADIO_TARJETA),
 )
 // Los colores salen de `PaletaLattis.kt`, según el tema elegido en la app
 // ([temaActual]), no sólo el del sistema.
@@ -40,9 +51,15 @@ internal val ColorRellenoBrisas: Color
 internal val ColorSobreRellenoBrisas: Color
     @Composable get() = paletaActual.sobreRelleno
 internal val EspacioControlBrisas = 12.dp
-// 20% más chico que los 48.dp originales, a pedido explícito (2026-09-15) --
-// no estaba "muy grande", pero se veía mejor un poco más compacto.
-internal val AlturaControlBrisas = 38.dp
+// Botones principales a 48dp, el mínimo táctil de Android (2026-11-14, fase 2
+// de `docs/handoff-rediseno-movil-ux.md`): "Registrar ingreso/salida" es lo
+// que más se toca, de pie y a veces con guantes. Estuvieron en 38dp desde
+// 2026-09-15 (pedido de entonces: más compactos).
+internal val AlturaControlBrisas = 48.dp
+
+/// Botones de menor jerarquía ("Cancelar"): más bajos que los principales
+/// para no competir con ellos, sin bajar del área que se toca con el pulgar.
+internal val AlturaControlDiscretoBrisas = 40.dp
 internal val ColorExitoBrisas: Color
     @Composable get() = paletaActual.exito
 /// Ámbar de advertencia para íconos y puntos (el triángulo, el punto de
@@ -69,5 +86,9 @@ internal val TipografiaBrisas = Typography(
     bodySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 13.sp, lineHeight = 18.sp),
     labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight(600)),
     labelMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight(500)),
-    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight(500)),
+    // 12sp, el mínimo de la app (2026-11-14, fase 2 de
+    // `docs/handoff-rediseno-movil-ux.md`; era 11sp): el nombre de las
+    // pestañas y "ADENTRO" se leen de pie y al sol. "Contratistas" sigue
+    // entrando en su pestaña en el A25 (~67dp de ~77dp).
+    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight(500)),
 )

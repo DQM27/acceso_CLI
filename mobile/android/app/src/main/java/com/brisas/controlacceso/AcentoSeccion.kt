@@ -1,93 +1,30 @@
 package com.brisas.controlacceso
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 
 /// Color de cada sección principal (pedido del usuario 2026-10-19): con un
-/// solo acento azul para todo, Contratistas, KOF y Proveedores se confundían de
-/// un vistazo. Lleva el contexto del guardia: "estoy en la pestaña roja".
+/// solo color para todo, Contratistas, KOF y Proveedores se confundían de un
+/// vistazo. Lleva el contexto del guardia: "estoy en la pestaña roja".
 ///
-/// El acento pinta sólo el marco (pestaña activa, botones, bordes, íconos y
-/// puntos: todo lo que ya usaba `colorScheme.primary`). Los colores de estado
-/// (confirmado, error, vencido: `EscaneoCompartido.kt`) NO cambian entre
-/// secciones, para que siempre signifiquen lo mismo.
+/// Desde 2026-11-14 (`docs/handoff-rediseno-movil-ux.md`, fase 1) pinta sólo
+/// el ícono y el nombre de la pestaña activa en la barra de abajo. Antes
+/// reemplazaba también el color principal de toda la página (botones,
+/// bordes, íconos): un "Entregar" rojo en KOF se leía como un error y un
+/// "Registrar" mango en Proveedores como una advertencia. Ahora todo lo que
+/// se toca va en el azul de la app y los colores de estado significan siempre
+/// lo mismo.
 ///
-/// Tonos elegidos para no parecerse a los de estado: verde azulado (no el
-/// verde pasto de "confirmado"), rojo KOF franco (el de error es más apagado
-/// y sólo sale como mensaje) y mango tostado (más oscuro que el ámbar de
-/// "vencido"). Los tonos viven en `PaletaLattis.kt`; contraste medido en
-/// `AcentoSeccionTest`: el acento contra el fondo llega a 3:1 y el texto
-/// sobre el acento y sobre el relleno a 4,5:1.
-@Immutable
-class AcentoSeccion(
-    /// Texto, íconos y pestaña activa.
-    val color: Color,
-    /// Texto e íconos sobre un relleno de [color].
-    val sobreColor: Color,
-    /// Relleno de los botones principales: en oscuro más profundo que
-    /// [color], para que no queden como bloques fluorescentes.
-    val relleno: Color,
-    /// Texto sobre [relleno].
-    val sobreRelleno: Color,
-)
-
-/// `null` = sin acento propio: la sección conserva el de la paleta base
-/// (Rutas y Visitas, que están en desarrollo y no se ven en la barra).
+/// Tonos en `PaletaLattis.kt`; contraste medido en `AcentoSeccionTest`.
 ///
-/// Correo va en violeta (pedido del usuario 2026-10-19: es una clase aparte
-/// de Proveedor, como en la columna "Clase" del escritorio). Desde
-/// 2026-10-29 Proveedores y Correo son secciones propias; antes compartían
-/// "Externos" y el color cambiaba con el tipo elegido adentro.
-fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): AcentoSeccion? {
+/// `null` = sin color propio (Rutas y Visitas, en desarrollo y fuera de la
+/// barra): la pestaña usa el azul de la app.
+fun colorDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): Color? {
     val paleta = if (oscuro) PaletaNoche else PaletaDia
-    val tono = when (seccion) {
-        SeccionPrincipal.ACTIVOS -> paleta.contratistas
+    return when (seccion) {
+        SeccionPrincipal.CONTRATISTAS -> paleta.contratistas
         SeccionPrincipal.KOF -> paleta.kof
         SeccionPrincipal.PROVEEDORES -> paleta.proveedores
         SeccionPrincipal.CORREO -> paleta.porCorreo
-        SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS -> return null
-    }
-    return AcentoSeccion(tono.acento, paleta.sobreAcento, tono.relleno, paleta.sobreRelleno)
-}
-
-/// Ejecuta [contenido] con el acento de [seccion] en lugar del color
-/// principal de la paleta. Todo lo que lee `MaterialTheme.colorScheme.primary`
-/// lo toma solo; no hace falta tocar cada pantalla.
-@Composable
-fun TemaSeccion(seccion: SeccionPrincipal, contenido: @Composable () -> Unit) {
-    val base = MaterialTheme.colorScheme
-    val oscuro = temaActual().oscuro
-    val esquema = remember(base, seccion, oscuro) {
-        val acento = acentoDeSeccion(seccion, oscuro) ?: return@remember base
-        base.copy(
-            primary = acento.color,
-            onPrimary = acento.sobreColor,
-            // Fondo suave del acento (círculo detrás de un ícono, por ejemplo).
-            primaryContainer = lerp(base.surface, acento.color, if (oscuro) 0.22f else 0.16f),
-            onPrimaryContainer = acento.color,
-            surfaceTint = acento.color,
-            inversePrimary = acento.color,
-        )
-    }
-    val relleno = remember(seccion, oscuro) { acentoDeSeccion(seccion, oscuro) }
-    MaterialTheme(colorScheme = esquema) {
-        // Los botones principales ([BotonBrisas]) también van en el color de la
-        // sección: antes quedaban en el azul fijo de la app (un "Entregar" azul
-        // en la sección roja de KOF).
-        if (relleno != null) {
-            CompositionLocalProvider(LocalRellenoBotones provides relleno, content = contenido)
-        } else {
-            contenido()
-        }
+        SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS -> null
     }
 }
-
-/// Relleno y texto de [BotonBrisas]. `null` = el azul de siempre
-/// ([ColorRellenoBrisas]), fuera de las secciones (login, avisos, ayuda).
-internal val LocalRellenoBotones = staticCompositionLocalOf<AcentoSeccion?> { null }

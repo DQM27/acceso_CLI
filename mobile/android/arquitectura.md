@@ -226,6 +226,34 @@ una pantalla propia. Lo que queda de `NubeViewModel` es sólo
 barra superior de `PantallaPrincipal`, no una pestaña, porque ya no hace
 falta que sobreviva cambios de pestaña por su cuenta (no hay pestaña).
 
+## Pantalla principal (2026-11-14)
+
+Del rediseño del móvil (`docs/handoff-rediseno-movil-ux.md`, fase 4):
+
+- **Navegación**: una sola variable, `panel` (`PanelPrincipal`): las pestañas
+  o la pantalla que se abre encima (avisos, nuevo contratista, Ayuda,
+  reconexión). Eran cuatro booleanos y cada apertura apagaba las otras tres a
+  mano; un estado imposible (dos a la vez) ya no se puede escribir.
+- **Archivos**: `BarraSecciones.kt` (la barra de abajo, `SeccionPrincipal` y
+  sus medidas) y `CampanitaAvisos.kt` salieron de `PantallaPrincipal.kt`.
+- **Sincronización, canal en vivo y bloqueo por inactividad siguen en
+  `PantallaPrincipal`, a propósito.** Sin Navigation-Compose, todo ViewModel
+  vive lo que la Activity: uno con `NubeRealtime` y `SincronizacionPeriodica`
+  sobreviviría al cierre de sesión y el siguiente guardia heredaría la
+  conexión de la sesión anterior (el mismo problema que se describe arriba
+  para `PantallaConfirmarIngreso`). Moverlos exige atar ese ViewModel a la
+  sesión (clave por sesión y detenerlo al salir de la composición); se hace
+  sólo si aparece una razón más fuerte que el orden del código, y probando en
+  un teléfono real login, cierre, expulsión y bloqueo.
+- **Carrusel sin precargar la sección vecina, a propósito.** Se probó
+  `beyondViewportPageCount = 1` en el `HorizontalPager` (2026-11-14, build
+  `diagnostico` en el Samsung A25, mismo recorrido en las dos versiones):
+  frames trabados 1,45 % sin precarga contra 1,77 % con ella, y en
+  Contratistas p90 19,3 ms contra 19,9 ms. No mejora, y además rompe la
+  telemetría por pantalla: la sección precargada llama a `RegistrarPantalla`
+  y se anota como visible sin que nadie la mire. No volver a probarlo sin
+  resolver antes eso.
+
 ## Subsistema OCR
 
 La cámara y ML Kit tienen reglas adicionales porque combinan callbacks de

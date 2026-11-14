@@ -32,12 +32,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,11 +42,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,12 +53,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /// Base común de las pantallas de antes de entrar (login, contraseña
 /// temporal, vinculación, fallo al abrir): la marca arriba y el formulario en
@@ -101,7 +96,7 @@ internal fun HojaPorteria(
         }
         if (conHoja) {
             Surface(
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(RADIO_TARJETA),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
@@ -170,12 +165,12 @@ internal fun AvisoPorteria(texto: String?) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.errorContainer)
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
+            Icon(IconosLucide.Error, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
             Text(ultimo, color = tinte, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -220,7 +215,7 @@ internal fun BotonPorteria(
                 color = LocalContentColor.current,
                 modifier = Modifier.size(18.dp),
             )
-            Text(texto, modifier = Modifier.padding(start = 10.dp))
+            Text(texto, modifier = Modifier.padding(start = 12.dp))
         } else {
             Text(texto)
         }
@@ -230,14 +225,23 @@ internal fun BotonPorteria(
 /// Campos agrupados como en los formularios de iOS (Ajustes, iniciar sesión
 /// con la cuenta): un solo bloque redondeado del color de la superficie, un
 /// renglón por campo separados por una línea fina, sin íconos ni marcos. Más
-/// discreto que un campo con borde y etiqueta flotante por cada dato.
+/// discreto que un campo con borde y etiqueta flotante por cada dato. Desde
+/// 2026-11-14 es el único estilo de campo de las pantallas en uso (fase 2 de
+/// `docs/handoff-rediseno-movil-ux.md`).
+///
+/// [fondo]: sobre una hoja que ya es del color de la superficie (la del
+/// primer arranque), `surfaceVariant`, para que el bloque se vea.
 @Composable
-internal fun GrupoCampos(modifier: Modifier = Modifier, contenido: @Composable ColumnScope.() -> Unit) {
+internal fun GrupoCampos(
+    modifier: Modifier = Modifier,
+    fondo: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surface,
+    contenido: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface),
+            .clip(RoundedCornerShape(RADIO_CONTROL))
+            .background(fondo),
         content = contenido,
     )
 }
@@ -270,8 +274,12 @@ internal fun CampoAgrupado(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     habilitado: Boolean = true,
     error: Boolean = false,
+    // Otra letra para el valor (los códigos de vinculación van en ancho fijo);
+    // `null` = la del cuerpo.
+    estiloTexto: TextStyle? = null,
     alFinal: (@Composable () -> Unit)? = null,
 ) {
+    val estilo = estiloTexto ?: MaterialTheme.typography.bodyLarge
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -291,7 +299,7 @@ internal fun CampoAgrupado(
             onValueChange = onCambiar,
             enabled = habilitado,
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
+            textStyle = estilo.copy(
                 color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -302,7 +310,7 @@ internal fun CampoAgrupado(
             decorationBox = { campo ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (valor.isEmpty()) {
-                        Text(ayuda, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(ayuda, style = estilo, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     campo()
                 }
@@ -346,7 +354,7 @@ internal fun CampoClaveAgrupado(
         alFinal = {
             IconButton(onClick = { visible = !visible }) {
                 Icon(
-                    if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    if (visible) IconosLucide.Ocultar else IconosLucide.Ver,
                     contentDescription = if (visible) "Ocultar contraseña" else "Mostrar contraseña",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -380,7 +388,7 @@ internal fun RequisitoPorteria(texto: String, cumplido: Boolean) {
     ) {
         val color = if (cumplido) ColorExitoBrisas else MaterialTheme.colorScheme.onSurfaceVariant
         Icon(
-            if (cumplido) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            if (cumplido) IconosLucide.Confirmado else IconosLucide.Pendiente,
             contentDescription = null,
             tint = color,
             modifier = Modifier.size(18.dp),
