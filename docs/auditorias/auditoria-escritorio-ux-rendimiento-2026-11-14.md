@@ -517,7 +517,7 @@ El dueño aprobó la fase 1 del plan, que incluye R1 y R7 (decisiones 8.2 y
 | R3 | Hecho | Sin `<ViewTransition>` ni `startTransition` al cambiar de sección. El salto desde una sección oculta pasó de efecto a ajuste durante el render (lo pidió el lint) |
 | R4 | Hecho | `nubeRealtime` se importa con `import()` dentro de `Shell`. `emitirActualizacion` y `NubeActualizadaDetalle` se mudaron a `eventosNube.ts` (se reexportan desde `nubeRealtime.ts`). Chunk inicial: 490 kB → 271 kB (gzip 141 → 84 kB) |
 | R5 | Hecho | `useDeferredValue` en el buscador, `cacheQuickFilter` en AG Grid y `plegarConCache` (`Tabla.logica.ts`, con tope de 20.000 textos). `plegar` se mudó a `Tabla.logica.ts` |
-| R6 | **Pendiente** | No se pudo compilar el crate de escritorio en el entorno de la sesión (falta WebKitGTK). Además conviene medir antes con la telemetría de `rendimiento` (ver R6) |
+| R6 | **Replanteado** | La telemetría muestra que el costo está en abrir una conexión SQLite nueva por llamada, no en la cantidad de llamadas (ver sección 12). Prioridad baja |
 | R7 | Hecho | `desdeInicialHistorial()` en `SelectorRangoFecha.logica.ts`: Historial y Visitas abren con los últimos 7 días. El atajo "Últimos 7 días" deja `hasta` abierto, igual que "Últimos 6 meses", para no perder lo posterior a medianoche con la app abierta |
 | R8 | Parcial | Quitado `backdrop-filter` del login. La nieve ya no cuesta nada con `NAVIDAD_ACTIVA = false` (sale antes de pedir cuadros): no se tocó. La animación de alto del modal se dejó: es un pedido del 2026-09-24 y el costo es chico (sólo el modal) |
 
@@ -529,3 +529,81 @@ buscar "karen angeles" encuentra "KAREN DE LOS ÁNGELES"; Historial abre en
 
 **Falta comprobar en Windows** con el instalador: tiempo de arranque (R1,
 R2, R4) y que el cambio de sección se sienta inmediato (R3).
+
+## 12. Lo que dice la telemetría (staging, consultada el 2026-11-14)
+
+Tabla `public.telemetria_diagnostico` del proyecto de staging, versiones
+`desktop-1.10.x`, últimos 21 días: 3 equipos con el grupo `rendimiento`,
+15 días con datos. Tiempos de cada comando medidos en el frontend, IPC
+incluido (`api/invocar.ts`), agregados por lote.
+
+### Arranque (`arranque.ms_hasta_ventana`)
+
+| Versión | Arranques | p50 | p90 | Mínimo |
+| --- | --- | --- | --- | --- |
+| 1.10.7 | 27 | 3,16 s | 4,00 s | 2,81 s |
+| 1.10.9 | 2 | 3,30 s | 3,32 s | 3,27 s |
+
+Ningún arranque baja de 2,8 s: el piso de 2 s del splash (R1) es la mayor
+parte. Con el piso en 300 ms, lo esperable es ~1,2–1,8 s; **medirlo** con
+los primeros arranques de la versión que lleve la fase 1.
+
+Anomalía: en 1.10.8 el p50 da 5.830.833 ms (~97 min, 9 arranques). Parece
+que el reloj sigue corriendo mientras la ventana no se muestra (equipo
+suspendido, o la app abierta oculta). Revisar cómo se mide antes de usar
+esa métrica para comparar.
+
+### Recarga de Activos (R6)
+
+5.058 recargas en 21 días (~110 por día y equipo). Las 8 llamadas van en
+paralelo, así que la recarga dura lo que la más lenta:
+
+| Comando | Conexión | p50 | p90 |
+| --- | --- | --- | --- |
+| `listar_ingresos_activos` y otras 3 locales | `state.core()` | 17–19 ms | 58–71 ms |
+| `listar_ingresos_remotos` y otras 3 remotas | `conexion_secundaria()` **nueva en cada llamada** | 78–79 ms | 146–149 ms |
+
+- Una recarga tarda **~80 ms (p50) y ~150 ms (p90)**. Por debajo de 100 ms
+  no se nota; en el p90 apenas.
+- Picos raros: 21 de 4.348 lotes (0,5 %) pasan de 500 ms y 8 de 2 s; 5 de
+  esos 8 coinciden con una sincronización a menos de 2 minutos.
+- Lo caro no es la cantidad de llamadas sino **abrir una conexión SQLite
+  nueva en cada una** (`GuiState::conexion_secundaria`): se lee el esquema
+  y la caché de páginas arranca vacía, con descifrado ChaCha20. La clave va
+  en crudo (`x'…'`), así que no hay derivación de clave. Prueba indirecta:
+  `aviso_bandeja_salida`, que sólo cuenta pendientes, tarda 25 ms (p50).
+
+**Conclusión: R6 tal como estaba planteado (un solo comando) no vale la
+pena.** La alternativa de menos piezas es una conexión de lectura
+persistente en `GuiState` (un `Mutex<Connection>` abierto una vez) para
+los listados remotos, `aviso_bandeja_salida` y `listar_historial_sitio`.
+Ganancia estimada: ~50 ms por recarga de Activos. Prioridad baja.
+
+### Otros comandos
+
+| Comando | Llamadas | p50 | p90 | Nota |
+| --- | --- | --- | --- | --- |
+| `aviso_bandeja_salida` | 63.937 | 25 ms | 46 ms | Cada 15 s en `BarraNube.tsx`; con la conexión persistente bajaría a casi nada |
+| `listar_historial` + `listar_historial_sitio` | 2.674 | 72 + 183 ms | 134 + 346 ms | Con 6 meses. El arranque en 7 días (R7) debería bajarlo mucho; medir |
+| `sincronizar_con_nube` | 499 | 1,2 s | 2,0 s | Red; máximo 28 s. 8 errores |
+| `sesion_realtime_nube` | 1.033 | 3 ms | 8 ms | **338 errores (33 %)**: revisar aparte, no es rendimiento |
+| `login` | 79 | 406 ms | 1,0 s | 33 errores (probablemente contraseñas mal escritas) |
+
+### Interfaz
+
+- Cambio de pantalla hasta el primer cuadro: 23–31 ms (p50) y 27–74 ms
+  (p90) en todas las secciones. La navegación ya era rápida; R3 quita el
+  fundido, que esta métrica no capturaba.
+- Tareas largas del hilo principal (`ui_bloqueos`): p50 ~55 ms y p90
+  ~90 ms en Activos; sólo 2 pasaron de 200 ms en todo el período. La
+  interfaz no se traba.
+
+### Qué cambia en las prioridades
+
+1. El arranque es lo único que el operador siente todos los días: la
+   fase 1 ya lo ataca (R1, R2, R4). Falta medirlo en la versión nueva.
+2. R6 baja a prioridad baja y cambia de forma (conexión persistente, no
+   comando único).
+3. El 33 % de errores de `sesion_realtime_nube` merece una revisión propia.
+4. El resto del rendimiento está bien: lo que queda por ganar está en la
+   UX (fase 3), no en la velocidad.
