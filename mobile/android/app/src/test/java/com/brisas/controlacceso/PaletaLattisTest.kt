@@ -92,6 +92,35 @@ class PaletaLattisTest {
     }
 
     @Test
+    fun laAdvertenciaSeLeeYNoSeConfundeConElError() {
+        for ((tema, p) in paletas) {
+            exigir("$tema franja de advertencia", p.textoAdvertencia, p.advertenciaSuave, 4.5)
+            exigir("$tema aviso breve de advertencia", p.rellenoAdvertencia, p.sobreRelleno, 4.5)
+            assertTrue("$tema advertencia distinta del error", p.advertenciaSuave != p.errorSuave)
+            assertTrue("$tema relleno de advertencia distinto del de error", p.rellenoAdvertencia != p.rellenoError)
+        }
+    }
+
+    @Test
+    fun losCamposYElGafeteSeLeen() {
+        // El número de gafete va en texto principal sobre `variante`, y los
+        // textos de ayuda de los campos en secundario.
+        for ((tema, p) in paletas) {
+            exigir("$tema gafete", p.texto, p.variante, 7.0)
+            exigir("$tema secundario sobre campo", p.textoSecundario, p.variante, 4.5)
+            exigir("$tema secundario sobre fondo", p.textoSecundario, p.fondo, 4.5)
+        }
+    }
+
+    @Test
+    fun enClaroLaTarjetaSeSeparaDelFondo() {
+        // Con Tokyo Day el fondo y la tarjeta daban 1,13:1; tarjeta blanca
+        // sobre gris muy claro más el borde suave las separa.
+        assertTrue(PaletaDia.tarjeta != PaletaDia.fondo)
+        exigir("borde suave contra tarjeta", PaletaDia.bordeSuave, PaletaDia.tarjeta, 1.4)
+    }
+
+    @Test
     fun enOscuroLaTarjetaSeSeparaDelFondo() {
         // Con Tokyo Night daba 1,05:1 y la lista parecía una sola mancha.
         exigir("tarjeta contra fondo", PaletaNoche.tarjeta, PaletaNoche.fondo, 1.15)

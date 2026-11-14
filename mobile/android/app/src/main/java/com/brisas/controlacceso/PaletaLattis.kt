@@ -72,6 +72,12 @@ internal class Paleta(
     /// Ámbar de íconos y puntos (sin red).
     val advertencia: Color,
     val textoAdvertencia: Color,
+    /// Fondo de una franja de advertencia ([TipoEstado.AVISO]), con
+    /// [textoAdvertencia] encima: antes compartía el rojo del error y un
+    /// "se reintenta solo" se leía igual que un fallo.
+    val advertenciaSuave: Color,
+    /// Relleno del aviso breve de advertencia, con [sobreRelleno] encima.
+    val rellenoAdvertencia: Color,
     /// La tarjeta de quien ya está adentro en la búsqueda de contratistas:
     /// fondo ámbar suave, franja a la izquierda y la palabra "ADENTRO". Ámbar
     /// como la señal de [AmarilloSenal], que ya dice eso mismo.
@@ -102,45 +108,48 @@ internal class Paleta(
 @Immutable
 internal class TinteTarjeta(val fondo: Color, val franja: Color)
 
-/// Tokyo Day: paleta oficial de folke/tokyonight.nvim (`tokyonight_day`), con
-/// los textos y estados ajustados en el escritorio para llegar a 4,5:1. Se
-/// queda igual que en el escritorio.
+/// Claro neutro de alto contraste (2026-11-14, `docs/handoff-rediseno-movil-ux.md`,
+/// fase 1): reemplaza Tokyo Day, cuya tarjeta casi no se separaba del fondo
+/// (1,13:1) y cuyo texto secundario quedaba en 3,7:1 sobre los campos. Se
+/// lee al sol en la portería: tarjetas blancas sobre un gris muy claro,
+/// texto casi negro, un solo azul para lo que se toca.
 internal val PaletaDia = Paleta(
-    fondo = Color(0xFFD0D5E3),
-    tarjeta = Color(0xFFE1E2E7),
-    variante = Color(0xFFC4C8DA),
-    realce = Color(0xFFE9E9ED),
-    texto = Color(0xFF343B58),
-    textoSecundario = Color(0xFF565F89),
-    borde = Color(0xFF848CB5),
-    bordeSuave = Color(0xFFA8AECB),
-    bordeVidrio = Color(0xFF848CB5).copy(alpha = 0.25f),
-    acento = Color(0xFF2959AA),
-    acentoSuave = Color(0xFFCFD4E1),
-    acentoInverso = Color(0xFF7AA2F7),
+    fondo = Color(0xFFF2F4F7),
+    tarjeta = Color(0xFFFFFFFF),
+    variante = Color(0xFFE8ECF2),
+    realce = Color(0xFFFFFFFF),
+    texto = Color(0xFF111827),
+    textoSecundario = Color(0xFF4B5563),
+    borde = Color(0xFF667085),
+    bordeSuave = Color(0xFFD0D5DD),
+    bordeVidrio = Color(0xFF667085).copy(alpha = 0.25f),
+    acento = Color(0xFF1D4ED8),
+    acentoSuave = Color(0xFFE0E7FF),
+    acentoInverso = Color(0xFF6EA8FF),
     sobreAcento = Color(0xFFFFFFFF),
-    relleno = Color(0xFF2959AA),
+    relleno = Color(0xFF1D4ED8),
     sobreRelleno = Color(0xFFFFFFFF),
-    info = Color(0xFF006D84),
-    infoSuave = Color(0xFFCBD6DD),
-    error = Color(0xFFA93737),
-    errorSuave = Color(0xFFDBD1D5),
-    exito = Color(0xFF4A6330),
-    rellenoExito = Color(0xFF4A6330),
-    rellenoInfo = Color(0xFF2959AA),
-    rellenoError = Color(0xFFA93737),
-    advertencia = Color(0xFFE0A100),
-    // #8C5F00 daba 4,3:1 sobre la tarjeta.
-    textoAdvertencia = Color(0xFF7F5600),
+    info = Color(0xFF0369A1),
+    infoSuave = Color(0xFFE0F2FE),
+    error = Color(0xFFB42318),
+    errorSuave = Color(0xFFFEE4E2),
+    exito = Color(0xFF15803D),
+    rellenoExito = Color(0xFF15803D),
+    rellenoInfo = Color(0xFF1D4ED8),
+    rellenoError = Color(0xFFB42318),
+    // Ícono o punto, no texto: 3,2:1 sobre la tarjeta.
+    advertencia = Color(0xFFD97706),
+    textoAdvertencia = Color(0xFF92400E),
+    advertenciaSuave = Color(0xFFFEF3C7),
+    rellenoAdvertencia = Color(0xFFB45309),
     adentroSuave = Color(0xFFFFF1C2),
-    // #E0A100 daba 2:1 sobre el crema.
-    franjaAdentro = Color(0xFFA87400),
-    textoAdentro = Color(0xFF7F5600),
-    salidaSuave = Color(0xFFDCE6FA),
-    franjaSalida = Color(0xFF2959AA),
-    bloqueadoSuave = Color(0xFFFBE3E3),
-    franjaBloqueado = Color(0xFFA93737),
-    textoBloqueado = Color(0xFFA93737),
+    franjaAdentro = Color(0xFFB45309),
+    textoAdentro = Color(0xFF92400E),
+    salidaSuave = Color(0xFFDBEAFE),
+    franjaSalida = Color(0xFF1D4ED8),
+    bloqueadoSuave = Color(0xFFFEE4E2),
+    franjaBloqueado = Color(0xFFB42318),
+    textoBloqueado = Color(0xFFB42318),
     contratistas = TonoSeccion(acento = Color(0xFF00806A), relleno = Color(0xFF00806A)),
     kof = TonoSeccion(acento = Color(0xFFC4161C), relleno = Color(0xFFC4161C)),
     proveedores = TonoSeccion(acento = Color(0xFFB85C00), relleno = Color(0xFFB85C00)),
@@ -164,7 +173,7 @@ internal val PaletaNoche = Paleta(
     acentoSuave = Color(0xFF1E2A40),
     acentoInverso = Color(0xFF2959AA),
     sobreAcento = Color(0xFF08080A),
-    relleno = Color(0xFF3366CC),
+    relleno = Color(0xFF2F5FD0),
     sobreRelleno = Color(0xFFFFFFFF),
     info = Color(0xFF6CC5E6),
     infoSuave = Color(0xFF1B2A33),
@@ -172,10 +181,12 @@ internal val PaletaNoche = Paleta(
     errorSuave = Color(0xFF3A1F22),
     exito = Color(0xFF4ADE80),
     rellenoExito = Color(0xFF1F7A44),
-    rellenoInfo = Color(0xFF3366CC),
+    rellenoInfo = Color(0xFF2F5FD0),
     rellenoError = Color(0xFFC53030),
     advertencia = Color(0xFFFBBF24),
     textoAdvertencia = Color(0xFFFBBF24),
+    advertenciaSuave = Color(0xFF3A2E10),
+    rellenoAdvertencia = Color(0xFFB45309),
     adentroSuave = Color(0xFF2E2610),
     franjaAdentro = Color(0xFFFBBF24),
     textoAdentro = Color(0xFFFBBF24),

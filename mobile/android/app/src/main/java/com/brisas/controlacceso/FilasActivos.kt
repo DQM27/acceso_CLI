@@ -174,8 +174,9 @@ internal fun TarjetaActivo(
 }
 
 /// El número de gafete en un cuadro de esquinas redondeadas (pedido del
-/// usuario 2026-10-27: cuadrado, no píldora), en el color de la sección;
-/// "S/G" en gris si entró sin gafete.
+/// usuario 2026-10-27: cuadrado, no píldora); "S/G" en gris si entró sin
+/// gafete. Neutro y no en el color de la sección (2026-11-14): es lo que se
+/// coteja en la salida, y el acento sobre su tinte quedaba en 3:1.
 @Composable
 private fun CuadroGafete(gafeteNumero: Long?) {
     val conGafete = gafeteNumero != null
@@ -183,16 +184,16 @@ private fun CuadroGafete(gafeteNumero: Long?) {
         modifier = Modifier
             .defaultMinSize(minWidth = 44.dp, minHeight = 30.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (conGafete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 8.dp)
             .semantics(mergeDescendants = true) { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             gafeteNumero?.toString() ?: "S/G",
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = if (conGafete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (conGafete) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }

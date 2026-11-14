@@ -99,8 +99,12 @@ private fun IconoEstado(tipo: TipoEstado) {
 @Composable
 private fun coloresEstado(tipo: TipoEstado): Pair<Color, Color> {
     val esquema = MaterialTheme.colorScheme
+    val paleta = paletaActual
     return when (tipo) {
-        TipoEstado.ERROR, TipoEstado.AVISO -> esquema.errorContainer to esquema.onErrorContainer
+        TipoEstado.ERROR -> esquema.errorContainer to esquema.onErrorContainer
+        // Ámbar, no rojo: "se reintenta solo" o "PRAIND por vencer" no son un
+        // fallo y se leían igual que uno.
+        TipoEstado.AVISO -> paleta.advertenciaSuave to paleta.textoAdvertencia
         TipoEstado.EXITO -> lerp(esquema.surface, ColorExitoBrisas, 0.16f) to ColorExitoBrisas
         TipoEstado.INFO, TipoEstado.CARGANDO -> esquema.surface to esquema.onSurfaceVariant
     }
@@ -161,7 +165,8 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
             // claros quedaban fluorescentes (ver `PaletaLattis.kt`).
             color = when (aviso.tipo) {
                 TipoEstado.EXITO -> paleta.rellenoExito
-                TipoEstado.ERROR, TipoEstado.AVISO -> paleta.rellenoError
+                TipoEstado.ERROR -> paleta.rellenoError
+                TipoEstado.AVISO -> paleta.rellenoAdvertencia
                 TipoEstado.INFO, TipoEstado.CARGANDO -> paleta.rellenoInfo
             },
             contentColor = paleta.sobreRelleno,
