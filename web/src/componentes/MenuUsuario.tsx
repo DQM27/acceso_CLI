@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { LogOut, Moon, PanelLeft, Sun } from "lucide-react";
 import type { UsuarioSesion } from "../api";
 import Engranaje from "./Engranaje";
 import { ListaFlotante } from "./ListaFlotante";
@@ -32,12 +32,17 @@ export default function MenuUsuario({
   colapsado,
   tema,
   onAlternarTema,
+  onPersonalizarMenu,
   onCerrarSesion,
 }: {
   sesion: UsuarioSesion;
   colapsado: boolean;
   tema: Tema;
   onAlternarTema: () => void;
+  /** Abre el menú para mostrar/ocultar secciones junto a la cuenta. Antes
+   * sólo se llegaba con clic derecho en el menú lateral (auditoría
+   * 2026-11-14, U10, igual que el escritorio). */
+  onPersonalizarMenu: (posicion: { x: number; y: number }) => void;
   onCerrarSesion: () => void;
 }) {
   // `abierto` es lo que quiere quien usa el panel; `visible` lo mantiene en
@@ -80,7 +85,7 @@ export default function MenuUsuario({
         onClick={abierto ? cerrar : abrir}
         aria-expanded={abierto}
         aria-haspopup="menu"
-        title={`${sesion.nombre} — tema y cerrar sesión`}
+        title={`${sesion.nombre} — tema, menú y cerrar sesión`}
         aria-label={`Cuenta de ${sesion.nombre}`}
       >
         <Engranaje>{inicialDe(sesion.nombre)}</Engranaje>
@@ -103,6 +108,24 @@ export default function MenuUsuario({
             >
               <IconoTema size={17} strokeWidth={2} aria-hidden="true" />
               Tema: {NOMBRE_TEMA[tema]}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="boton boton-icono boton-salir"
+              title="Mostrar, ocultar o restablecer las secciones del menú lateral"
+              onClick={() => {
+                // Al costado de la cuenta, a su altura (el menú mide ~300 px).
+                const caja = campoRef.current?.getBoundingClientRect();
+                cerrar();
+                onPersonalizarMenu({
+                  x: (caja?.right ?? 0) + 8,
+                  y: Math.max(8, (caja?.bottom ?? 0) - 300),
+                });
+              }}
+            >
+              <PanelLeft size={17} strokeWidth={2} aria-hidden="true" />
+              Personalizar menú
             </button>
             <button type="button" role="menuitem" className="boton boton-icono boton-salir" onClick={onCerrarSesion}>
               <LogOut size={17} strokeWidth={2} aria-hidden="true" />

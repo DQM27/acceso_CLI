@@ -15,7 +15,7 @@ export default function AvisoTruncado({ mensaje }: { mensaje: string }) {
         borderRadius: "var(--radio-chico)",
         border: "1px solid var(--advertencia)",
         color: "var(--advertencia)",
-        fontSize: "0.85rem",
+        fontSize: "var(--tam-sm)",
       }}
     >
       {mensaje}

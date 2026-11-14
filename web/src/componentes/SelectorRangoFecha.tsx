@@ -57,7 +57,7 @@ export default function SelectorRangoFecha({
           onClick={alternar}
           aria-expanded={abierto}
           title={`Período: ${textoRangoFecha(desde, hasta)}`}
-          style={{ textTransform: "uppercase", fontWeight: 400 }}
+          style={{ fontWeight: 400 }}
         >
           <CalendarDays size={16} />
           {etiquetaCortaRango(desde, hasta)}
@@ -90,14 +90,12 @@ export default function SelectorRangoFecha({
                     className="boton"
                     style={{
                       padding: "0.35rem 0.4rem",
-                      fontSize: "0.78rem",
+                      fontSize: "var(--tam-xs)",
                       // Sin negrita y sin saltos: cada acceso rápido en una
                       // sola línea (en negrita "SEMANA PASADA" y "ÚLTIMOS 30
                       // DÍAS" se partían en dos).
                       fontWeight: 400,
                       whiteSpace: "nowrap",
-                      // En mayúsculas, como "ACCESO RÁPIDO".
-                      textTransform: "uppercase",
                     }}
                     // Un acceso rápido aplica y cierra en el acto (pedido del
                     // usuario 2026-09-23: elegir y después "Aplicar" era un

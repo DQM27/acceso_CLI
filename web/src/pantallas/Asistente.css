@@ -65,7 +65,7 @@
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   overflow: hidden;
-  font-size: 0.875rem;
+  font-size: var(--tam-sm);
 }
 .asistente-chat header {
   display: flex;
@@ -73,12 +73,12 @@
   gap: var(--espacio-2);
   padding: var(--espacio-3) var(--espacio-4);
   border-bottom: 1px solid var(--borde);
-  font-size: 0.95rem;
+  font-size: var(--tam-base);
   font-weight: 700;
 }
 /* Consultas de hoy contra el tope diario; se pone en advertencia al acercarse. */
 .asistente-contador {
-  font-size: 0.72rem;
+  font-size: var(--tam-xs);
   font-weight: 600;
   color: var(--muted);
   background: var(--panel-suave);
@@ -127,7 +127,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   cursor: pointer;
 }
 .asistente-reintentar:disabled {
@@ -241,17 +241,17 @@
 }
 .asistente-guia h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--tam-base);
 }
 .asistente-guia h3 {
   margin: 0 0 4px;
-  font-size: 0.875rem;
+  font-size: var(--tam-sm);
 }
 .asistente-guia p,
 .asistente-guia ul {
   margin: 0 0 var(--espacio-2);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--tam-sm);
 }
 .asistente-guia ul {
   padding-left: 18px;
@@ -409,7 +409,7 @@
   border: 1px solid var(--borde);
   border-radius: var(--radio-capsula);
   background: var(--panel);
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   animation: lienzo-aparecer 220ms ease-out both;
 }
 .asistente-filtro button {
@@ -484,7 +484,7 @@
   background: transparent;
   color: var(--texto);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -496,7 +496,7 @@
 .asistente-menu-grupo {
   padding: 6px 10px 2px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--tam-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -513,7 +513,7 @@
   animation: lienzo-aparecer 180ms ease-out both;
 }
 .asistente-guardar label {
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
   color: var(--muted);
 }
 .asistente-guardar input {
@@ -529,7 +529,7 @@
 .asistente-guardar-ayuda {
   flex-basis: 100%;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--tam-xs);
 }
 .asistente-ok {
   color: var(--exito);
@@ -640,7 +640,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.9rem;
+  font-size: var(--tam-titulo);
   font-weight: 700;
   line-height: 1.1;
   color: var(--texto);
@@ -659,7 +659,7 @@
   display: block;
   margin-top: 6px;
   color: var(--texto-atenuado);
-  font-size: 0.78rem;
+  font-size: var(--tam-xs);
 }
 .lienzo-kpi-cabeza {
   display: flex;
@@ -708,11 +708,11 @@
 }
 .lienzo-bloque-cabecera h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--tam-base);
 }
 .lienzo-subtitulo {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
 }
 .lienzo-alternar {
   margin-left: auto;
@@ -772,7 +772,7 @@
 }
 .lienzo-nota {
   margin: var(--espacio-2) 0 0;
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
 }
 
 .lienzo-tabla-caja {
@@ -781,7 +781,7 @@
 .lienzo-tabla {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
 }
 .lienzo-tabla th,
 .lienzo-tabla td {
@@ -833,7 +833,7 @@
   background: transparent;
   color: var(--texto);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
 }
 /* La grilla dibuja todas sus filas (para imprimirla completa): en pantalla, la caja se desplaza. */
 .lienzo-tabla-grilla {
@@ -860,7 +860,7 @@
   color: var(--muted);
 }
 .lienzo-nota-celda {
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   font-style: italic;
   white-space: nowrap;
 }
@@ -898,7 +898,7 @@
   gap: 4px;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   font-weight: 500;
   line-height: 1.6;
   white-space: nowrap;
@@ -1164,7 +1164,7 @@
   list-style: none;
   margin: var(--espacio-3) 0 0;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
 }
 .lienzo-leyenda li {
   display: flex;
@@ -1202,7 +1202,7 @@
   border-radius: var(--radio-chico);
   background: var(--elevado);
   box-shadow: var(--sombra-panel);
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   animation: lienzo-desvanecer 120ms ease-out both;
 }
 .lienzo-tooltip-titulo {
@@ -1226,7 +1226,7 @@
   padding-top: 6px;
   border-top: 1px solid var(--panel-suave);
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--tam-xs);
 }
 
 .lienzo-aparecer {
@@ -1291,12 +1291,12 @@
   border: 1px solid var(--borde);
   border-radius: var(--radio-capsula);
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--tam-xs);
 }
 .lienzo-libre-descripcion {
   margin: 0 0 var(--espacio-2);
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
 }
 
 /* Consulta del asistente: aviso de filas recortadas y el SQL a la vista (auditable). */
@@ -1306,11 +1306,11 @@
   border: 1px solid var(--advertencia);
   border-radius: var(--radio-chico);
   background: var(--advertencia-suave);
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
 }
 .asistente-sql {
   margin-top: var(--espacio-4);
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
   color: var(--muted);
 }
 .asistente-sql summary {
@@ -1326,7 +1326,7 @@
   background: var(--campo-fondo);
   color: var(--texto);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1374,11 +1374,11 @@
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--tam-xs);
 }
 .asistente-alerta-motivo {
   margin: var(--espacio-2) 0;
-  font-size: 0.85rem;
+  font-size: var(--tam-sm);
   color: var(--muted);
 }
 .asistente-alerta blockquote {

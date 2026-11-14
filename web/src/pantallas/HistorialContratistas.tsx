@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import IconoDispositivo from "../componentes/IconoDispositivo";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -246,6 +247,7 @@ export default function HistorialContratistas({
         flex: 1,
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
+        cellRenderer: IconoDispositivo,
       },
       {
         field: "tipo_ingreso",

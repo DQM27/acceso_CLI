@@ -4,6 +4,7 @@ import type { DefinicionColumnaExport } from "../exportacion";
 import { textoFecha, textoHora } from "../tiempo";
 import { columnaFecha, columnaGafete, columnaHora, textoGafete } from "../componentes/columnasComunes";
 import { textoDispositivo } from "./Historial.logica";
+import IconoDispositivo from "../componentes/IconoDispositivo";
 
 /** Cómo se rotula cada dato en cada clase -- los mismos nombres que en el
  * historial de escritorio (`desktop/src/pantallas/HistorialProveedores.tsx`,
@@ -121,6 +122,7 @@ export function columnasClase(clase: ClaseOtra): ColDef<MovimientoClase>[] {
       flex: 0.9,
       minWidth: 110,
       valueFormatter: (p) => textoDispositivo(p.value ?? null),
+      cellRenderer: IconoDispositivo,
     },
     e.placa ? { colId: "placa", field: "placa", headerName: e.placa, flex: 0.9, minWidth: 100 } : null,
     columnaGafete<MovimientoClase>({ flex: 0.8 }),

@@ -263,6 +263,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // abierto de par en par, nunca "colapsado a íconos" -- ver el media query
   // en index.css.
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  // Menú para mostrar/ocultar secciones: clic derecho en el lateral o
+  // «Personalizar menú» en el menú de la cuenta.
+  const [menuSecciones, setMenuSecciones] = useState<{ x: number; y: number } | null>(null);
 
   // Ajuste durante el render (patrón de React): la sección nueva se monta en
   // el mismo render en que se elige, sin un efecto que la agregue después
@@ -310,12 +313,15 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
+            posicionMenuSecciones={menuSecciones}
+            onPosicionMenuSecciones={setMenuSecciones}
             pie={
               <MenuUsuario
                 sesion={sesion}
                 colapsado={colapsado}
                 tema={tema}
                 onAlternarTema={alternarTema}
+                onPersonalizarMenu={setMenuSecciones}
                 onCerrarSesion={cerrarSesion}
               />
             }
