@@ -79,7 +79,7 @@ internal fun <T> ListaConEstados(
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
     // Abajo, lugar para lo que flota sobre la barra (ver [EspacioPieLista]).
-    contentPadding: PaddingValues = PaddingValues(top = 5.dp, bottom = EspacioPieLista),
+    contentPadding: PaddingValues = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
     // El del mensaje sin filas: el de la sección (cajas en Proveedores, sobre
     // en Correo, insignia en KOF), como el ícono de su pestaña.
     iconoVacio: ImageVector = IconosLucide.Personas,
@@ -123,7 +123,7 @@ internal fun <T> ListaConEstados(
                 EstadoLista.LISTA -> LazyColumn(
                     state = estadoLista,
                     contentPadding = contentPadding,
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (pista != null) {
                         item(key = CLAVE_PISTA) {
@@ -178,7 +178,7 @@ private fun FilasMarcadoras(arriba: androidx.compose.ui.unit.Dp) {
             .fillMaxWidth()
             .padding(top = arriba)
             .semantics { contentDescription = descripcion },
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         repeat(4) {
             Column(

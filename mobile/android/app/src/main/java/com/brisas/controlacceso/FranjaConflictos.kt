@@ -49,7 +49,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
     val varios = mensajes.size > 1
     var desplegada by rememberSaveable { mutableStateOf(false) }
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         modifier = modifier
@@ -82,7 +82,7 @@ fun FranjaConflictos(mensajes: List<String>, modifier: Modifier = Modifier) {
                         .padding(start = 32.dp, top = 8.dp)
                         .heightIn(max = 220.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     mensajes.forEach { mensaje ->
                         Text(mensaje, style = MaterialTheme.typography.bodySmall)

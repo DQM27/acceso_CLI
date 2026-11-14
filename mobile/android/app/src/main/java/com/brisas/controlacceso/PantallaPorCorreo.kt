@@ -311,7 +311,7 @@ private fun FormularioNuevoIngresoCorreo(
     // `imePadding()` en un Column SIN `fillMaxSize`, mismo motivo que en
     // [FormularioNuevoIngresoProveedor].
     PantallaConGestoVolver(onVolver = onVolver) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
         val scrollState = rememberScrollState()
         val scope = rememberCoroutineScope()
         Column(modifier = Modifier.verticalScroll(scrollState).imePadding()) {

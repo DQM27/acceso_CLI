@@ -66,7 +66,7 @@ internal fun SeccionFormulario(
                 titulo.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
             )
         }
         GrupoCampos(contenido = contenido)
@@ -76,7 +76,7 @@ internal fun SeccionFormulario(
                 style = MaterialTheme.typography.bodySmall,
                 color = if (pieEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = if (pieEsError) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
             )
         }
     }
@@ -92,22 +92,22 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 12.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(MaterialTheme.colorScheme.primaryContainer)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
             Icon(IconosLucide.EscanearDocumento, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(titulo, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

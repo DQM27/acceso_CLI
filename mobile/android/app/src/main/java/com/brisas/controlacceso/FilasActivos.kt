@@ -184,7 +184,7 @@ private fun CuadroGafete(gafeteNumero: Long?) {
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 44.dp, minHeight = 30.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(RADIO_CHICO))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 8.dp)
             .semantics(mergeDescendants = true) { contentDescription = if (conGafete) "Gafete $gafeteNumero" else "Sin gafete" },

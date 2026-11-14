@@ -25,13 +25,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-internal val FormaControlBrisas = RoundedCornerShape(16.dp)
+// Los únicos tres radios de la app, más el círculo y la cápsula (2026-11-14,
+// fase 3 de `docs/handoff-rediseno-movil-ux.md`; antes eran doce). No usar
+// `RoundedCornerShape(n.dp)` suelto en una pantalla. Los espacios siguen la
+// escala 4, 8, 12, 16, 24.
+/// Cuadros chicos: el número de gafete, el S/G, la inicial del menú.
+internal val RADIO_CHICO = 8.dp
+/// Controles: botones, campos, franjas, el selector.
+internal val RADIO_CONTROL = 12.dp
+/// Tarjetas, hojas, menús y las piezas de abajo.
+internal val RADIO_TARJETA = 20.dp
+
+internal val FormaControlBrisas = RoundedCornerShape(RADIO_CONTROL)
 internal val FormasBrisas = Shapes(
     extraSmall = FormaControlBrisas,
     small = FormaControlBrisas,
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(RADIO_TARJETA),
+    large = RoundedCornerShape(RADIO_TARJETA),
+    extraLarge = RoundedCornerShape(RADIO_TARJETA),
 )
 // Los colores salen de `PaletaLattis.kt`, según el tema elegido en la app
 // ([temaActual]), no sólo el del sistema.

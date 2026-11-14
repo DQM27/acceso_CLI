@@ -183,7 +183,7 @@ fun PantallaReconectarEquipo(
 @Composable
 fun FranjaEquipoRetirado(onReconectar: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         modifier = modifier.fillMaxWidth(),

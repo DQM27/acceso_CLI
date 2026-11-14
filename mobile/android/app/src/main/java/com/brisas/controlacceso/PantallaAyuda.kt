@@ -172,7 +172,7 @@ private fun FilaAyuda(titulo: String, onClick: () -> Unit, detalle: String? = nu
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
+            .padding(vertical = 8.dp),
     ) {
         Text(titulo, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         if (detalle != null) {
@@ -201,7 +201,7 @@ private fun TemaAyuda(destino: DestinoAyuda, onAbrir: (DestinoAyuda) -> Unit, on
         LazyColumn(
             state = estadoLista,
             contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.weight(1f),
         ) {
             items(bloques) { bloque -> BloqueAyuda(bloque, enlace) }
@@ -222,7 +222,7 @@ private fun BloqueAyuda(bloque: BloqueManual, onEnlace: (TramoManual) -> Unit) {
             texto(bloque.tramos),
             style = if (bloque.nivel <= 2u) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 14.dp),
+            modifier = Modifier.padding(top = 12.dp),
         )
         is BloqueManual.Parrafo -> Text(
             texto(bloque.tramos),
@@ -244,14 +244,14 @@ private fun BloqueAyuda(bloque: BloqueManual, onEnlace: (TramoManual) -> Unit) {
         is BloqueManual.Tabla -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (fila in bloque.filas) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(RADIO_CONTROL),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         fila.celdas.forEachIndexed { i, celda ->
                             if (i == 0) {

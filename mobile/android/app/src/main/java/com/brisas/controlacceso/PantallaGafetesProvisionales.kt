@@ -247,7 +247,7 @@ private fun ResultadosEncargado(texto: String, resultados: List<EncargadoRuta>, 
     }
     LazyColumn(
         contentPadding = PADDING_RESULTADOS,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(resultados, key = { it.id }) { encargado ->
             FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })

@@ -78,7 +78,7 @@ internal fun FormularioNuevoIngresoProveedor(
     // Atrás del sistema (con su gesto) va al mismo lugar que "‹ Volver": sin
     // esto se escapaba a la Activity (hallazgo 2026-09-19).
     PantallaConGestoVolver(onVolver = onVolver) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     Column(
@@ -164,7 +164,7 @@ internal fun FormularioNuevoIngresoProveedor(
             if (texto.isEmpty()) {
                 EstadoVacio("Busque la empresa", "Escriba el nombre; si no existe, la puede crear aquí.", IconosLucide.Empresa)
             } else {
-                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (ofrecerCrear && resultados.isEmpty()) {
                         item(key = "crear") {
                             FilaCrear(texto.uppercase()) {

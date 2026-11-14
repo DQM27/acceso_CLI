@@ -168,7 +168,7 @@ internal fun ResultadosGafete(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PADDING_RESULTADOS,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // El núcleo ya quitó los números repetidos: cada gafete es su clave.
             items(coincidencias, key = { it.numero }) { coincidencia ->
@@ -214,7 +214,7 @@ private fun FilaGafeteSinIngreso(numero: Int, sinPortador: GafeteSinPortador?) {
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(if (libre) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -254,7 +254,7 @@ private fun ListaActivos(
         detalleVacio = detalleVacio,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
-        contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
+        contentPadding = contentPadding ?: PaddingValues(top = 4.dp, bottom = EspacioPieLista),
         pista = pistaListaAdentro(activos.size),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
@@ -354,7 +354,7 @@ internal fun DialogoRegistrarSalida(
                     style = MaterialTheme.typography.labelLarge,
                     color = ColorTextoAdvertenciaBrisas,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             Text(

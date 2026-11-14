@@ -236,7 +236,7 @@ internal fun HojaIngreso(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconoPaso(Paso.INGRESO, tamano = 48.dp)
-                Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
+                Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                     Text(preparacion.nombre, style = MaterialTheme.typography.titleLarge)
                     Text(
                         "${preparacion.cedula} · ${preparacion.empresaNombre}",
@@ -410,7 +410,7 @@ internal fun PantallaBloqueoIngreso(
     onRegistrarSalida: () -> Unit = {},
 ) {
     PantallaConGestoVolver(onVolver = onVolver) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
             EncabezadoPantalla(
                 titulo = titulo,
                 subtitulo = subtitulo,
@@ -480,7 +480,7 @@ private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Mo
         label = "textoSinGafete",
     )
     // Del alto del renglón de [CampoAgrupado], que lo lleva al final.
-    val forma = RoundedCornerShape(10.dp)
+    val forma = RoundedCornerShape(RADIO_CHICO)
     Box(
         modifier = modifier
             .size(width = 56.dp, height = 36.dp)

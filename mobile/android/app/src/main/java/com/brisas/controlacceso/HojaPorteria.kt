@@ -96,7 +96,7 @@ internal fun HojaPorteria(
         }
         if (conHoja) {
             Surface(
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(RADIO_TARJETA),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
@@ -165,10 +165,10 @@ internal fun AvisoPorteria(texto: String?) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.errorContainer)
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(IconosLucide.Error, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
             Text(ultimo, color = tinte, style = MaterialTheme.typography.bodyMedium)
@@ -215,7 +215,7 @@ internal fun BotonPorteria(
                 color = LocalContentColor.current,
                 modifier = Modifier.size(18.dp),
             )
-            Text(texto, modifier = Modifier.padding(start = 10.dp))
+            Text(texto, modifier = Modifier.padding(start = 12.dp))
         } else {
             Text(texto)
         }
@@ -240,7 +240,7 @@ internal fun GrupoCampos(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(fondo),
         content = contenido,
     )

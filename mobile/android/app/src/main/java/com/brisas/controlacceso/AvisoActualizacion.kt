@@ -43,8 +43,8 @@ fun AvisoActualizacion(
         contentColor = if (urgente) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onTertiaryContainer,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = EspacioControlBrisas, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = EspacioControlBrisas, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

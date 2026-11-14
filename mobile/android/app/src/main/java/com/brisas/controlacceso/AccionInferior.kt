@@ -170,7 +170,7 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
             busqueda.ayuda,
             style = MaterialTheme.typography.bodyLarge,
@@ -312,7 +312,7 @@ internal fun BuscadorInferior(
                 }
             }
             if (encabezado != null) {
-                Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
                     encabezado()
                 }
             }

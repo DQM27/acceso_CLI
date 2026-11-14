@@ -66,7 +66,7 @@ fun MensajeEscaneo(texto: String, tono: TonoEscaneo, modifier: Modifier = Modifi
     Row(
         modifier = modifier
             .drawBehind { drawRoundRect(fondo, cornerRadius = CornerRadius(size.height / 2)) }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -81,7 +81,7 @@ fun MensajeEscaneo(texto: String, tono: TonoEscaneo, modifier: Modifier = Modifi
         ) { (textoMostrado, tonoMostrado) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(iconoDeTono(tonoMostrado), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
                     textoMostrado,
                     color = Color.White,

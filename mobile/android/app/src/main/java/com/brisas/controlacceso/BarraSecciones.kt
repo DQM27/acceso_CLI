@@ -157,7 +157,7 @@ internal fun BarraSecciones(
 }
 
 internal val ALTO_BARRA_SECCIONES = 58.dp
-private val MARGEN_INTERIOR_BARRA = 5.dp
+private val MARGEN_INTERIOR_BARRA = 4.dp
 /// El mismo margen que las tarjetas de las listas: con 12dp la barra y la
 /// búsqueda sobresalían 4dp de cada lado (pruebas del usuario 2026-10-29).
 internal val MARGEN_LATERAL_BARRA = 16.dp

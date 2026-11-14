@@ -158,7 +158,7 @@ private const val MS_CONFIRMACION_VINCULADO = 1400L
 /// Tres rayitas: la del paso actual más larga y en color.
 @Composable
 private fun IndicadorPasos(actual: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(PasoVinculacion.entries.size) { indice ->
             val color by animateColorAsState(
                 if (indice <= actual) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,

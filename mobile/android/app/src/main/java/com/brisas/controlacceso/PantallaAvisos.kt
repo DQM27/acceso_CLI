@@ -203,7 +203,7 @@ private fun FilaAviso(
     var desplegado by rememberSaveable(aviso.id) { mutableStateOf(false) }
     val error = MaterialTheme.colorScheme.error
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(RADIO_TARJETA),
         color = if (aviso.emergente) lerp(MaterialTheme.colorScheme.surface, error, 0.10f) else MaterialTheme.colorScheme.surface,
         border = if (aviso.emergente) BorderStroke(1.dp, error.copy(alpha = 0.5f)) else null,
         modifier = modifier.fillMaxWidth(),
@@ -223,7 +223,7 @@ private fun FilaAviso(
                         .size(38.dp)
                         .background(
                             if (aviso.emergente) error else MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                            RoundedCornerShape(10.dp),
+                            RoundedCornerShape(RADIO_CHICO),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -253,7 +253,7 @@ private fun FilaAviso(
                         )
                         // Sin leer: un punto del color de la app junto a la hora.
                         if (!aviso.leido) {
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(8.dp))
                             Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
                         }
                     }
@@ -295,11 +295,11 @@ private fun PildoraAccion(texto: String, icono: ImageVector, color: Color, onCli
             .clip(CircleShape)
             .background(color.copy(alpha = 0.10f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         Text(texto, color = color, style = MaterialTheme.typography.labelLarge)
     }
 }
@@ -310,7 +310,7 @@ private fun PildoraAccion(texto: String, icono: ImageVector, color: Color, onCli
 @Composable
 fun FranjaEmergencia(aviso: AvisoBandeja, onAbrir: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         modifier = modifier.fillMaxWidth().clickable(onClick = onAbrir),

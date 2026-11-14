@@ -79,7 +79,7 @@ import androidx.compose.runtime.setValue
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
  * que el mockup, que usa esquinas visibles, no un óvalo completo. */
-internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
+internal val FormaCampoBrisas = RoundedCornerShape(RADIO_CONTROL)
 
 /** Altura de los campos de búsqueda "filled" (~10% más bajo que la altura
  * por defecto de un `TextField` sin label, pedido explícito 2026-09-15) --
@@ -90,7 +90,7 @@ internal val AlturaBusquedaBrisas = 50.dp
 
 // Antes que [FormaPildoraBrisas]: las propiedades de un archivo se inicializan
 // en orden.
-private val RADIO_PILDORA = 12.dp
+private val RADIO_PILDORA = RADIO_CONTROL
 
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
  * completa (percent=50), se veía más redondeada que el mockup, que usa
@@ -204,10 +204,10 @@ internal val FormaBusquedaBrisas: Shape get() = FormaPiezaEntera
 // una ranura fina.
 
 /** Radio de las esquinas de afuera de las piezas de abajo. */
-internal val RADIO_PIEZA = 18.dp
+internal val RADIO_PIEZA = RADIO_TARJETA
 
 /** Radio de las esquinas del corte, donde se juntan dos piezas. */
-internal val RADIO_CORTE = 6.dp
+internal val RADIO_CORTE = RADIO_CHICO
 
 /** La ranura entre las dos mitades de una pieza cortada. */
 internal val ESPACIO_CORTE = 4.dp
@@ -448,7 +448,7 @@ fun BotonIconoCuadradoBrisas(
         Box(
             modifier = Modifier
                 .size(TAMANO_BOTON_CUADRADO)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.surface)
                 .indication(interaccion, ripple()),
             contentAlignment = Alignment.Center,
@@ -524,7 +524,7 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(IconosLucide.Lapiz, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)

@@ -132,7 +132,7 @@ internal fun PasoEncargado(
     sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -178,7 +178,7 @@ internal fun PasoEncargado(
             // Provisionales para no empujar el resto del formulario fuera
             // de pantalla.
             ListaConDesvanecido {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     resultados.take(6).forEach { encargado ->
                         FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })
                     }

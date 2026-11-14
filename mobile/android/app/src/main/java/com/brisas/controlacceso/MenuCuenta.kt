@@ -222,22 +222,22 @@ private fun PanelCuenta(
     onCerrarSesion: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(RADIO_TARJETA),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         // Angosto a propósito: a 260dp tapaba media pantalla.
         modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 230.dp),
     ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
             Box {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(RADIO_CHICO))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -384,7 +384,7 @@ private fun OpcionMenu(
                 val avance by animateFloatAsState(progreso, label = "progresoActualizacion")
                 LinearProgressIndicator(
                     progress = { avance },
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(2.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(RADIO_CHICO)),
                 )
             }
         }
@@ -400,8 +400,8 @@ private fun SelectorTema(elegido: TemaApp?, onElegir: (TemaApp?) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(3.dp),
     ) {
@@ -410,10 +410,10 @@ private fun SelectorTema(elegido: TemaApp?, onElegir: (TemaApp?) -> Unit) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(RoundedCornerShape(RADIO_CHICO))
                     .background(if (activa) MaterialTheme.colorScheme.surface else Color.Transparent)
                     .selectable(selected = activa, role = Role.RadioButton, onClick = { onElegir(tema) })
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val color = if (activa) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant

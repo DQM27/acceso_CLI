@@ -56,14 +56,14 @@ internal fun FranjaEstado(texto: String, tipo: TipoEstado, modifier: Modifier = 
     }
     val (fondo, contenido) = coloresEstado(tipo)
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(RADIO_CONTROL),
         color = fondo,
         contentColor = contenido,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconoEstado(tipo)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 texto,
                 style = MaterialTheme.typography.bodyMedium,
@@ -167,9 +167,9 @@ internal fun HostAvisosBreves(avisos: AvisosBreves, modifier: Modifier = Modifie
             contentColor = paleta.sobreRelleno,
             modifier = Modifier.clickable { avisos.ocultar(aviso.id) },
         ) {
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconoEstado(aviso.tipo)
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
                     aviso.texto,
                     style = MaterialTheme.typography.bodyMedium,

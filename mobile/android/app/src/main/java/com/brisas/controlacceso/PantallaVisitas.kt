@@ -103,8 +103,8 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -149,7 +149,7 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
         } else {
             Column(
                 modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (verificacion) {
                     is VerificacionVisita.Entrada -> Entrada(
@@ -174,8 +174,8 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
 private fun ListaAdentro(visitas: List<VisitaAdentro>, onElegir: (VisitaAdentro) -> Unit) {
     ListaConDesvanecido {
         LazyColumn(
-            contentPadding = PaddingValues(top = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            contentPadding = PaddingValues(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(visitas, key = { clave(it.origen) }) { visita ->
                 TarjetaActivo(

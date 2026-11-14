@@ -126,7 +126,7 @@ fun PantallaNuevoContratista(
     // esto se escapaba a la Activity (hallazgo 2026-09-19). Con la cámara o el
     // buscador abiertos manda el atrás de ellos (se registran después).
     PantallaConGestoVolver(onVolver = onVolver) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
     ) {
@@ -186,7 +186,7 @@ fun PantallaNuevoContratista(
                 error = sugerenciaEmpresa != null && vm.empresaSeleccionada == null,
             )
             DivisorGrupo()
-            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 FilaPildoras(
                     opciones = TIPOS_CONTRATISTA.map(::etiquetaTipo),
                     seleccionado = TIPOS_CONTRATISTA.indexOf(vm.tipoIngreso),
@@ -255,7 +255,7 @@ fun PantallaNuevoContratista(
             if (coincidentes.isEmpty()) {
                 EstadoVacio("Sin resultados", "Pruebe con otro nombre. Las empresas nuevas se dan de alta en el panel.", IconosLucide.Empresa)
             } else {
-                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(coincidentes, key = { it.id }) { empresa ->
                         FilaResultado(empresa.nombre) {
                             vm.elegirEmpresa(empresa)

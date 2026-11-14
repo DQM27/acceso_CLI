@@ -105,7 +105,7 @@ internal fun PantallaConGestoVolver(
                 scaleY = escala
                 translationX = (if (desdeIzquierda) 1f else -1f) * progreso * 12.dp.toPx()
                 if (progreso > 0f) {
-                    shape = RoundedCornerShape((28 * progreso).dp)
+                    shape = RoundedCornerShape(RADIO_TARJETA * progreso)
                     clip = true
                 }
             },
