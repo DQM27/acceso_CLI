@@ -624,9 +624,13 @@ Ganancia estimada: ~50 ms por recarga de Activos. Prioridad baja.
   no tiene red, a veces durante horas (por ejemplo, de 9 h a 17 h). En sólo
   16 de 863 minutos con error había otra llamada a la nube funcionando en
   el minuto de al lado: son los momentos en que la red se cae o vuelve.
-- **Mejora menor posible:** con `navigator.onLine === false`, no intentar y
-  esperar el evento `online` en vez de reintentar cada minuto. Ahorra
-  llamadas inútiles y deja de inflar esta métrica. Prioridad baja.
+- **Hecho (2026-11-14, aprobado por el dueño):** con `navigator.onLine`
+  en `false`, `nubeRealtime.ts` ya no reintenta: espera el evento `online`
+  y entonces conecta enseguida, también si estaba en medio de una espera
+  entre reintentos. Contexto del dueño: esa PC se conecta por el internet
+  compartido de un teléfono, y hay días en que nadie se lo comparte. Si el
+  teléfono comparte sin datos (`onLine` en `true` pero sin internet), siguen
+  los reintentos normales.
 - **Lo que sí conviene revisar es la red de ese puesto**: identificar el
   equipo `a016c1b9…` (ver `sesion_inicio`/`identidad_equipo`). Mientras no
   hay red, la PC no recibe avisos en vivo; la sincronización periódica
