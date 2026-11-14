@@ -160,7 +160,7 @@ export default function FormularioGafete({
           </p>
         ) : (
           resumen.frase && (
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.9rem" }}>{resumen.frase}</p>
+            <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-base)" }}>{resumen.frase}</p>
           )
         )}
 

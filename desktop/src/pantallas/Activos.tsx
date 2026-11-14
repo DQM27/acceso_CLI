@@ -383,7 +383,7 @@ export default function Activos({
             <button
               type="button"
               className="boton"
-              style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
+              style={{ padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" }}
               onClick={() => salidaIndividual(fila)}
             >
               {/* En KOF no sale una persona: se devuelve el gafete. */}

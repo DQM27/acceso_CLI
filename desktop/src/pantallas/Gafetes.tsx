@@ -72,7 +72,7 @@ export default function Gafetes() {
             <button
               type="button"
               className="boton"
-              style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
+              style={{ padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" }}
               onClick={() => setGestionAbierta(gafete)}
             >
               Resolver
@@ -92,7 +92,7 @@ export default function Gafetes() {
             <button
               type="button"
               className="boton"
-              style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
+              style={{ padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" }}
               onClick={() => setDetalleAbierto(gafete)}
             >
               Detalles

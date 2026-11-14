@@ -321,7 +321,7 @@ export default function HistorialContratistas({
               borderRadius: "var(--radio-chico)",
               border: "1px solid var(--advertencia)",
               color: "var(--advertencia)",
-              fontSize: "0.85rem",
+              fontSize: "var(--tam-sm)",
             }}
           >
             Este rango tiene más de {filas.length.toLocaleString("es-CR")} movimientos — se

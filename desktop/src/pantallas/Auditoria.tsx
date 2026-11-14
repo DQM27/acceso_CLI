@@ -152,7 +152,7 @@ export default function Auditoria() {
               borderRadius: "var(--radio-chico)",
               border: "1px solid var(--advertencia)",
               color: "var(--advertencia)",
-              fontSize: "0.85rem",
+              fontSize: "var(--tam-sm)",
             }}
           >
             Hay más de {cambiosCargados.toLocaleString("es-CR")} cambios de auditoría — se

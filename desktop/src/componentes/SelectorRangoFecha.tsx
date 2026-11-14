@@ -57,18 +57,20 @@ export default function SelectorRangoFecha({
           onClick={alternar}
           aria-expanded={abierto}
           title={`Período: ${textoRangoFecha(desde, hasta)}`}
-          style={{ textTransform: "uppercase", fontWeight: 400 }}
+          style={{ fontWeight: 400 }}
         >
           <CalendarDays size={16} />
           {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
-      {/* Se abre al costado izquierdo del botón, a su misma altura (pedido
-          del usuario 2026-09-23), así nunca tapa los botones de al lado
-          (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
-          dos columnas, cada uno en una sola línea. */}
+      {/* Se abre debajo del botón. Antes se abría a su costado izquierdo
+          para no tapar Excel/CSV/PDF, que estaban al lado (pedido del
+          2026-09-23); desde que el período va al extremo izquierdo de la
+          barra (auditoría 2026-11-14, U5) eso lo dejaba cortado fuera de la
+          ventana, y exportar quedó en la otra punta. Ancho fijo: lo que
+          piden los accesos rápidos en dos columnas, cada uno en una línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={260} direccion="izquierda">
+        <ListaFlotante posicion={posicion} ancho={260}>
           <div
             ref={popoverRef}
             style={{
@@ -82,7 +84,7 @@ export default function SelectorRangoFecha({
               <p
                 style={{
                   margin: "0 0 0.4rem",
-                  fontSize: "0.75rem",
+                  fontSize: "var(--tam-xs)",
                   color: "var(--muted)",
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
@@ -99,14 +101,12 @@ export default function SelectorRangoFecha({
                     className="boton"
                     style={{
                       padding: "0.35rem 0.4rem",
-                      fontSize: "0.78rem",
+                      fontSize: "var(--tam-xs)",
                       // Sin negrita y sin saltos: cada acceso rápido en una
                       // sola línea (en negrita "SEMANA PASADA" y "ÚLTIMOS 30
                       // DÍAS" se partían en dos).
                       fontWeight: 400,
                       whiteSpace: "nowrap",
-                      // En mayúsculas, como "ACCESO RÁPIDO".
-                      textTransform: "uppercase",
                     }}
                     // Un acceso rápido aplica y cierra en el acto (pedido del
                     // usuario 2026-09-23: elegir y después "Aplicar" era un

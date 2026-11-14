@@ -214,7 +214,7 @@ export function CheckInAgendada({
             <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
               {estado.preparacion.visitante.nombre}
             </p>
-            <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+            <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
               {estado.preparacion.visitante.cedula}
               {estado.preparacion.visitante.empresa && ` · ${estado.preparacion.visitante.empresa}`}
               {" · Anfitrión: "}

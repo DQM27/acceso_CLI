@@ -66,7 +66,7 @@ function TituloSeccion({ children }: { children: string }) {
     <p
       style={{
         margin: "0 0 0.35rem",
-        fontSize: "0.75rem",
+        fontSize: "var(--tam-xs)",
         fontWeight: 600,
         textTransform: "uppercase",
         letterSpacing: "0.04em",
@@ -267,7 +267,7 @@ export default function SalidaRutaModal({
                   onMouseEnter={() => setResaltadoEncargado(indice)}
                 >
                   <span>{encargado.nombre}</span>
-                  <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  <span style={{ color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                     #{encargado.codigo_empleado}
                   </span>
                 </FilaListaFlotante>
@@ -275,7 +275,7 @@ export default function SalidaRutaModal({
             </ListaFlotante>
           )}
           {codigoEmpleado && (
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
+            <p style={{ margin: 0, fontSize: "var(--tam-xs)", color: "var(--muted)" }}>
               Código de empleado #{codigoEmpleado}
             </p>
           )}
@@ -375,7 +375,7 @@ export default function SalidaRutaModal({
                   onMouseEnter={() => setResaltadoVehiculo(indice)}
                 >
                   <span>{vehiculo.placa}</span>
-                  <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  <span style={{ color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                     {vehiculo.numero_unidad ?? "Sin unidad"}
                   </span>
                 </FilaListaFlotante>
@@ -383,7 +383,7 @@ export default function SalidaRutaModal({
             </ListaFlotante>
           )}
           {numeroUnidad && (
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
+            <p style={{ margin: 0, fontSize: "var(--tam-xs)", color: "var(--muted)" }}>
               Unidad {numeroUnidad}
             </p>
           )}

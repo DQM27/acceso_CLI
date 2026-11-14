@@ -134,7 +134,7 @@ export default function Modal({
             marginBottom: "1rem",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--acento)" }}>{titulo}</h2>
+          <h2 style={{ margin: 0, fontSize: "var(--tam-titulo)", color: "var(--texto)" }}>{titulo}</h2>
           <button
             type="button"
             className="boton boton-discreto boton-icono"

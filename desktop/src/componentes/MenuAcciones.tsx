@@ -69,7 +69,7 @@ export default function MenuAcciones({
               >
                 <IconoAccion size={16} aria-hidden="true" />
                 <span style={{ flex: 1, textAlign: "left" }}>{textoAccion}</span>
-                {atajo && <span style={{ opacity: 0.6, fontSize: "0.75rem" }}>{atajo}</span>}
+                {atajo && <span style={{ opacity: 0.6, fontSize: "var(--tam-xs)" }}>{atajo}</span>}
               </button>
             ))}
           </div>

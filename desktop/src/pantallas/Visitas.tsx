@@ -65,7 +65,7 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
 
 const guion = (valor: string | null | undefined) => valor || "—";
 
-const BOTON_FILA = { padding: "0.15rem 0.55rem", fontSize: "0.78rem" } as const;
+const BOTON_FILA = { padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" } as const;
 
 /**
  * Visitas: las agendadas en la web (camino principal) y las autorizadas por
