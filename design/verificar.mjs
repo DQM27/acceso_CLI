@@ -26,5 +26,14 @@ for (const [nombre, t] of Object.entries(temas)) {
     revisar(rol, rol+'-suave', 4.5);
   }
   for (const fondo of ['campo-fondo','panel']) revisar('borde-fuerte', fondo, 3);
+  // Filas resaltadas por larga permanencia (Activos): el texto se lee sobre
+  // el fondo suave y ese fondo se distingue de una fila normal. El matiz
+  // cuenta tanto como la luminancia, por eso la distancia es en RGB.
+  for (const rol of ['advertencia-suave','error-suave']) {
+    revisar('texto', rol, 4.5);
+    const distancia = Math.hypot(...[0, 2, 4].map(i => parseInt(t[rol].slice(1 + i, 3 + i), 16) - parseInt(t.panel.slice(1 + i, 3 + i), 16)));
+    pares++;
+    assert.ok(distancia >= 30, `${nombre}: ${rol} casi igual al panel (distancia ${distancia.toFixed(0)}), una fila resaltada no se distinguiría`);
+  }
 }
-console.log(`${pares} combinaciones de contraste verificadas en claro y oscuro.`);
+console.log(`${pares} combinaciones de contraste verificadas en ${Object.keys(temas).length} temas.`);

@@ -111,7 +111,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
             <button
               type="button"
               className="boton"
-              style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
+              style={{ padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" }}
               onClick={() => registrarRetorno(fila)}
             >
               Retorno

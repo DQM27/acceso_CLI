@@ -83,25 +83,28 @@ export default function Contratistas() {
             filas={filas}
             busqueda={busqueda}
             filtrosPorColumna
+            mensajeVacio="No hay contratistas registrados. «Nuevo contratista» agrega el primero."
+            // Misma barra en todas las pantallas (auditoría 2026-11-14, U5):
+            // la acción principal con su nombre a la izquierda, el buscador
+            // y «Tabla» a la derecha.
             controles={
-              <>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title="Nuevo contratista"
-                  aria-label="Nuevo contratista"
-                  onClick={() => setFormularioAbierto("crear")}
-                >
-                  <Plus size={16} aria-hidden="true" />
-                </button>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
-                  <input
-                    placeholder="Cédula o nombre…"
-                    value={busqueda}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-              </>
+              <button
+                type="button"
+                className="boton boton-icono"
+                onClick={() => setFormularioAbierto("crear")}
+              >
+                <Plus size={16} aria-hidden="true" />
+                Nuevo contratista
+              </button>
+            }
+            accionesDerecha={
+              <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
+                <input
+                  placeholder="Cédula o nombre…"
+                  value={busqueda}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
             }
             onCeldaEditada={manejarEdicion}
             onFilaDobleClic={setFormularioAbierto}

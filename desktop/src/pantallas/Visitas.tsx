@@ -7,7 +7,7 @@ import type { TablaHandle } from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
-import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
+import { desdeInicialHistorial, textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
@@ -28,7 +28,7 @@ import {
   listarHistorialIngresosCorreoSitio,
   listarTodosLosCorreosActivos,
 } from "../api/correo";
-import { fechaHaceMeses, fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
   TEXTO_ORIGEN,
   textoMedioDePlaca,
@@ -65,7 +65,7 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
 
 const guion = (valor: string | null | undefined) => valor || "—";
 
-const BOTON_FILA = { padding: "0.15rem 0.55rem", fontSize: "0.78rem" } as const;
+const BOTON_FILA = { padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" } as const;
 
 /**
  * Visitas: las agendadas en la web (camino principal) y las autorizadas por
@@ -90,8 +90,8 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const [modal, setModal] = useState<{ cedula?: string } | null>(null);
   const [busqueda, setBusqueda] = useState("");
   // Período del historial: mismo arranque que los demás historiales
-  // ("Últimos 6 meses", `hasta` abierto).
-  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  // ("Últimos 7 días", `hasta` abierto).
+  const [desde, setDesde] = useState(() => desdeInicialHistorial());
   const [hasta, setHasta] = useState("");
   // Para que la exportación lea lo que muestra la grilla (filtros incluidos).
   const tablaHistorialRef = useRef<TablaHandle<FilaVisitaHistorial>>(null);

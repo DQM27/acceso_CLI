@@ -5,7 +5,7 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import { claseCapaVista } from "../componentes/capaVista";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { SeccionActivaProvider, useSeccionActiva } from "../contexto/BarraEstadoContexto";
-import { fechaHaceMeses } from "../tiempo";
+import { desdeInicialHistorial } from "../componentes/SelectorRangoFecha.logica";
 import type { ClaseHistorial, PropsHistorialClase } from "./Historial.logica";
 
 const HistorialContratistas = lazy(() => import("./HistorialContratistas"));
@@ -32,7 +32,7 @@ const VISTAS: Record<ClaseHistorial, (props: PropsHistorialClase) => ReactNode> 
  * Historial de todos los ingresos, con un selector de clase en el centro de
  * la barra. No es una lista mezclada: cada clase conserva su grilla, sus
  * columnas y su exportación, y el selector cambia de una a otra. El rango de
- * fechas es el mismo para todas (por defecto, los últimos 6 meses; `hasta`
+ * fechas es el mismo para todas (por defecto, los últimos 7 días; `hasta`
  * vacío queda abierto, así no se pierden movimientos del día en curso).
  * Las visitas agendadas siguen en su propia pantalla.
  */
@@ -42,7 +42,7 @@ export default function Historial() {
   // Cada clase se monta al abrirla por primera vez, no todas de entrada: la
   // de contratistas puede traer miles de filas.
   const [abiertas, setAbiertas] = useState<ClaseHistorial[]>(["contratistas"]);
-  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [desde, setDesde] = useState(() => desdeInicialHistorial());
   const [hasta, setHasta] = useState("");
 
   function elegirClase(nueva: ClaseHistorial) {

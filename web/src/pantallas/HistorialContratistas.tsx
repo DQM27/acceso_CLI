@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import IconoDispositivo from "../componentes/IconoDispositivo";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -246,6 +247,7 @@ export default function HistorialContratistas({
         flex: 1,
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
+        cellRenderer: IconoDispositivo,
       },
       {
         field: "tipo_ingreso",
@@ -300,21 +302,24 @@ export default function HistorialContratistas({
             columnas={columnas}
             filtrosPorColumna
             origenServidor={origenServidor}
+            mensajeVacio="No hay movimientos con este período y unidades."
+            // Misma barra que el escritorio (U5): unidades, período y clase a la
+            // izquierda; buscador y exportación a la derecha.
             controles={
               <>
-                <div className="campo flex-[0_1_16rem]">
+                {compartidos}
+                {selector}
+              </>
+            }
+            accionesDerecha={
+              <>
+                <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
                   <input
                     placeholder="Cédula o nombre…"
                     value={busqueda}
                     onChange={(evento) => setBusqueda(evento.target.value)}
                   />
                 </div>
-                {selector}
-              </>
-            }
-            accionesDerecha={
-              <>
-                {compartidos}
                 <BotonesExportacion
                   exportando={exportando}
                   alExportarExcel={exportarAExcel}

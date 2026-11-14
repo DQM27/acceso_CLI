@@ -79,19 +79,21 @@ export default function HistorialSitio<T extends { uuid: string }>({
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}
-            controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
-                <input
-                  placeholder={placeholderBusqueda}
-                  value={busqueda}
-                  onChange={(evento) => setBusqueda(evento.target.value)}
-                />
-              </div>
-            }
+            mensajeVacio="No hay movimientos en este período. Amplíe el rango de fechas para ver más."
+            // Misma barra en todas las pantallas (auditoría 2026-11-14, U5),
+            // en una sola línea: el período a la izquierda, la clase al
+            // centro, el buscador y la exportación a la derecha.
             accionesCentro={selector}
+            controles={<SelectorRangoFecha desde={desde} hasta={hasta} onAplicar={onRango} />}
             accionesDerecha={
               <>
-                <SelectorRangoFecha desde={desde} hasta={hasta} onAplicar={onRango} />
+                <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
+                  <input
+                    placeholder={placeholderBusqueda}
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
                 <BotonesExportacion
                   tablaRef={tablaRef}
                   nombreArchivo={nombreArchivo}

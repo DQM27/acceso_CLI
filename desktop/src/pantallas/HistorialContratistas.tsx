@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { avisos } from "../avisos/avisos";
-import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
-import type { ColDef } from "ag-grid-community";
+import { FileSpreadsheet, FileText, Monitor, Sheet, Smartphone } from "lucide-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { idPorUuid } from "../componentes/Tabla.logica";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -48,6 +48,19 @@ const CLAVES_COLUMNA: Record<string, string> = {
 /** Historial de contratistas -- una de las clases de `Historial.tsx`, que le
  * pasa el selector de clase (`selector`, va al centro de la barra) y el rango
  * de fechas, compartido por todas las clases. */
+/** Celda "Dispositivo": el ícono, con el nombre al pasar el mouse y para el
+ * lector de pantalla (ver `textoDispositivo`). */
+function IconoDispositivo({ value }: ICellRendererParams<FilaHistorial>) {
+  const nombre = textoDispositivo(value ?? null);
+  const Icono = value === "pc" ? Monitor : value === "mobile" ? Smartphone : null;
+  if (!Icono) return nombre;
+  return (
+    <span title={nombre} aria-label={nombre} style={{ display: "inline-flex", verticalAlign: "middle" }}>
+      <Icono size={16} aria-hidden="true" />
+    </span>
+  );
+}
+
 export default function HistorialContratistas({
   selector,
   desde,
@@ -221,6 +234,8 @@ export default function HistorialContratistas({
         flex: 1,
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
+        filterValueGetter: (p) => textoDispositivo(p.data?.dispositivo_tipo ?? null),
+        cellRenderer: IconoDispositivo,
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
         // -- las tres cosas que identifican a LA PERSONA que se busca, mismo
         // criterio que Activos.tsx (hallazgo real del usuario 2026-09-21:
@@ -321,7 +336,7 @@ export default function HistorialContratistas({
               borderRadius: "var(--radio-chico)",
               border: "1px solid var(--advertencia)",
               color: "var(--advertencia)",
-              fontSize: "0.85rem",
+              fontSize: "var(--tam-sm)",
             }}
           >
             Este rango tiene más de {filas.length.toLocaleString("es-CR")} movimientos — se
@@ -341,19 +356,21 @@ export default function HistorialContratistas({
             filas={filas}
             filtrosPorColumna
             busqueda={busqueda}
-            controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
-                <input
-                  placeholder="Cédula, nombre, empresa…"
-                  value={busqueda}
-                  onChange={(evento) => setBusqueda(evento.target.value)}
-                />
-              </div>
-            }
+            mensajeVacio="No hay movimientos en este período. Amplíe el rango de fechas para ver más."
+            // Misma barra en todas las pantallas (auditoría 2026-11-14, U5),
+            // en una sola línea: el período a la izquierda, la clase al
+            // centro, el buscador y la exportación a la derecha.
             accionesCentro={selector}
+            controles={<SelectorRangoFecha desde={desde} hasta={hasta} onAplicar={onRango} />}
             accionesDerecha={
               <>
-                <SelectorRangoFecha desde={desde} hasta={hasta} onAplicar={onRango} />
+                <div className="campo" style={{ flex: "1 1 16rem", minWidth: "10rem", maxWidth: "18rem" }}>
+                  <input
+                    placeholder="Cédula, nombre, empresa…"
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
                 {/* Excel · CSV · PDF en una sola pieza de íconos
                     (`.segmentado`), como filtros/anchos -- pedido del usuario
                     2026-09-23: son de la misma categoría. */}
@@ -370,7 +387,7 @@ export default function HistorialContratistas({
                     onClick={exportar}
                     disabled={exportando}
                   >
-                    <FileSpreadsheet size={16} />
+                    <FileSpreadsheet size={16} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -382,7 +399,7 @@ export default function HistorialContratistas({
                     onClick={exportarCsv}
                     disabled={exportando}
                   >
-                    <Sheet size={16} />
+                    <Sheet size={16} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -396,7 +413,7 @@ export default function HistorialContratistas({
                     onClick={exportarPdf}
                     disabled={exportando}
                   >
-                    <FileText size={16} />
+                    <FileText size={16} aria-hidden="true" />
                   </button>
                 </div>
               </>

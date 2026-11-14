@@ -47,7 +47,7 @@ export default class ErrorBoundary extends Component<
             gap: "0.75rem",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--error)" }}>
+          <h2 style={{ margin: 0, fontSize: "var(--tam-titulo)", color: "var(--error)" }}>
             Ocurrió un error inesperado
           </h2>
           <p style={{ margin: 0, color: "var(--muted)" }}>
@@ -63,7 +63,7 @@ export default class ErrorBoundary extends Component<
               border: "1px solid var(--borde)",
               borderRadius: "var(--radio-chico)",
               color: "var(--muted)",
-              fontSize: "0.8rem",
+              fontSize: "var(--tam-xs)",
               fontFamily: "ui-monospace, Consolas, monospace",
               overflowWrap: "break-word",
             }}

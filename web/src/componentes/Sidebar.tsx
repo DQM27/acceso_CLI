@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -106,6 +106,8 @@ export default function Sidebar({
   onRestablecer,
   abiertoEnMovil,
   pie,
+  posicionMenuSecciones,
+  onPosicionMenuSecciones,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
    * (Sidebar filtra internamente qué renderiza; el menú contextual necesita
@@ -127,9 +129,13 @@ export default function Sidebar({
   /** Lo que va al fondo del menú (la cuenta de quien tiene la sesión, como en
    * escritorio). El Sidebar sólo navega: no sabe qué es. */
   pie?: ReactNode;
+  /** Dónde está abierto el menú para mostrar/ocultar secciones (`null`,
+   * cerrado). Lo abre el clic derecho acá o «Personalizar menú» del menú de
+   * la cuenta (auditoría 2026-11-14, U10, igual que el escritorio). */
+  posicionMenuSecciones: { x: number; y: number } | null;
+  onPosicionMenuSecciones: (posicion: { x: number; y: number } | null) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   // Cuándo terminó el último arrastre (ver `recienArrastrado` en `ItemSidebar`).
   const finArrastre = useRef(0);
   const recienArrastrado = () => performance.now() - finArrastre.current < MS_CLIC_TRAS_ARRASTRE;
@@ -203,7 +209,7 @@ export default function Sidebar({
         className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}
         onContextMenu={(evento) => {
           evento.preventDefault();
-          setMenu({ x: evento.clientX, y: evento.clientY });
+          onPosicionMenuSecciones({ x: evento.clientX, y: evento.clientY });
         }}
       >
         <DndContext
@@ -233,14 +239,14 @@ export default function Sidebar({
 
         {pie}
 
-        {menu && (
+        {posicionMenuSecciones && (
           <MenuContextualSecciones
-            posicion={menu}
+            posicion={posicionMenuSecciones}
             secciones={secciones}
             ocultas={ocultas}
             onCambiarVisibilidad={onCambiarVisibilidad}
             onRestablecer={onRestablecer}
-            onCerrar={() => setMenu(null)}
+            onCerrar={() => onPosicionMenuSecciones(null)}
           />
         )}
       </nav>

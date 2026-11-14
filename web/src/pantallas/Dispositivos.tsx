@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
-import { MonitorSmartphone, ShieldAlert } from "lucide-react";
+import { MonitorSmartphone, Plus, ShieldAlert } from "lucide-react";
 import Tabla from "../componentes/Tabla";
 import { idPorId } from "../componentes/Tabla.logica";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
@@ -530,8 +530,9 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               controles={
                 <>
                   {selectorVista}
-                  <button type="button" className="boton" onClick={abrirModal}>
-                    + Nuevo
+                  <button type="button" className="boton boton-icono" onClick={abrirModal}>
+                    <Plus size={16} aria-hidden="true" />
+                    Nuevo dispositivo
                   </button>
                 </>
               }

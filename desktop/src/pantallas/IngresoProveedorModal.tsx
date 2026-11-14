@@ -392,7 +392,7 @@ export default function IngresoProveedorModal({
                     style={{
                       margin: "0.15rem 0 0",
                       color: "var(--muted)",
-                      fontSize: "0.85rem",
+                      fontSize: "var(--tam-sm)",
                     }}
                   >
                     {cedula}
@@ -401,7 +401,7 @@ export default function IngresoProveedorModal({
                 <button
                   type="button"
                   className="boton"
-                  style={{ fontSize: "0.8rem" }}
+                  style={{ fontSize: "var(--tam-xs)" }}
                   onClick={cambiarProveedor}
                 >
                   Cambiar
@@ -428,7 +428,7 @@ export default function IngresoProveedorModal({
                   <button
                     type="button"
                     className="boton"
-                    style={{ fontSize: "0.8rem" }}
+                    style={{ fontSize: "var(--tam-xs)" }}
                     onClick={cambiarProveedor}
                   >
                     Cambiar
@@ -464,7 +464,7 @@ export default function IngresoProveedorModal({
                 style={{
                   margin: 0,
                   color: "var(--advertencia)",
-                  fontSize: "0.85rem",
+                  fontSize: "var(--tam-sm)",
                 }}
               >
                 ⚠ Ya está adentro con el gafete {textoGafete(gafeteAdentro)}

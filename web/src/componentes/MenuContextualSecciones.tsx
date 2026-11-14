@@ -73,6 +73,10 @@ export default function MenuContextualSecciones({
 
       <div className="menu-contextual-separador" />
 
+      <p className="m-0 px-[0.6rem] pt-[0.2rem] pb-[0.35rem] text-(--muted)" style={{ fontSize: "var(--tam-xs)" }}>
+        Para reordenar, arrastre las secciones en el menú.
+      </p>
+
       <button
         type="button"
         onClick={() => {

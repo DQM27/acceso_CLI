@@ -79,3 +79,26 @@ export function interpretarFechaDDMMAAAA(texto: string): Date | null {
 export function textoFechaDDMMAAAA(fecha: Date): string {
   return textoFechaDDMMYYYY(fechaYMD(fecha));
 }
+
+/** Duración legible para la columna "Tiempo adentro" de Activos: "45 min",
+ * "3 h 20 min", "2 d 4 h". Menos de un minuto (o un valor negativo por un
+ * reloj adelantado) se muestra como "< 1 min". */
+export function textoDuracion(ms: number): string {
+  const minutos = Math.floor(ms / 60_000);
+  if (minutos < 1) return "< 1 min";
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `${horas} h ${minutos % 60} min`;
+  return `${Math.floor(horas / 24)} d ${horas % 24} h`;
+}
+
+/** Instante de ingreso en una sola columna: la hora si fue hoy, y si no
+ * "DD/MM HH:MM" (en Activos casi todo es de hoy: la fecha completa repetía el
+ * mismo valor en cada fila). */
+export function textoIngresoCorto(iso: string, ahora: Date = new Date()): string {
+  const hora = textoHora(iso);
+  const ymd = fechaLocalYMD(iso);
+  if (ymd === fechaYMD(ahora)) return hora;
+  const [, mes, dia] = ymd.split("-");
+  return `${dia}/${mes} ${hora}`;
+}

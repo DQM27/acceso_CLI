@@ -20,15 +20,15 @@ export interface FiltroHistorial {
   sitioIds?: string[];
 }
 
-/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
- * columna "Dispositivo" -- tanto en pantalla como en Excel/PDF (mismo
- * mapeo que `textoDispositivo` en `desktop/src/pantallas/Historial.tsx` y
- * `HistorialViewModel.kt` del móvil). Antes devolvía ícono + palabra
- * ("💻 PC"/"📱 Celular"), pero quedaba desparejo visualmente -- una palabra
- * bastante más larga que la otra. */
+/** "pc"/"mobile" (`dispositivos.tipo`) → el nombre: es lo que usan el filtro
+ * y el Excel/PDF de la columna "Dispositivo". En la celda se ve sólo el
+ * ícono (`IconoDispositivo`), porque ícono más palabra quedaba desparejo.
+ * Antes devolvía un emoji, que se veía distinto al resto de los íconos y
+ * llegaba así al Excel (auditoría 2026-11-14, igual que el escritorio).
+ * Cualquier otro valor (ej. "visor") se muestra tal cual. */
 export function textoDispositivo(tipo: string | null): string {
-  if (tipo === "pc") return "💻";
-  if (tipo === "mobile") return "📱";
+  if (tipo === "pc") return "PC";
+  if (tipo === "mobile") return "Celular";
   return tipo ?? "—";
 }
 

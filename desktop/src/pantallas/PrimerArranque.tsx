@@ -80,7 +80,7 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
       >
         <div>
           <h2 style={{ margin: "0 0 0.35rem" }}>Vincular este equipo</h2>
-          <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.9rem" }}>
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-base)" }}>
             Escriba el código que muestra el panel de administración para este equipo. Vence en
             pocos minutos y sirve una sola vez; al vincular se trae el catálogo, incluidos los
             usuarios, y con eso ya se puede iniciar sesión.

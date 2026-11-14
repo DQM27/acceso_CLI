@@ -8,7 +8,7 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
 import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, textoTiempoAdentro } from "../api/adentro";
 import type { PersonaAdentro, TipoAdentro } from "../api/adentro";
-import { textoFechaHora } from "../tiempo";
+import { textoIngresoCorto } from "../tiempo";
 import { textoGafete } from "../componentes/columnasComunes";
 import {
   CLASES,
@@ -130,29 +130,41 @@ export default function Activos() {
       {
         colId: "entrada",
         headerName: "Entrada",
-        flex: 1.3,
-        minWidth: 150,
-        // Ordena por el instante, muestra fecha y hora de Costa Rica.
+        flex: 1,
+        minWidth: 110,
+        // Ordena por el instante; muestra la hora, y la fecha sólo si no es de
+        // hoy (auditoría 2026-11-14, U2, igual que el escritorio).
         valueGetter: (p) => p.data?.hora_entrada ?? "",
-        valueFormatter: (p) =>
-          p.value ? textoFechaHora(p.value) : "",
+        valueFormatter: (p) => (p.value ? textoIngresoCorto(p.value) : ""),
         filter: false,
       },
       {
         colId: "tiempo",
-        headerName: "Tiempo adentro",
-        flex: 1.1,
-        minWidth: 130,
+        // "Tiempo" a secas para que no se corte; el nombre completo queda en el
+        // tooltip y en "Tabla" > Columnas (igual que el escritorio).
+        headerName: "Tiempo",
+        headerTooltip: "Tiempo adentro",
+        flex: 1,
+        minWidth: 110,
         valueGetter: (p) => (p.data ? textoTiempoAdentro(p.data.hora_entrada) : ""),
         // Mismo orden que "Entrada": el texto ("3 h 20 min") no ordena bien.
         comparator: (_a, _b, nodoA, nodoB) =>
           (nodoB.data?.hora_entrada ?? "").localeCompare(nodoA.data?.hora_entrada ?? ""),
         filter: false,
       },
-      { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.2, minWidth: 130 },
+      // Opcional: se activa desde "Tabla" > Columnas visibles.
+      { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.2, minWidth: 130, hide: true },
     ],
     [],
   );
+
+  // "Tipo" (la clase) sólo con "Todas": con una clase elegida repetía lo mismo
+  // en cada fila. Se oculta sin moverla de lugar.
+  const ocultasPorClase = useMemo(() => (filtroClase === "todas" ? [] : ["tipo"]), [filtroClase]);
+  const mensajeVacio =
+    filtroClase === "todas"
+      ? "No hay nadie adentro en ninguna unidad."
+      : `No hay ${ETIQUETA_CLASE[filtroClase].toLowerCase()} adentro.`;
 
   return (
     <div className="flex h-full flex-col">
@@ -167,18 +179,24 @@ export default function Activos() {
             busqueda={busqueda}
             filtrosPorColumna
             idFila={idPorTipoEId}
+            mensajeVacio={mensajeVacio}
+            columnasOcultasPorPantalla={ocultasPorClase}
+            // Misma barra que el escritorio (auditoría 2026-11-14, U5): filtros a
+            // la izquierda; buscador y «Tabla» a la derecha. Antes iba primero el
+            // buscador (pedido del 2026-10-26); el dueño pidió que el panel sea
+            // igual al escritorio.
+            accionesDerecha={
+              <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
+                <input
+                  placeholder="Cédula, nombre, gafete…"
+                  value={busqueda}
+                  disabled={cargando}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
+            }
             controles={
               <>
-                {/* Primero el buscador y después los filtros (pedido del
-                    usuario 2026-10-26). */}
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Cédula, nombre, gafete…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
                 <SegmentadoOpciones
                   opciones={opcionesFiltroClase(conteoClases)}
                   valor={filtroClase}

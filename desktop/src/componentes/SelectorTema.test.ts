@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { leerTema, siguienteTema, temaDelSistema } from "./SelectorTema.logica";
+import { CLAVE_TEMA_ULTIMO, leerTema, siguienteTema, temaDelSistema, temaInicial } from "./SelectorTema.logica";
 
 const CLAVE_TEMA = "escritorio:tema";
 
@@ -79,5 +79,26 @@ describe("siguienteTema", () => {
   it("alterna Tokyo Day ↔ Tokyo Night", () => {
     expect(siguienteTema("tokyo-day")).toBe("tokyo-night");
     expect(siguienteTema("tokyo-night")).toBe("tokyo-day");
+  });
+});
+
+describe("temaInicial (antes de iniciar sesión)", () => {
+  it("usa el último tema elegido en esta PC", () => {
+    mockearSistema(false);
+    localStorage.setItem(CLAVE_TEMA_ULTIMO, "tokyo-night");
+    expect(temaInicial()).toBe("tokyo-night");
+  });
+
+  it("sin nada guardado (o con algo inválido) toma el del sistema", () => {
+    mockearSistema(true);
+    expect(temaInicial()).toBe("tokyo-night");
+    localStorage.setItem(CLAVE_TEMA_ULTIMO, "brisas");
+    expect(temaInicial()).toBe("tokyo-night");
+  });
+
+  it("no lee el tema por usuario: es el de la PC, no el de nadie en particular", () => {
+    mockearSistema(false);
+    localStorage.setItem("u7:escritorio:tema", "tokyo-night");
+    expect(temaInicial()).toBe("tokyo-day");
   });
 });

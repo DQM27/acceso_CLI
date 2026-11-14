@@ -14,6 +14,7 @@ function montar(props: { colapsado?: boolean; tema?: Tema; alternar?: () => void
       tema={props.tema ?? "tokyo-day"}
       onAlternarTema={props.alternar ?? (() => {})}
       onCerrarSesion={props.cerrar ?? (() => {})}
+      onPersonalizarMenu={() => {}}
     />,
   );
 }
@@ -35,7 +36,7 @@ describe("MenuUsuario", () => {
     montar();
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
     expect(screen.getByText("daniel@ejemplo.com")).toBeTruthy();
-    expect(screen.getByText("Tema: Tokyo Day")).toBeTruthy();
+    expect(screen.getByText("Tema: Claro")).toBeTruthy();
     expect(screen.getByText("Cerrar sesión")).toBeTruthy();
     expect(screen.queryByText(/contraseña/i)).toBeNull();
   });
@@ -44,7 +45,7 @@ describe("MenuUsuario", () => {
     const alternar = vi.fn();
     montar({ tema: "tokyo-night", alternar });
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
-    fireEvent.click(screen.getByText("Tema: Tokyo Night"));
+    fireEvent.click(screen.getByText("Tema: Oscuro"));
     expect(alternar).toHaveBeenCalledTimes(1);
   });
 

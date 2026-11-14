@@ -431,7 +431,7 @@ export default function Telemetria() {
     <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={setVista} etiqueta="Vista" />
   );
   const campoBusqueda = (
-    <div className="campo flex-[0_1_16rem]">
+    <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
       <input
         placeholder={vista === "equipos" ? "Equipo, unidad, estudio…" : "Equipo, estudio, quién, nota…"}
         value={busqueda}
@@ -460,7 +460,6 @@ export default function Telemetria() {
               controles={
                 <>
                   {selectorVista}
-                  {campoBusqueda}
                   <SegmentadoOpciones
                     opciones={opcionesFiltro(conteo)}
                     valor={filtro}
@@ -470,12 +469,15 @@ export default function Telemetria() {
                 </>
               }
               accionesDerecha={
+                <>
+                {campoBusqueda}
                 <span
                   className="text-sm text-(--muted)"
                   title="Los errores se reportan siempre y no se controlan desde acá"
                 >
                   Sin orden: {textoGrupos(GRUPOS_POR_DEFECTO)}
                 </span>
+                </>
               }
             />
           ) : (
@@ -490,10 +492,10 @@ export default function Telemetria() {
               controles={
                 <>
                   {selectorVista}
-                  {campoBusqueda}
                   <span role="status">{cambios.length.toLocaleString("es-CR")} cambios</span>
                 </>
               }
+              accionesDerecha={campoBusqueda}
             />
           )}
         </div>

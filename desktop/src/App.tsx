@@ -31,7 +31,6 @@ import {
   useMemo,
   useRef,
   useState,
-  ViewTransition,
 } from "react";
 import type { ReactNode } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -77,9 +76,8 @@ import {
   sincronizarConNube,
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
-import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
 import { MENSAJE_EXPULSION, MENSAJE_SESION_EN_OTRA_UNIDAD } from "./expulsionNube";
-import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
+import { EVENTO_CAMBIO_EN_VIVO, emitirActualizacion } from "./eventosNube";
 import { registrarPantalla } from "./telemetria";
 import { mensajeConflictoGafete } from "./conflictoGafete";
 import { textoHora } from "./tiempo";
@@ -90,14 +88,14 @@ import {
 } from "./contexto/BarraEstadoContexto";
 
 /** Piso de cuánto se ve el splash (`splashscreen.html`), aunque la pantalla
- * real esté lista antes -- sin esto, en un arranque rápido el splash pasaba
- * tan fugaz que ni se alcanzaba a leer (reportado 2026-09-19). No compite
- * con `ESPERA_MAXIMA_SPLASH` de `lib.rs` (8s, la red de seguridad si el
- * frontend nunca avisa) -- éste es un PISO sobre el camino normal, aquél un
- * TECHO sobre el camino de emergencia; entre uno y otro el splash dura entre
- * `DURACION_MINIMA_SPLASH_MS` y `ESPERA_MAXIMA_SPLASH` según qué tan rápido
- * esté todo. */
-const DURACION_MINIMA_SPLASH_MS = 2000;
+ * real esté lista antes: sólo evita un destello de un par de cuadros. Antes
+ * era de 2 s (reportado 2026-09-19: en un arranque rápido el splash no se
+ * alcanzaba a leer), pero la app se abre varias veces por turno y esos 2 s
+ * se pagaban en cada apertura aunque todo estuviera listo (auditoría
+ * 2026-11-14, R1). No compite con `ESPERA_MAXIMA_SPLASH` de `lib.rs` (8s,
+ * la red de seguridad si el frontend nunca avisa) -- éste es un PISO sobre
+ * el camino normal, aquél un TECHO sobre el camino de emergencia. */
+const DURACION_MINIMA_SPLASH_MS = 300;
 
 /** Instante de referencia para medir cuánto lleva visible el splash (ver
  * `DURACION_MINIMA_SPLASH_MS`) -- módulo, no dentro de `App`, porque tiene
@@ -415,15 +413,13 @@ function Shell({
   useEffect(() => {
     registrarPantalla(seccion);
   }, [seccion]);
-  // React 19.3: `<ViewTransition>` sólo anima un cambio si ocurrió dentro de
-  // una transición -- acá no hay router que la envuelva sola (a diferencia
-  // de web-visitas con createBrowserRouter), así que el cambio de sección
-  // se dispara a mano con startTransition. Las secciones ya están todas
-  // montadas (ver comentario de arriba), el cambio real es sólo un toggle
-  // de `display` -- React igual detecta la mutación dentro del contenedor
-  // envuelto y dispara el cross-fade nativo del navegador.
+  // Cambio de sección inmediato, sin fundido ni transición: es la acción más
+  // repetida de la app y las secciones ya visitadas están montadas, así que
+  // es sólo un cambio de `display`. Antes pasaba por `<ViewTransition>` y
+  // `startTransition`, que capturaban y fundían toda el área de la grilla en
+  // cada clic sin informar nada (auditoría 2026-11-14, R3).
   function cambiarSeccion(id: Seccion) {
-    startTransition(() => setSeccion(id));
+    setSeccion(id);
   }
   const [colapsado, setColapsado] = useState(() => leerSidebarColapsado(sesion.id));
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
@@ -468,12 +464,11 @@ function Shell({
   // Si la sección activa se ocultó, hay que salir de ella -- de lo
   // contrario el usuario queda viendo una pantalla que ya no tiene entrada
   // en el sidebar para volver a elegir ni forma de saber dónde está parado.
-  useEffect(() => {
-    if (seccionesVisibles.length > 0 && !seccionesVisibles.some((s) => s.id === seccion)) {
-      cambiarSeccion(seccionesVisibles[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seccionesVisibles]);
+  // Ajuste durante el render (mismo patrón que `visitadas`), no un efecto:
+  // se corrige en el mismo render en que se oculta, sin un cuadro intermedio.
+  if (seccionesVisibles.length > 0 && !seccionesVisibles.some((s) => s.id === seccion)) {
+    setSeccion(seccionesVisibles[0].id);
+  }
 
   function reordenarSidebar(orden: Seccion[]) {
     setOrdenSidebar(orden);
@@ -530,6 +525,9 @@ function Shell({
     setFiltroPermanencia((actual) => (actual === nivel ? null : nivel));
   }
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
+  // Menú para mostrar/ocultar secciones: lo abre el clic derecho en el menú
+  // lateral o «Personalizar menú» en el menú de la cuenta.
+  const [menuSecciones, setMenuSecciones] = useState<{ x: number; y: number } | null>(null);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
   const [modalReconexion, setModalReconexion] = useState(false);
@@ -689,17 +687,29 @@ function Shell({
       .catch((error) => console.error("equipo_retirado:", error));
   });
   useEffect(() => {
-    const cancelarRealtime = iniciarRealtimeNube({
-      onSincronizado: (resumen, recargar) => alSincronizarNube(resumen, false, recargar),
-      onEstado: setEstadoConexionNube,
-      // Aviso de expulsión: la nube confirma (o no) el retiro. Sólo si lo
-      // confirma se ofrece reconectar (ver `expulsionNube.ts`). El trabajo
-      // local sigue disponible; el aviso queda fijo hasta que alguien lo
-      // cierre o la nube vuelva a aceptar al equipo.
-      confirmarExpulsion: descartarTokenNube,
-      onExpulsado: ofrecerReconexion,
-      usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
-    });
+    // `nubeRealtime` (y con él `@supabase/supabase-js`) se carga recién acá,
+    // con la sesión abierta: importado de entrada viajaba en el paquete
+    // inicial y se analizaba antes de poder mostrar el login (auditoría
+    // 2026-11-14, R4). Si la sesión se cierra antes de que termine de
+    // cargar, no se conecta.
+    let cancelado = false;
+    let cancelarRealtime = () => {};
+    import("./nubeRealtime")
+      .then(({ iniciarRealtimeNube }) => {
+        if (cancelado) return;
+        cancelarRealtime = iniciarRealtimeNube({
+          onSincronizado: (resumen, recargar) => alSincronizarNube(resumen, false, recargar),
+          onEstado: setEstadoConexionNube,
+          // Aviso de expulsión: la nube confirma (o no) el retiro. Sólo si lo
+          // confirma se ofrece reconectar (ver `expulsionNube.ts`). El trabajo
+          // local sigue disponible; el aviso queda fijo hasta que alguien lo
+          // cierre o la nube vuelva a aceptar al equipo.
+          confirmarExpulsion: descartarTokenNube,
+          onExpulsado: ofrecerReconexion,
+          usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
+        });
+      })
+      .catch((error) => console.error("No se pudo cargar el canal en vivo:", error));
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
       ({ payload }) => alSincronizarNube(payload, true),
@@ -710,6 +720,7 @@ function Shell({
     window.addEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
 
     return () => {
+      cancelado = true;
       cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
       window.removeEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
@@ -821,8 +832,8 @@ function Shell({
               onCambiarVisibilidad={alternarVisibilidadSeccion}
               onRestablecer={restablecerSidebar}
               recargarUnidad={sincronizandoManual}
-              onBuscarActualizacion={buscarActualizacionManual}
-              buscandoActualizacion={buscandoActualizacion}
+              posicionMenuSecciones={menuSecciones}
+              onPosicionMenuSecciones={setMenuSecciones}
               pie={
                 <MenuUsuario
                   sesion={sesion}
@@ -830,15 +841,14 @@ function Shell({
                   tema={tema}
                   onAlternarTema={alternarTema}
                   onCerrarSesion={onCerrarSesion}
+                  onPersonalizarMenu={setMenuSecciones}
+                  onBuscarActualizacion={buscarActualizacionManual}
+                  buscandoActualizacion={buscandoActualizacion}
                 />
               }
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-              {/* Ver cambiarSeccion arriba -- las secciones ya están todas
-                  montadas, el cross-fade es sobre el toggle de `display`
-                  dentro de este contenedor, no sobre mount/unmount. */}
-              <ViewTransition>
               {visitadas.map((id) => (
                 <div
                   key={id}
@@ -903,7 +913,6 @@ function Shell({
                   </ErrorBoundary>
                 </div>
               ))}
-              </ViewTransition>
             </main>
           </div>
 

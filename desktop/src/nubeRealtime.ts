@@ -12,16 +12,12 @@ import {
 import type { ResumenSincronizacion } from "./api/nube";
 import { esCierreDeEstaSesion, esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { esOrdenDeEsteEquipo } from "./ordenTelemetria";
-import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
+import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, emitirActualizacion } from "./eventosNube";
 import { mide, realtimeTelemetria } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
 
-export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
-
-export interface NubeActualizadaDetalle {
-  origen: "realtime" | "manual";
-  resumen: ResumenSincronizacion;
-}
+export { EVENTO_NUBE_ACTUALIZADA, emitirActualizacion } from "./eventosNube";
+export type { NubeActualizadaDetalle } from "./eventosNube";
 
 /** Mismos 4 valores que entrega `RealtimeChannel.subscribe` de
  * supabase-js -- ver `EstadoConexionNube` en `componentes/BarraNube.tsx`,
@@ -68,21 +64,6 @@ interface OpcionesRealtimeNube {
   usuario?: { cedula: string; nombre: string };
 }
 
-/** Avisa a quien esté escuchando (hoy: la pantalla Nube, si está montada)
- * que hay un resumen nuevo — lo usa tanto el aviso en vivo de Realtime como
- * el botón "Sincronizar" de la barra de estado (`BarraNube.tsx`), para que
- * ambos caminos actualicen lo mismo sin duplicar la lógica de refresco. */
-export function emitirActualizacion(
-  resumen: ResumenSincronizacion,
-  origen: NubeActualizadaDetalle["origen"] = "realtime",
-) {
-  window.dispatchEvent(
-    new CustomEvent<NubeActualizadaDetalle>(EVENTO_NUBE_ACTUALIZADA, {
-      detail: { origen, resumen },
-    }),
-  );
-}
-
 /** Tablas cuyo historial en esta PC es SÓLO la copia que baja de la nube
  * (`historial_ingresos_correo_sitio`, `historial_ingresos_proveedor_sitio`,
  * `historial_visitas_sitio`, `prestamos_gafete_provisional_historial_sitio`).
@@ -106,6 +87,13 @@ const REINTENTO_TOPE_MS = 60_000;
 const PAUSA_AGRUPACION_MS = 600;
 // Cada cuánto, como mucho, se relee el desfase del reloj (telemetría).
 const INTERVALO_DESFASE_MS = 10_000;
+
+/** El sistema dice que no hay ninguna red conectada. `navigator.onLine` en
+ * `true` no garantiza internet (un teléfono compartiendo sin datos): en ese
+ * caso se sigue con los reintentos normales. */
+function sinRed(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
 
 /** `true` sólo si la nube confirmó el retiro. Sin forma de preguntar, o si
  * la pregunta falla, no está confirmado: la próxima sincronización vuelve a
@@ -145,6 +133,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   // `subscribe` avisa "SUBSCRIBED", así una falla puntual después de mucho
   // andar bien no arranca desde el tope.
   let intentosSeguidos = 0;
+  // `true` mientras el sistema dice que no hay red (`navigator.onLine`): no
+  // se reintenta, se espera el evento `online`. Hay puestos que se conectan
+  // por el internet compartido de un teléfono y pasan horas sin red; antes se
+  // reintentaba cada minuto todo ese rato, en vano (auditoría 2026-11-14:
+  // ~60 errores por hora en la telemetría de un solo equipo).
+  let esperandoRed = false;
   // Telemetría de diagnóstico (sin efecto si no está activa): desde cuándo
   // está suscrito el canal actual y el desfase del reloj con que se corrige
   // la latencia de los avisos.
@@ -196,7 +190,11 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   }
 
   function reconectar() {
-    if (cancelado || temporizadorReconectar) return;
+    if (cancelado || temporizadorReconectar || esperandoRed) return;
+    if (sinRed()) {
+      esperandoRed = true;
+      return;
+    }
     const espera = Math.min(REINTENTO_BASE_MS * 2 ** intentosSeguidos, REINTENTO_TOPE_MS);
     intentosSeguidos += 1;
     temporizadorReconectar = window.setTimeout(() => {
@@ -264,6 +262,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
 
   async function conectar() {
     if (cancelado) return;
+    if (sinRed()) {
+      // Sin red no hay nada que intentar: queda a la espera de `online`.
+      opciones.onEstado?.("CHANNEL_ERROR");
+      esperandoRed = true;
+      return;
+    }
     realtimeTelemetria()?.conectando();
     const inicioIntento = performance.now();
     try {
@@ -412,11 +416,24 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   // por un ingreso/salida que se registró acá mismo.
   const alCambioLocal = () => programarCorrida();
   window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
+
+  // Volvió la red: se conecta enseguida, sin esperar el resto de la espera
+  // entre reintentos (que puede ir por los 60 s) y con la cuenta de
+  // intentos en cero. Con el canal ya suscrito no hace nada.
+  const alVolverRed = () => {
+    if (cancelado || (!esperandoRed && !temporizadorReconectar)) return;
+    esperandoRed = false;
+    intentosSeguidos = 0;
+    limpiarCanal();
+    void conectar();
+  };
+  window.addEventListener("online", alVolverRed);
   void conectar();
 
   function detener() {
     cancelado = true;
     window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
+    window.removeEventListener("online", alVolverRed);
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     limpiarCanal();
   }

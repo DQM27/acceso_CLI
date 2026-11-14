@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState } from "react";
 import { guardarPreferencia } from "../preferencias";
-import { CLAVE_TEMA, leerTema, siguienteTema } from "./SelectorTema.logica";
+import { CLAVE_TEMA, CLAVE_TEMA_ULTIMO, leerTema, siguienteTema } from "./SelectorTema.logica";
 import type { Tema } from "./SelectorTema.logica";
 
 /**
@@ -18,6 +18,8 @@ export function useTema(usuarioId: number | null): { tema: Tema; alternarTema: (
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", tema);
+    // El login de la próxima vez arranca con este tema (ver `temaInicial`).
+    guardarPreferencia(CLAVE_TEMA_ULTIMO, null, tema);
   }, [tema]);
 
   function alternarTema() {

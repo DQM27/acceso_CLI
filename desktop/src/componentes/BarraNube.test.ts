@@ -3,8 +3,8 @@ import { descripcion } from "./BarraNube.logica";
 
 describe("descripcion (BarraNube)", () => {
   it("sin red del SO, manda 'sin conexión' sin importar el estado del canal", () => {
-    expect(descripcion("SUBSCRIBED", false).texto).toBe("Sin conexión — modo offline");
-    expect(descripcion(null, false).texto).toBe("Sin conexión — modo offline");
+    expect(descripcion("SUBSCRIBED", false).texto).toBe("Sin internet — se guarda en esta PC");
+    expect(descripcion(null, false).texto).toBe("Sin internet — se guarda en esta PC");
   });
 
   it("sólo parpadea el punto cuando algo está caído", () => {
@@ -34,7 +34,7 @@ describe("descripcion (BarraNube)", () => {
     for (const estado of ["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"] as const) {
       expect(descripcion(estado, true)).toEqual({
         texto: "Sin conexión en vivo",
-        color: "var(--error)",
+        color: "var(--advertencia)",
         parpadea: true,
       });
     }

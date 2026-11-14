@@ -192,14 +192,14 @@ export default function EntregarGafeteProvisionalModal({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>{elegido.nombre}</p>
-                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
                   Código de empleado {elegido.codigo_empleado}
                 </p>
               </div>
               <button
                 type="button"
                 className="boton"
-                style={{ fontSize: "0.8rem" }}
+                style={{ fontSize: "var(--tam-xs)" }}
                 onClick={cambiarEncargado}
               >
                 Cambiar
@@ -207,7 +207,7 @@ export default function EntregarGafeteProvisionalModal({
             </div>
 
             {prestadosElegido.length > 0 && (
-              <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+              <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "var(--tam-sm)" }}>
                 ⚠ Ya tiene prestado el gafete {prestadosElegido.map(textoGafete).join(", ")} sin
                 devolver
               </p>
