@@ -245,6 +245,14 @@ Del rediseño del móvil (`docs/handoff-rediseno-movil-ux.md`, fase 4):
   sesión (clave por sesión y detenerlo al salir de la composición); se hace
   sólo si aparece una razón más fuerte que el orden del código, y probando en
   un teléfono real login, cierre, expulsión y bloqueo.
+- **Carrusel sin precargar la sección vecina, a propósito.** Se probó
+  `beyondViewportPageCount = 1` en el `HorizontalPager` (2026-11-14, build
+  `diagnostico` en el Samsung A25, mismo recorrido en las dos versiones):
+  frames trabados 1,45 % sin precarga contra 1,77 % con ella, y en
+  Contratistas p90 19,3 ms contra 19,9 ms. No mejora, y además rompe la
+  telemetría por pantalla: la sección precargada llama a `RegistrarPantalla`
+  y se anota como visible sin que nadie la mire. No volver a probarlo sin
+  resolver antes eso.
 
 ## Subsistema OCR
 
