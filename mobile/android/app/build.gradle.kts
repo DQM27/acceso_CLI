@@ -118,6 +118,25 @@ android {
                 "\"https://lt.megabrisas.com/android/latest.json\"",
             )
         }
+        // Build para MEDIR rendimiento en el teléfono: compilado igual que
+        // release (R8, sin `debuggable`) porque un build de debug corre sin
+        // optimizaciones y da tiempos peores que los reales. Firmado con la
+        // llave de debug (no requiere la de producción), apunta al sandbox
+        // (staging) y manda telemetría a su tabla `telemetria_diagnostico`
+        // (qué se mide lo decide el panel por equipo, ver Telemetria.kt).
+        // Sufijo propio: convive con la app real y con el build de debug sin
+        // pisarlos. `./gradlew assembleDiagnostico`. Existió hasta 384ce27b y
+        // se repuso el 2026-11-14 para medir el rediseño del móvil.
+        create("diagnostico") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".diag"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
+            // Sin actualizador: tiene otro paquete y no puede instalar el APK real.
+            buildConfigField("String", "URL_MANIFIESTO_ACTUALIZACION", "\"\"")
+            manifestPlaceholders["etiquetaApp"] = "Lattis DIAG"
+        }
     }
 
     // El build de prueba (debug) lleva el icono con la cinta TEST
