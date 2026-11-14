@@ -21,7 +21,7 @@ import {
   tipoDeError,
   tipoDeRed,
 } from "./telemetriaCalculos";
-import { fijarPantallaErrores } from "./errores";
+import { escucharErroresJs, fijarPantallaErrores } from "./errores";
 
 const INTERVALO_VOLCADO_MS = 30_000;
 /** La memoria del WebView cambia despacio: se anota una vez cada tantos
@@ -97,12 +97,6 @@ function evento(tipo: string, datos: Record<string, unknown>) {
   pendientes.push({ tipo, datos });
 }
 
-/** Un error que atrapó un `ErrorBoundary` de React (no llega a
- * `window.onerror`). */
-export function registrarErrorRender(error: unknown) {
-  registrarErrorJs("render", error);
-}
-
 function registrarErrorJs(origen: string, error: unknown) {
   const clave = `${origen}:${tipoDeError(error)}`;
   erroresJs.set(clave, (erroresJs.get(clave) ?? 0) + 1);
@@ -155,12 +149,9 @@ let escuchasListas = false;
 function instalarEscuchas() {
   if (escuchasListas) return;
   escuchasListas = true;
-  window.addEventListener("error", (e) => {
-    registrarErrorJs("error", e.error);
-  });
-  window.addEventListener("unhandledrejection", (e) => {
-    registrarErrorJs("promesa", e.reason);
-  });
+  // Los errores (globales, promesas y de render) llegan por la única
+  // entrada de `errores.ts`, que además los manda al núcleo.
+  escucharErroresJs(registrarErrorJs);
   if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
     new PerformanceObserver((lista) => {
       if (mide("fluidez")) lista.getEntries().forEach((entrada) => bloqueos.registrar(entrada.duration));

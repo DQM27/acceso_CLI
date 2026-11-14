@@ -31,13 +31,33 @@ export function describirError(error: unknown, origen: OrigenErrorJs): { titulo:
   return { titulo: `${prefijo}${texto || "(sin mensaje)"}`.slice(0, LARGO_MAXIMO_TITULO), traza: "" };
 }
 
-/** Manda el error al núcleo. Nunca lanza: reportar un error no puede causar
- * otro. */
+type OyenteErrorJs = (origen: OrigenErrorJs, error: unknown) => void;
+const oyentes = new Set<OyenteErrorJs>();
+
+/** Para quien además quiera enterarse de cada error (hoy la telemetría, que
+ * los cuenta). Antes la telemetría instalaba sus propias escuchas globales
+ * y el `ErrorBoundary` avisaba a los dos módulos por separado: dos caminos
+ * para el mismo error (auditoría 2026-11-13). Devuelve cómo dejar de
+ * escuchar. */
+export function escucharErroresJs(oyente: OyenteErrorJs): () => void {
+  oyentes.add(oyente);
+  return () => oyentes.delete(oyente);
+}
+
+/** Manda el error al núcleo y avisa a los oyentes. Única entrada para los
+ * tres orígenes. Nunca lanza: reportar un error no puede causar otro. */
 export function reportarErrorJs(error: unknown, origen: OrigenErrorJs) {
   const { titulo, traza } = describirError(error, origen);
   void invoke("reportar_error_js", { titulo, traza }).catch(() => {
     // Sin backend (o falló el IPC): queda sólo la consola.
   });
+  for (const oyente of oyentes) {
+    try {
+      oyente(origen, error);
+    } catch {
+      // Un oyente roto no frena el reporte ni a los demás.
+    }
+  }
 }
 
 let pantallaInformada: string | null = null;

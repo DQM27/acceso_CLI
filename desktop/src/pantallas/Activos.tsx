@@ -10,10 +10,12 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import MenuAcciones from "../componentes/MenuAcciones";
+import { useRecargaVisible } from "../componentes/useRecargaVisible";
+import { idPorClave } from "../componentes/Tabla.logica";
 import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, cerrarActivos, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
 import {
   CLASE_SINGULAR,
   contarPorClase,
@@ -110,18 +112,13 @@ function opcionesFiltroClase(
   ];
 }
 
-/** Fuera del componente a propósito: una función nueva en cada render hacía
- * que la grilla se reconstruyera y perdiera los anchos ajustados (ver
- * `columnaBase` en Tabla.tsx). */
-const idPorClave = (fila: ActivoUnificado) => fila.clave;
 
 /** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
  * contratistas lo tienen). */
-function claseFilaActiva(fila: ActivoUnificado): string | undefined {
-  if (fila.nivel_permanencia === "Critico") return "fila-permanencia-critico";
-  if (fila.nivel_permanencia === "Aviso") return "fila-permanencia-aviso";
-  return undefined;
-}
+const REGLAS_PERMANENCIA: Record<string, (fila: ActivoUnificado) => boolean> = {
+  "fila-permanencia-critico": (fila) => fila.nivel_permanencia === "Critico",
+  "fila-permanencia-aviso": (fila) => fila.nivel_permanencia === "Aviso",
+};
 
 export default function Activos({
   refrescarSenal,
@@ -197,32 +194,35 @@ export default function Activos({
   // 2026-09-23) -- ni queda escondida en la barra de estado.
   const tablaRef = useRef<TablaHandle<ActivoUnificado>>(null);
 
+  // La selección NO se borra al recargar: cada sincronización o aviso en vivo
+  // recarga, y antes desmarcaba las casillas a mitad de una salida masiva. AG
+  // Grid ya saca de la selección las filas que desaparecen (y avisa por
+  // `onSeleccionCambia`), así que sólo quedan marcadas las que siguen adentro.
+  // `cargando` sólo vale para la PRIMERA carga (la tabla no muestra "Cargando…"
+  // después): arranca en `true` y se apaga al terminar, no se vuelve a prender
+  // en cada recarga -- así tampoco hace falta un setState síncrono dentro del
+  // efecto (antes se diferían con `Promise.resolve().then` para la regla
+  // `react-hooks/set-state-in-effect`).
   const recargar = useCallback(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
-    // esta actualización de estado como síncrona dentro del cuerpo del
-    // efecto que la dispara (abajo). Diferirla a un microtask no cambia
-    // nada perceptible (corre antes del próximo paint igual) y cumple la
-    // regla.
-    return Promise.resolve()
-      .then(() => setCargando(true))
-      .then(() => listarActivosUnificados())
+    return listarActivosUnificados()
       .then(({ activos, total }) => {
         setActivos(activos);
         setTotal(total);
         setCargadoAlgunaVez(true);
-        setSeleccionadas([]);
       })
       .finally(() => setCargando(false));
   }, []);
 
+  // Oculta (otra sección a la vista), la pantalla no recarga: queda
+  // pendiente y recarga una vez al volver (ver `useRecargaVisible`).
+  const versionDatos = useRecargaVisible(refrescarSenal);
   useEffect(() => {
     let vigente = true;
     recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
-  }, [recargar, refrescarSenal]);
+  }, [recargar, versionDatos]);
 
   // useCallback a propósito: esta función se cierra dentro de una celda de
   // `columnas` — sin identidad estable, `columnas` (memoizado más abajo)
@@ -318,46 +318,9 @@ export default function Activos({
         minWidth: 100,
         getQuickFilterText: () => "",
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.9,
-        minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-        getQuickFilterText: () => "",
-      },
-      {
-        colId: "fecha_ingreso",
-        type: "fecha",
-        headerName: "Fecha",
-        flex: 1.1,
-        minWidth: 110,
-        // `valueGetter` (no `field`) a propósito, igual que Hora: si la
-        // columna lee el string ISO crudo, AG Grid la infiere como fecha y
-        // el filtro flotante termina siendo el selector nativo de
-        // fecha+hora del navegador (`datetime-local`) en vez de un texto
-        // simple — igual que le pasaba a Hora. `fechaLocalYMD` mantiene el
-        // orden cronológico correcto como texto ("2026-08-28" ordena bien
-        // sin volver a pasar por `Date`); `valueFormatter` sólo reacomoda
-        // ese mismo string a DD/MM/AAAA para mostrar, sin re-parsearlo.
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-        getQuickFilterText: () => "",
-      },
-      {
-        colId: "hora_ingreso",
-        headerName: "Hora",
-        flex: 0.9,
-        minWidth: 90,
-        // `valueGetter` (no `field`+`valueFormatter`) a propósito: si lee
-        // el string ISO crudo, AG Grid vuelve a inferirla como fecha (con
-        // el mismo problema de la columna Fecha). Devolviendo ya el texto
-        // "HH:MM", la columna se filtra/ordena como texto plano — mismo
-        // comportamiento que el resto de columnas de texto, sin ícono raro.
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
-        getQuickFilterText: () => "",
-      },
+      columnaGafete({ getQuickFilterText: () => "" }),
+      columnaFecha("fecha_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
+      columnaHora("hora_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
       {
         field: "usuario_ingreso_nombre",
         headerName: "Dio ingreso",
@@ -405,7 +368,7 @@ export default function Activos({
             filtrosPorColumna
             id="activos"
             idFila={idPorClave}
-            claseFila={claseFilaActiva}
+            reglasClaseFila={REGLAS_PERMANENCIA}
             columnas={columnas}
             filas={filasVisibles}
             busqueda={busqueda}

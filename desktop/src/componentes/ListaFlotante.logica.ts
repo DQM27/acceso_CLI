@@ -101,6 +101,11 @@ export function useListaFlotante(visible: boolean) {
   return { campoRef, posicion };
 }
 
+/** Misma lista: mismo largo y los mismos elementos en el mismo orden. */
+export function mismosItems<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a === b || (a.length === b.length && a.every((item, i) => Object.is(item, b[i])));
+}
+
 /** ↑/↓ mueve `resaltado` dentro de `items`, Enter llama `onSeleccionar` con
  * el ítem resaltado. Se reinicia a 0 cada vez que cambia la lista de items
  * (si no, una búsqueda nueva con menos resultados puede dejarlo apuntando a
@@ -113,12 +118,19 @@ export function useNavegacionFlechas<T>(
   onSeleccionar: (item: T) => void,
 ) {
   const [resaltado, setResaltado] = useState(0);
-
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setResaltado` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => setResaltado(0));
-  }, [items]);
+  // Ajuste durante el render (patrón de React): con una lista nueva vuelve a
+  // 0 en el mismo render, sin un efecto ni el rodeo `Promise.resolve().then`
+  // (que además dejaba un render con el índice viejo).
+  //
+  // Se compara por CONTENIDO, no por identidad: varios llamadores arman la
+  // lista en cada render (un `[]` nuevo, un `.filter(...)`), y comparando
+  // la identidad cada render "cambiaba" la lista y disparaba otro render sin
+  // fin ("Too many re-renders" al abrir Nuevo ingreso con Ctrl+N).
+  const [itemsVistos, setItemsVistos] = useState(items);
+  if (!mismosItems(itemsVistos, items)) {
+    setItemsVistos(items);
+    setResaltado(0);
+  }
 
   function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) {
     if (!activo || items.length === 0) return;

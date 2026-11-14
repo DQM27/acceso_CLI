@@ -4,9 +4,11 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
+import { useRecargaVisible } from "../componentes/useRecargaVisible";
 import { listarRutasActivas, registrarRetornoRuta } from "../api";
 import type { SalidaRutaActivaResumen } from "../api";
-import { textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaDDMMYYYY } from "../tiempo";
+import { columnaHora } from "../componentes/columnasComunes";
 
 const SalidaRutaModal = lazy(() => import("./SalidaRutaModal"));
 
@@ -35,25 +37,25 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
 
   useBarraEstado(cargando ? "Cargando…" : textoConteo(conteo, filas.length, "ruta(s) activa(s)"));
 
+  // "Cargando…" sólo en la PRIMERA carga: antes se prendía en cada
+  // sincronización y la barra de estado parpadeaba. Por eso tampoco hay un
+  // setState síncrono dentro del efecto (lo que obligaba a diferirlo con
+  // `Promise.resolve().then` por `react-hooks/set-state-in-effect`).
   const recargar = useCallback(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
-    // esta actualización de estado como síncrona dentro del cuerpo del
-    // efecto que la dispara (abajo). Ver el mismo comentario en Activos.tsx.
-    return Promise.resolve()
-      .then(() => setCargando(true))
-      .then(() => listarRutasActivas())
+    return listarRutasActivas()
       .then(setFilas)
       .finally(() => setCargando(false));
   }, []);
 
+  // Oculta, no recarga: queda pendiente hasta volver (`useRecargaVisible`).
+  const versionDatos = useRecargaVisible(refrescarSenal);
   useEffect(() => {
     let vigente = true;
     recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
-  }, [refrescarSenal, recargar]);
+  }, [versionDatos, recargar]);
 
   const registrarRetorno = useCallback(
     async (fila: SalidaRutaActivaResumen) => {
@@ -95,13 +97,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
         minWidth: 100,
         valueGetter: (p) => (p.data ? textoFechaDDMMYYYY(p.data.fecha_documento) : ""),
       },
-      {
-        colId: "hora_salida",
-        headerName: "Hora salida",
-        flex: 0.8,
-        minWidth: 90,
-        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_salida) : ""),
-      },
+      columnaHora("hora_salida", (fila) => fila.fecha_hora_salida, { headerName: "Hora salida", flex: 0.8 }),
       { field: "usuario_salida_nombre", headerName: "Registró", flex: 1.1, minWidth: 120 },
       {
         headerName: "Acción",

@@ -1,6 +1,7 @@
 import "./modulosTabla";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
@@ -12,6 +13,7 @@ import type {
   Column,
   GetRowIdParams,
   RowClassParams,
+  RowClassRules,
   RowClickedEvent,
   ColumnMovedEvent,
   ColumnPinnedEvent,
@@ -252,11 +254,12 @@ export interface TablaProps<T> {
    * Grid reconoce la misma fila en vez de redibujar todo, y hace destellar
    * las celdas que cambiaron (ej. una salida que llega por Realtime). */
   idFila?: (fila: T) => string;
-  /** Clase CSS extra para una fila según sus datos (ej. resaltar a quien
-   * lleva más de 12 horas adentro). Como puede depender de la hora actual,
-   * la grilla se redibuja sola cada minuto mientras esto esté puesto. Debe
-   * ser una función estable (definida fuera del componente). */
-  claseFila?: (fila: T) => string | undefined;
+  /** Clases CSS extra para una fila según sus datos (ej. resaltar a quien
+   * lleva más de 12 horas adentro): clase -> condición. Son `rowClassRules`
+   * de AG Grid, que al actualizarse una fila ponen Y QUITAN cada clase --
+   * `getRowClass` sólo agregaba, y por eso antes la grilla se redibujaba
+   * entera cada minuto. Debe ser un objeto estable (fuera del componente). */
+  reglasClaseFila?: Record<string, (fila: T) => boolean>;
   /** Cuántas filas quedan visibles y si hay algún filtro puesto (por
    * columna o `busqueda`), cada vez que cambia lo que muestra la grilla --
    * para el contador de la barra de estado ("1 de 304 movimiento(s)"), ver
@@ -313,7 +316,7 @@ function TablaBase<T>(
     id,
     cargando,
     idFila,
-    claseFila,
+    reglasClaseFila,
     onConteoVisible,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
@@ -331,19 +334,12 @@ function TablaBase<T>(
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Mismo mecanismo que `SelectorRangoFecha`: cierra al clickear afuera del
-  // botón y del popover (el popover vive en un portal a `document.body`, así
-  // que un click "afuera" del árbol de este componente no lo cierra solo).
-  useEffect(() => {
-    if (!selectorAbierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (selectorRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setSelectorAbierto(false);
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
-  }, [selectorAbierto, selectorRef]);
+  // Cierra al clickear afuera del botón y del popover (el popover vive en un
+  // portal a `document.body`, así que un click "afuera" del árbol de este
+  // componente no lo cierra solo).
+  useCerrarAlClicAfuera(selectorAbierto, [selectorRef, popoverRef], () => setSelectorAbierto(false), {
+    conEscape: false,
+  });
 
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
 
@@ -357,14 +353,20 @@ function TablaBase<T>(
     setPrimeraCargaHecha(true);
   }
 
-  // `claseFila` puede depender del reloj (ej. "más de 12 horas adentro"):
-  // sin esto, una fila que cruza el umbral no cambiaba hasta el próximo
-  // refresco de datos.
-  useEffect(() => {
-    if (!claseFila) return;
-    const intervalo = window.setInterval(() => apiRef.current?.redrawRows(), 60_000);
-    return () => window.clearInterval(intervalo);
-  }, [claseFila]);
+  // Las reglas leen sólo los datos de la fila: AG Grid las reevalúa cuando
+  // esos datos cambian (una recarga), sin redibujar la grilla entera.
+  const reglasAgGrid = useMemo<RowClassRules<T> | undefined>(
+    () =>
+      reglasClaseFila
+        ? Object.fromEntries(
+            Object.entries(reglasClaseFila).map(([clase, condicion]) => [
+              clase,
+              (p: RowClassParams<T>) => (p.data ? condicion(p.data) : false),
+            ]),
+          )
+        : undefined,
+    [reglasClaseFila],
+  );
 
   const columnasConVisibilidad = useMemo(
     () =>
@@ -760,12 +762,7 @@ function TablaBase<T>(
               ? (p: GetRowIdParams<T>) => idFila(p.data)
               : undefined
           }
-          getRowClass={
-            claseFila
-              ? (p: RowClassParams<T>) =>
-                  (p.data ? claseFila(p.data) : undefined)
-              : undefined
-          }
+          rowClassRules={reglasAgGrid}
           // Sin el recuadro de foco al hacer clic en una celda (se veía
           // feo y no copiaba nada) -- a cambio no hay navegación por
           // flechas dentro de la grilla.

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { ChevronDown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ListaFlotante } from "./ListaFlotante";
@@ -34,23 +35,7 @@ export default function MenuAcciones({
   const { campoRef, posicion } = useListaFlotante(visible);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!abierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (campoRef.current?.contains(objetivo) || menuRef.current?.contains(objetivo)) return;
-      cerrar();
-    }
-    function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") cerrar();
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    document.addEventListener("keydown", alTeclear);
-    return () => {
-      document.removeEventListener("mousedown", alHacerClicAfuera);
-      document.removeEventListener("keydown", alTeclear);
-    };
-  }, [abierto, campoRef, cerrar]);
+  useCerrarAlClicAfuera(abierto, [campoRef, menuRef], cerrar);
 
   return (
     <div ref={campoRef} style={{ flexShrink: 0 }}>

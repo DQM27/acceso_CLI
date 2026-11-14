@@ -10,13 +10,9 @@ function tecla(key: string) {
 }
 
 describe("useNavegacionFlechas", () => {
-  // Referencias estables a propósito, declaradas una sola vez: el hook
-  // reinicia `resaltado` cuando cambia la IDENTIDAD de `items` (efecto
-  // sobre `[items]`), igual que en NuevoIngresoModal/SalidaModal donde
-  // viene de useState/useMemo. Pasar un literal nuevo en cada render del
-  // hook (p. ej. `() => useNavegacionFlechas(["a","b"], ...)` dentro de
-  // `renderHook`) dispararía ese reinicio en cada tecla — no es cómo se usa
-  // en la app real, así que tampoco es cómo hay que probarlo acá.
+  // Referencias estables declaradas una sola vez (como en la app, donde la
+  // lista viene de useState/useMemo). El hook igual compara la lista por
+  // CONTENIDO -- ver las pruebas de "arreglo nuevo en cada render" abajo.
   const items3 = ["a", "b", "c"];
   const items2 = ["a", "b"];
   const items1 = ["a"];
@@ -79,6 +75,25 @@ describe("useNavegacionFlechas", () => {
     const { result } = renderHook(() => useNavegacionFlechas([], true, onSeleccionar));
     act(() => result.current.manejarTecla(tecla("Enter")));
     expect(onSeleccionar).not.toHaveBeenCalled();
+  });
+
+  it("un [] nuevo en cada render no entra en bucle (Ctrl+N abría Nuevo ingreso con 'Too many re-renders')", () => {
+    const { rerender, result } = renderHook(() => useNavegacionFlechas([], true, vi.fn()));
+    expect(() => {
+      rerender();
+      rerender();
+    }).not.toThrow();
+    expect(result.current.resaltado).toBe(0);
+  });
+
+  it("la misma lista armada de nuevo en cada render conserva el resaltado", () => {
+    const fuente = ["a", "b", "c"];
+    const { result, rerender } = renderHook(() =>
+      useNavegacionFlechas(fuente.filter(() => true), true, vi.fn()),
+    );
+    act(() => result.current.manejarTecla(tecla("ArrowDown")));
+    rerender();
+    expect(result.current.resaltado).toBe(1);
   });
 
   it("reinicia el resaltado a 0 cuando cambia la lista de ítems", async () => {
