@@ -195,15 +195,23 @@ fun PantallaPrincipal(
     // de Toasts que salían abajo tapando la barra de secciones.
     val avisosBreves = remember { AvisosBreves() }
     val scope = rememberCoroutineScope()
+    // El último aviso en vivo ya guardado en la base local; lo atiende el
+    // efecto de más abajo, que tiene a mano los ViewModels de cada sección.
+    var cambioEnVivo by remember { mutableStateOf<CambioEnVivo?>(null) }
     val realtime = remember(nucleo, scope, sesion) {
         NubeRealtime(
             nucleo = nucleo,
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
-            // Aviso en vivo con la fila ya guardada: refresca Activos al
-            // instante, sin esperar la sincronización.
-            onCambioAplicado = { refrescarNube += 1 },
+            // Aviso en vivo con la fila ya guardada: refresca al instante,
+            // sin esperar la sincronización, sólo la sección de esa tabla
+            // (2026-11-14, fase 5 de `docs/handoff-rediseno-movil-ux.md`):
+            // antes cada aviso recargaba las cuatro, ocho lecturas al núcleo
+            // por el mismo candado.
+            onCambioAplicado = { tabla ->
+                cambioEnVivo = CambioEnVivo(seccionDeTabla(tabla), (cambioEnVivo?.id ?: 0L) + 1)
+            },
             // El canal corre en `scope` (hilo principal): el aviso puede
             // mostrarse directo. El trabajo local sigue disponible.
             onExpulsado = {
@@ -356,6 +364,19 @@ fun PantallaPrincipal(
         if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
         if (seccion != SeccionPrincipal.PROVEEDORES || fueraDePestanas) proveedoresViewModel.refrescarActivos()
         if (seccion != SeccionPrincipal.CORREO || fueraDePestanas) correoViewModel.refrescarActivos()
+    }
+    // Un aviso en vivo ya guardado: sólo su sección, esté o no a la vista (la
+    // pantalla lee del mismo ViewModel). Tabla desconocida: todas, como una
+    // sincronización.
+    LaunchedEffect(cambioEnVivo) {
+        val cambio = cambioEnVivo ?: return@LaunchedEffect
+        when (cambio.seccion) {
+            SeccionPrincipal.CONTRATISTAS -> activosViewModel.refrescar()
+            SeccionPrincipal.KOF -> gafetesViewModel.refrescarActivos()
+            SeccionPrincipal.PROVEEDORES -> proveedoresViewModel.refrescarActivos()
+            SeccionPrincipal.CORREO -> correoViewModel.refrescarActivos()
+            SeccionPrincipal.RUTAS, SeccionPrincipal.VISITAS, null -> refrescarNube += 1
+        }
     }
 
     // Qué ocupa la pantalla debajo de la barra superior.

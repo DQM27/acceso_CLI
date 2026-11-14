@@ -217,3 +217,18 @@ enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = fa
 }
 
 internal val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }
+
+/// La sección de una tabla de la nube que llega por un aviso en vivo (las que
+/// `control_acceso::nube::aplicar_cambio_en_vivo` guarda al instante); `null`
+/// si no corresponde a ninguna.
+internal fun seccionDeTabla(tabla: String?): SeccionPrincipal? = when (tabla) {
+    "ingresos" -> SeccionPrincipal.CONTRATISTAS
+    "ingresos_proveedor" -> SeccionPrincipal.PROVEEDORES
+    "ingresos_correo" -> SeccionPrincipal.CORREO
+    "prestamos_gafete_provisional" -> SeccionPrincipal.KOF
+    else -> null
+}
+
+/// Un aviso en vivo ya guardado en la base local: qué sección refrescar.
+/// `id` distingue dos avisos seguidos de la misma sección: cada uno refresca.
+internal data class CambioEnVivo(val seccion: SeccionPrincipal?, val id: Long)
