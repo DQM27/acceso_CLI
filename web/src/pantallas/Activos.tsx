@@ -8,7 +8,8 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
 import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, textoTiempoAdentro } from "../api/adentro";
 import type { PersonaAdentro, TipoAdentro } from "../api/adentro";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
+import { textoGafete } from "../componentes/columnasComunes";
 import {
   CLASES,
   ETIQUETA_CLASE,
@@ -123,7 +124,7 @@ export default function Activos() {
         headerName: "Gafete",
         flex: 0.8,
         minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+        valueFormatter: (p) => textoGafete(p.value as number | null),
       },
       { field: "placa", headerName: "Placa", flex: 0.9, minWidth: 100 },
       {
@@ -134,7 +135,7 @@ export default function Activos() {
         // Ordena por el instante, muestra fecha y hora de Costa Rica.
         valueGetter: (p) => p.data?.hora_entrada ?? "",
         valueFormatter: (p) =>
-          p.value ? `${textoFechaDDMMYYYY(fechaLocalYMD(p.value))} ${textoHora(p.value)}` : "",
+          p.value ? textoFechaHora(p.value) : "",
         filter: false,
       },
       {

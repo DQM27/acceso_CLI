@@ -9,7 +9,7 @@ import { useLista } from "../componentes/useLista";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { ContratistaConEstado } from "../api/contratistas";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaDDMMYYYY, textoFechaHora } from "../tiempo";
 import { COLOR_NIVEL, ESTADOS_ACCESO, nivelPraind, textoEstadoPraind } from "./Contratistas.logica";
 import { mensajeError } from "../mensajeError";
 
@@ -130,7 +130,7 @@ export default function Contratistas() {
         minWidth: 160,
         valueGetter: (p) =>
           p.data?.adentro_desde
-            ? `${p.data.adentro_sitio_nombre ?? "—"} · ${textoFechaDDMMYYYY(fechaLocalYMD(p.data.adentro_desde))} ${textoHora(p.data.adentro_desde)}`
+            ? `${p.data.adentro_sitio_nombre ?? "—"} · ${textoFechaHora(p.data.adentro_desde)}`
             : "",
       },
       {

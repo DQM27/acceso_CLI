@@ -21,11 +21,11 @@ import {
   imprimirHtml,
 } from "../exportacion";
 import type { DefinicionColumnaExport } from "../exportacion";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaLocalYMD, textoFechaHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 
 function fechaHora(iso: string | null): string {
-  return iso ? `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}` : "";
+  return iso ? textoFechaHora(iso) : "";
 }
 
 /** "Hace 30 días" en `AAAA-MM-DD` (día de Costa Rica). */

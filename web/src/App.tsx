@@ -264,17 +264,13 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // en index.css.
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
-  useEffect(() => {
-    if (!seccionActual) return;
-    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
-    // -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto.
-    Promise.resolve().then(() => {
-      setVisitadas((actual) =>
-        actual.includes(seccionActual) ? actual : [...actual, seccionActual],
-      );
-    });
-  }, [seccionActual]);
+  // Ajuste durante el render (patrón de React): la sección nueva se monta en
+  // el mismo render en que se elige, sin un efecto que la agregue después
+  // (antes se difería con `Promise.resolve().then` por la regla
+  // `react-hooks/set-state-in-effect`). Mismo criterio que el escritorio.
+  if (seccionActual && !visitadas.includes(seccionActual)) {
+    setVisitadas([...visitadas, seccionActual]);
+  }
 
   useEffect(() => {
     const etiqueta = SECCIONES.find((s) => s.id === seccionActual)?.etiqueta;

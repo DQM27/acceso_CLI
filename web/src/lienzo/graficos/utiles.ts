@@ -129,13 +129,15 @@ function prefiereMenosMovimiento(): boolean {
 
 /** Número que sube desde 0 hasta su valor (y de un valor al siguiente) en `duracion` ms. */
 export function useNumeroAnimado(destino: number, duracion = 650): number {
-  const [actual, setActual] = useState(() => (prefiereMenosMovimiento() ? destino : 0));
+  // Sin animación se devuelve el destino tal cual, sin pasar por el estado
+  // (antes se fijaba con `Promise.resolve().then(setActual)` para esquivar la
+  // regla set-state-in-effect).
+  const sinMovimiento = prefiereMenosMovimiento() || typeof requestAnimationFrame === "undefined";
+  const [actual, setActual] = useState(() => (sinMovimiento ? destino : 0));
   const desde = useRef(actual);
   useEffect(() => {
-    if (prefiereMenosMovimiento() || typeof requestAnimationFrame === "undefined") {
+    if (sinMovimiento) {
       desde.current = destino;
-      // Sin animación: salta directo, en el siguiente microtask (evita setState síncrono en el efecto).
-      void Promise.resolve().then(() => setActual(destino));
       return;
     }
     const inicio = desde.current;
@@ -151,8 +153,8 @@ export function useNumeroAnimado(destino: number, duracion = 650): number {
     };
     cuadro = requestAnimationFrame(paso);
     return () => cancelAnimationFrame(cuadro);
-  }, [destino, duracion]);
-  return actual;
+  }, [destino, duracion, sinMovimiento]);
+  return sinMovimiento ? destino : actual;
 }
 
 /**
@@ -166,18 +168,21 @@ export function useInterpolado(claves: string[], valores: number[], duracion = 5
   const firma = JSON.stringify([claves, valores]);
   const [mostrado, setMostrado] = useState<{ firma: string; valores: number[] }>({ firma, valores });
   const actual = useRef(new Map(claves.map((c, i) => [c, valores[i]])));
+  // Sin animación se dibuja el destino tal cual (ver el `return` del final);
+  // el efecto sólo recuerda los valores para cuando vuelva a haber animación.
+  const sinMovimiento = prefiereMenosMovimiento() || typeof requestAnimationFrame === "undefined";
 
   useEffect(() => {
     const [nuevasClaves, destino] = JSON.parse(firma) as [string[], number[]];
+    if (sinMovimiento) {
+      actual.current = new Map(nuevasClaves.map((c, i) => [c, destino[i]]));
+      return;
+    }
     const desde = nuevasClaves.map((c) => actual.current.get(c) ?? 0);
     const fijar = (lista: number[]) => {
       actual.current = new Map(nuevasClaves.map((c, i) => [c, lista[i]]));
       setMostrado({ firma, valores: lista });
     };
-    if (prefiereMenosMovimiento() || typeof requestAnimationFrame === "undefined") {
-      void Promise.resolve().then(() => fijar(destino));
-      return;
-    }
     const t0 = performance.now();
     let cuadro = 0;
     const paso = (ahora: number) => {
@@ -188,8 +193,9 @@ export function useInterpolado(claves: string[], valores: number[], duracion = 5
     };
     cuadro = requestAnimationFrame(paso);
     return () => cancelAnimationFrame(cuadro);
-  }, [firma, duracion]);
+  }, [firma, duracion, sinMovimiento]);
 
+  if (sinMovimiento) return valores;
   // Mientras la animación no arrancó (o si cambió la cantidad), se dibuja el destino.
   return mostrado.valores.length === valores.length ? mostrado.valores : valores;
 }

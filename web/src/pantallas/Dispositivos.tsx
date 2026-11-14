@@ -13,7 +13,7 @@ import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
 import { TEXTO_CREDENCIAL, TEXTO_EVENTO, detalleEvento, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useLista } from "../componentes/useLista";
 import { usePresenciaPorSitio } from "../presenciaSitios";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
   autorizarReconexion,
@@ -60,9 +60,6 @@ interface CodigoMostrado {
   expira_en: string;
 }
 
-function textoFechaHora(iso: string): string {
-  return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
-}
 
 /**
  * Las acciones sobre un equipo: Registrar, Retirar y, sobre uno retirado,

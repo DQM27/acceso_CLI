@@ -5,6 +5,7 @@ import Engranaje from "./Engranaje";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
 import { NOMBRE_TEMA, type Tema } from "./useTema";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 
 /** Lo que dura la animación de salida del menú (ver `.lista-flotante-saliendo`
  * en `index.css`): el menú se desmonta cuando termina. */
@@ -67,23 +68,7 @@ export default function MenuUsuario({
     [],
   );
 
-  useEffect(() => {
-    if (!abierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (campoRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      cerrar();
-    }
-    function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") cerrar();
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    document.addEventListener("keydown", alTeclear);
-    return () => {
-      document.removeEventListener("mousedown", alHacerClicAfuera);
-      document.removeEventListener("keydown", alTeclear);
-    };
-  }, [abierto, campoRef]);
+  useCerrarAlClicAfuera(abierto, [campoRef, popoverRef], cerrar);
 
   const IconoTema = tema === "tokyo-night" ? Moon : Sun;
 

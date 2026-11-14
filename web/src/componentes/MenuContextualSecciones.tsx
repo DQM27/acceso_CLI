@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../secciones";
@@ -35,22 +36,8 @@ export default function MenuContextualSecciones({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function alClicFuera(evento: MouseEvent) {
-      if (ref.current && !ref.current.contains(evento.target as Node)) onCerrar();
-    }
-    function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") onCerrar();
-    }
-    // `mousedown` (no `click`) para cerrar antes de que un click posterior
-    // en otra parte de la app dispare su propio handler.
-    document.addEventListener("mousedown", alClicFuera);
-    document.addEventListener("keydown", alTeclear);
-    return () => {
-      document.removeEventListener("mousedown", alClicFuera);
-      document.removeEventListener("keydown", alTeclear);
-    };
-  }, [onCerrar]);
+  // Montado sólo mientras está abierto.
+  useCerrarAlClicAfuera(true, [ref], onCerrar);
 
   const visiblesCount = secciones.length - ocultas.length;
 

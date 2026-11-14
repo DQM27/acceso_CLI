@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { CalendarDays } from "lucide-react";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
@@ -19,16 +20,7 @@ export default function SelectorRangoFecha({
   const { campoRef, posicion } = useListaFlotante(abierto);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!abierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (campoRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setAbierto(false);
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
-  }, [abierto, campoRef]);
+  useCerrarAlClicAfuera(abierto, [campoRef, popoverRef], () => setAbierto(false), { conEscape: false });
 
   function abrir() {
     setDesdeBorrador(desde);

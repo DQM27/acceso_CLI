@@ -27,6 +27,7 @@ import { useListaFlotante } from "./ListaFlotante.logica";
 import FiltroFechaTabla from "./FiltroFechaTabla";
 import { compararFechaYMD, textoTooltip } from "./Tabla.logica";
 import { useDebounced } from "./useDebounced";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -323,19 +324,12 @@ function TablaBase<T>(
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
   const enServidor = origenServidor !== undefined;
 
-  // Mismo mecanismo que `SelectorRangoFecha`: cierra al clickear afuera del
-  // botón y del popover (el popover vive en un portal a `document.body`, así
-  // que un click "afuera" del árbol de este componente no lo cierra solo).
-  useEffect(() => {
-    if (!selectorAbierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (selectorRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setSelectorAbierto(false);
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
-  }, [selectorAbierto, selectorRef]);
+  // Cierra al clickear afuera del botón y del popover (el popover vive en un
+  // portal a `document.body`, así que un click "afuera" del árbol de este
+  // componente no lo cierra solo).
+  useCerrarAlClicAfuera(selectorAbierto, [selectorRef, popoverRef], () => setSelectorAbierto(false), {
+    conEscape: false,
+  });
 
   function ordenVigente(): OrdenTabla | null {
     const ordenada = (apiRef.current?.getColumnState() ?? [])
