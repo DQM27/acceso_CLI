@@ -525,6 +525,9 @@ function Shell({
     setFiltroPermanencia((actual) => (actual === nivel ? null : nivel));
   }
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
+  // Menú para mostrar/ocultar secciones: lo abre el clic derecho en el menú
+  // lateral o «Personalizar menú» en el menú de la cuenta.
+  const [menuSecciones, setMenuSecciones] = useState<{ x: number; y: number } | null>(null);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
   const [modalReconexion, setModalReconexion] = useState(false);
@@ -829,8 +832,8 @@ function Shell({
               onCambiarVisibilidad={alternarVisibilidadSeccion}
               onRestablecer={restablecerSidebar}
               recargarUnidad={sincronizandoManual}
-              onBuscarActualizacion={buscarActualizacionManual}
-              buscandoActualizacion={buscandoActualizacion}
+              posicionMenuSecciones={menuSecciones}
+              onPosicionMenuSecciones={setMenuSecciones}
               pie={
                 <MenuUsuario
                   sesion={sesion}
@@ -838,6 +841,9 @@ function Shell({
                   tema={tema}
                   onAlternarTema={alternarTema}
                   onCerrarSesion={onCerrarSesion}
+                  onPersonalizarMenu={setMenuSecciones}
+                  onBuscarActualizacion={buscarActualizacionManual}
+                  buscandoActualizacion={buscandoActualizacion}
                 />
               }
             />

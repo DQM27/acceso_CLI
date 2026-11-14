@@ -117,7 +117,7 @@ export default function BarraNube({
         </span>
       )}
       <span
-        title={`Avisos en vivo de la nube: ${texto}`}
+        title={`Avisos en vivo de la nube: ${texto}. Lo registrado se guarda en esta PC y se sincroniza solo al volver la conexión.`}
         style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color }}
       >
         <span

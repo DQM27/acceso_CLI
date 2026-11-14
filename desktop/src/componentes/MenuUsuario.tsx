@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
-import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
+import { KeyRound, LogOut, Moon, PanelLeft, RefreshCw, Sun } from "lucide-react";
 import type { UsuarioSesion } from "../api";
 import CambiarPasswordModal from "./CambiarPasswordModal";
 import Engranaje from "./Engranaje";
 import { ListaFlotante } from "./ListaFlotante";
 import { useAperturaAnimada, useListaFlotante } from "./ListaFlotante.logica";
 import { NOMBRE_TEMA } from "./SelectorTema.logica";
+import { useVersionApp } from "./useVersionApp";
 import type { Tema } from "./SelectorTema.logica";
 
 /** La inicial del nombre, para el círculo (vacío si no hay nombre). */
@@ -34,12 +35,22 @@ export default function MenuUsuario({
   tema,
   onAlternarTema,
   onCerrarSesion,
+  onPersonalizarMenu,
+  onBuscarActualizacion,
+  buscandoActualizacion,
 }: {
   sesion: UsuarioSesion;
   colapsado: boolean;
   tema: Tema;
   onAlternarTema: () => void;
   onCerrarSesion: () => void;
+  /** Abre el menú para mostrar/ocultar secciones junto a la cuenta. Antes
+   * sólo se llegaba con clic derecho en el menú lateral, y casi nadie lo
+   * descubría (auditoría 2026-11-14, U10). */
+  onPersonalizarMenu: (posicion: { x: number; y: number }) => void;
+  /** Antes era la versión del pie del menú, sin nada que lo indicara (U11). */
+  onBuscarActualizacion: () => void;
+  buscandoActualizacion: boolean;
 }) {
   // `abierto` es lo que quiere quien opera; `visible` lo mantiene en pantalla
   // el rato que dura la animación de salida.
@@ -51,6 +62,7 @@ export default function MenuUsuario({
   useCerrarAlClicAfuera(abierto, [campoRef, popoverRef], cerrar);
 
   const IconoTema = tema === "tokyo-night" ? Moon : Sun;
+  const version = useVersionApp();
 
   return (
     <div ref={campoRef} className="usuario">
@@ -60,7 +72,7 @@ export default function MenuUsuario({
         onClick={abierto ? cerrar : abrir}
         aria-expanded={abierto}
         aria-haspopup="menu"
-        title={`${sesion.nombre} — tema, contraseña y cerrar sesión`}
+        title={`${sesion.nombre} — tema, menú, actualizaciones, contraseña y cerrar sesión`}
         aria-label={`Cuenta de ${sesion.nombre}`}
       >
         <Engranaje>{inicialDe(sesion.nombre)}</Engranaje>
@@ -89,6 +101,41 @@ export default function MenuUsuario({
             >
               <IconoTema size={17} strokeWidth={2} aria-hidden="true" />
               Tema: {NOMBRE_TEMA[tema]}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="boton boton-icono boton-salir"
+              title="Mostrar, ocultar o restablecer las secciones del menú lateral"
+              onClick={() => {
+                // Al costado de la cuenta, a su altura (el menú de secciones
+                // mide ~300 px).
+                const caja = campoRef.current?.getBoundingClientRect();
+                cerrar();
+                onPersonalizarMenu({
+                  x: (caja?.right ?? 0) + 8,
+                  y: Math.max(8, (caja?.bottom ?? 0) - 300),
+                });
+              }}
+            >
+              <PanelLeft size={17} strokeWidth={2} aria-hidden="true" />
+              Personalizar menú
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="boton boton-icono boton-salir"
+              onClick={onBuscarActualizacion}
+              disabled={buscandoActualizacion}
+              title={version ? `Versión instalada: ${version}` : undefined}
+            >
+              <RefreshCw
+                size={17}
+                strokeWidth={2}
+                aria-hidden="true"
+                className={buscandoActualizacion ? "girando" : undefined}
+              />
+              {buscandoActualizacion ? "Buscando…" : "Buscar actualización"}
             </button>
             <button
               type="button"

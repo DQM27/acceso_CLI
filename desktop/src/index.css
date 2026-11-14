@@ -1005,18 +1005,7 @@ textarea::placeholder {
   font: inherit;
   font-size: 0.7rem;
   color: var(--muted);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-/* Mismo hover que `.barra-estado-boton`: en reposo es texto plano, al pasar el
-   ratón se tiñe y se nota que es un botón (buscar actualización). */
-.shell-sidebar-version:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--texto) 10%, transparent);
-}
-
-.shell-sidebar-version:disabled {
-  cursor: default;
+  user-select: text;
 }
 
 /* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo

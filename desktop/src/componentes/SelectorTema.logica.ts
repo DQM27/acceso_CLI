@@ -16,8 +16,10 @@ export const CLAVE_TEMA = "escritorio:tema";
 
 /** Nombre con que se muestra cada tema en el menú de usuario. */
 export const NOMBRE_TEMA: Record<Tema, string> = {
-  "tokyo-day": "Tokyo Day",
-  "tokyo-night": "Tokyo Night",
+  // Claro/oscuro, no el nombre de la paleta: quien opera no tiene por qué
+  // saber qué es "Tokyo Day" (auditoría 2026-11-14, U11).
+  "tokyo-day": "Claro",
+  "tokyo-night": "Oscuro",
 };
 
 /** Orden en que se recorren los temas (día → noche → día). */

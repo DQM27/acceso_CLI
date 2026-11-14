@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
 import {
   DndContext,
@@ -84,8 +83,8 @@ export default function Sidebar({
   onCambiarVisibilidad,
   onRestablecer,
   recargarUnidad,
-  onBuscarActualizacion,
-  buscandoActualizacion,
+  posicionMenuSecciones,
+  onPosicionMenuSecciones,
   pie,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
@@ -103,8 +102,11 @@ export default function Sidebar({
   /** Cuando cambia, se vuelve a leer la unidad (ver `useIdentidadEquipo`). */
   recargarUnidad?: unknown;
   /** La versión de abajo es también el botón de buscar actualización. */
-  onBuscarActualizacion: () => void;
-  buscandoActualizacion: boolean;
+  /** Dónde está abierto el menú para mostrar/ocultar secciones (`null`,
+   * cerrado). Lo abre el clic derecho acá o «Personalizar menú» del menú de
+   * la cuenta (auditoría 2026-11-14, U10): vive en `Shell`. */
+  posicionMenuSecciones: { x: number; y: number } | null;
+  onPosicionMenuSecciones: (posicion: { x: number; y: number } | null) => void;
   /** Lo que va al fondo del menú, sobre la versión (la cuenta de quien tiene la
    * sesión). El Sidebar sólo navega: no sabe qué es. */
   pie?: ReactNode;
@@ -112,7 +114,6 @@ export default function Sidebar({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const visibles = secciones.filter((seccion) => !ocultas.includes(seccion.id));
 
@@ -176,7 +177,7 @@ export default function Sidebar({
       className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}
       onContextMenu={(evento) => {
         evento.preventDefault();
-        setMenu({ x: evento.clientX, y: evento.clientY });
+        onPosicionMenuSecciones({ x: evento.clientX, y: evento.clientY });
       }}
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltar}>
@@ -202,19 +203,16 @@ export default function Sidebar({
 
       {pie}
 
-      <VersionFooter
-        onBuscarActualizacion={onBuscarActualizacion}
-        buscando={buscandoActualizacion}
-      />
+      <VersionFooter />
 
-      {menu && (
+      {posicionMenuSecciones && (
         <MenuContextualSecciones
-          posicion={menu}
+          posicion={posicionMenuSecciones}
           secciones={secciones}
           ocultas={ocultas}
           onCambiarVisibilidad={onCambiarVisibilidad}
           onRestablecer={onRestablecer}
-          onCerrar={() => setMenu(null)}
+          onCerrar={() => onPosicionMenuSecciones(null)}
         />
       )}
     </nav>

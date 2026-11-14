@@ -101,6 +101,10 @@ export default function MenuContextualSecciones({
 
       <div style={{ borderTop: "1px solid var(--borde)", margin: "0.3rem 0" }} />
 
+      <p style={{ margin: 0, padding: "0.2rem 0.6rem 0.35rem", color: "var(--muted)", fontSize: "0.75rem" }}>
+        Para reordenar, arrastre las secciones en el menú.
+      </p>
+
       <button
         type="button"
         onClick={() => {

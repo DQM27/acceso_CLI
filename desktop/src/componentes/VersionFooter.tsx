@@ -8,35 +8,12 @@ import { useVersionApp } from "./useVersionApp";
  * `tauri.conf.json` real) y no de `package.json` -- ese campo quedó
  * congelado en "0.0.0" y no es la fuente de verdad de la app empaquetada.
  *
- * También es el botón de "buscar actualización": en reposo se ve como texto
- * plano y al pasar el ratón se tiñe, igual que los botones de la barra de
- * estado (`.barra-estado-boton`).
+ * Sólo texto: antes era también el botón de "buscar actualización", pero
+ * nada lo indicaba. Ahora esa acción está en el menú de la cuenta
+ * (`MenuUsuario`, auditoría 2026-11-14, U11).
  */
-export default function VersionFooter({
-  onBuscarActualizacion,
-  buscando = false,
-}: {
-  onBuscarActualizacion: () => void;
-  buscando?: boolean;
-}) {
+export default function VersionFooter() {
   const version = useVersionApp();
-
   if (!version) return null;
-
-  return (
-    <button
-      type="button"
-      className="shell-sidebar-version"
-      title={`Lattis v${version} — buscar actualización`}
-      aria-label={`Lattis versión ${version}, buscar actualización`}
-      onClick={onBuscarActualizacion}
-      disabled={buscando}
-    >
-      {/* Antes se ocultaba con el sidebar colapsado (¡colapsado &&) -- pero
-          la columna angosta (3.75rem, ver .shell-sidebar-colapsada) tiene
-          espacio de sobra para "v1.6.4" a este tamaño de fuente (0.7rem),
-          no hacía falta esconderlo (hallazgo real del usuario, 2026-09-21). */}
-      {buscando ? "Buscando…" : `v${version}`}
-    </button>
-  );
+  return <span className="shell-sidebar-version">v{version}</span>;
 }
