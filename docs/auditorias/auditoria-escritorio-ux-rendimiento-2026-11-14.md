@@ -665,7 +665,7 @@ sola línea.
 | U8 | Hecho | Mensaje propio con la tabla vacía: texto buscado, filtros, o el que pasa cada pantalla (`mensajeVacio`). Los avisos de AG Grid, suprimidos (`suppressOverlays`) |
 | U9 | Hecho | «Sin internet — se guarda en esta PC» y «Sin conexión en vivo» en ámbar, no en rojo |
 | U10 | Hecho | «Personalizar menú» en el menú de la cuenta; el clic derecho sigue; pista de arrastrar |
-| U11 | Hecho en parte | «Registrar N salidas», cierre de modal con ícono X, «Buscar actualización» en el menú de la cuenta (la versión del pie es sólo texto), tema «Claro»/«Oscuro», `lang="es"`. **Corrección:** la columna «Estado» de Contratistas no sale vacía con datos reales (dice «Puede entrar»): fue un efecto de los datos simulados. Quedan sin tocar: «SÍ» en negrita de «Adentro» y el emoji de «Dispositivo» en Historial |
+| U11 | Hecho en parte | «Registrar N salidas», cierre de modal con ícono X, «Buscar actualización» en el menú de la cuenta (la versión del pie es sólo texto), tema «Claro»/«Oscuro», `lang="es"`. **Corrección:** la columna «Estado» de Contratistas no sale vacía con datos reales (dice «Puede entrar»): fue un efecto de los datos simulados. «SÍ» en negrita de «Adentro» y emoji de «Dispositivo» en Historial: resueltos después (ver «Conexión persistente y detalles») |
 
 Comprobado: lint, `tsc --noEmit`, 71 archivos de test (537 tests),
 `npm run build`, y capturas con Tauri simulado a 1366, 1440 y 1920 px en
@@ -674,9 +674,9 @@ claro y oscuro.
 **Falta comprobar en Windows** con datos reales: anchos de columnas de
 Activos con nombres largos y que «Tiempo» se actualice cada minuto.
 
-### Pendiente para después: interfaz en inglés y español
+### Interfaz en inglés y español: fuera de prioridades
 
-El dueño pidió verlo más adelante. Medición rápida (2026-11-14): ~750
+**Decisión del dueño (2026-11-14): no es prioridad.** No retomarlo sin que lo pida. Se deja la medición por si algún día se retoma. Medición rápida (2026-11-14): ~750
 textos en español en 73 archivos del frontend; ~800 mensajes en el núcleo
 Rust (errores, avisos, textos de Excel/PDF), que hoy llegan ya redactados
 en español; y el manual de Ayuda (`docs/manual`). Complejidad estimada 7/10

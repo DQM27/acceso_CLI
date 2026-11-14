@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { avisos } from "../avisos/avisos";
-import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
-import type { ColDef } from "ag-grid-community";
+import { FileSpreadsheet, FileText, Monitor, Sheet, Smartphone } from "lucide-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { idPorUuid } from "../componentes/Tabla.logica";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -48,6 +48,19 @@ const CLAVES_COLUMNA: Record<string, string> = {
 /** Historial de contratistas -- una de las clases de `Historial.tsx`, que le
  * pasa el selector de clase (`selector`, va al centro de la barra) y el rango
  * de fechas, compartido por todas las clases. */
+/** Celda "Dispositivo": el ícono, con el nombre al pasar el mouse y para el
+ * lector de pantalla (ver `textoDispositivo`). */
+function IconoDispositivo({ value }: ICellRendererParams<FilaHistorial>) {
+  const nombre = textoDispositivo(value ?? null);
+  const Icono = value === "pc" ? Monitor : value === "mobile" ? Smartphone : null;
+  if (!Icono) return nombre;
+  return (
+    <span title={nombre} aria-label={nombre} style={{ display: "inline-flex", verticalAlign: "middle" }}>
+      <Icono size={16} aria-hidden="true" />
+    </span>
+  );
+}
+
 export default function HistorialContratistas({
   selector,
   desde,
@@ -221,6 +234,8 @@ export default function HistorialContratistas({
         flex: 1,
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
+        filterValueGetter: (p) => textoDispositivo(p.data?.dispositivo_tipo ?? null),
+        cellRenderer: IconoDispositivo,
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
         // -- las tres cosas que identifican a LA PERSONA que se busca, mismo
         // criterio que Activos.tsx (hallazgo real del usuario 2026-09-21:
