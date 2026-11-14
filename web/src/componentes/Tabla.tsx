@@ -566,15 +566,15 @@ function TablaBase<T>(
   return (
     <div className="flex h-full flex-col">
       <div
-        className="mb-[0.375rem] flex flex-wrap items-end justify-between gap-[0.375rem]"
+        className="mb-1.5 flex flex-wrap items-end justify-between gap-1.5"
       >
         <div
-          className="flex flex-1 flex-wrap items-end gap-[0.375rem]"
+          className="flex flex-1 flex-wrap items-end gap-1.5"
         >
           {controles}
         </div>
 
-        <div className="flex items-center gap-[0.375rem]">
+        <div className="flex items-center gap-1.5">
           {accionesDerecha}
 
           {/* Filtros y anchos de columna en una sola pieza de íconos
