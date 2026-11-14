@@ -9,6 +9,7 @@ import {
   textoFechaDDMMAAAA,
   textoFechaDDMMYYYY,
   textoHora,
+  textoIngresoCorto,
 } from "./tiempo";
 
 describe("mascaraFechaDDMMAAAA / interpretarFechaDDMMAAAA / textoFechaDDMMAAAA", () => {
@@ -113,5 +114,17 @@ describe("fechaHaceMeses", () => {
 
   it("año bisiesto: el último día de febrero es el 29, no el 28", () => {
     expect(fechaHaceMeses(1, new Date(2028, 2, 31))).toBe("2028-02-29");
+  });
+});
+
+describe("textoIngresoCorto", () => {
+  const ahora = new Date(2026, 10, 14, 16, 0);
+  it("hoy muestra sólo la hora", () => {
+    const iso = new Date(2026, 10, 14, 8, 5).toISOString();
+    expect(textoIngresoCorto(iso, ahora)).toBe(textoHora(iso));
+  });
+  it("otro día agrega día y mes", () => {
+    const iso = new Date(2026, 10, 13, 23, 40).toISOString();
+    expect(textoIngresoCorto(iso, ahora)).toBe(`13/11 ${textoHora(iso)}`);
   });
 });

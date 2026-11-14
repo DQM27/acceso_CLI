@@ -165,21 +165,24 @@ export default function HistorialClase({
             columnas={columnas}
             filtrosPorColumna
             origenServidor={origenServidor}
+            mensajeVacio="No hay movimientos con este período y unidades."
+            // Misma barra que el escritorio (U5): unidades, período y clase a la
+            // izquierda; buscador y exportación a la derecha.
             controles={
               <>
-                <div className="campo flex-[0_1_16rem]">
+                {compartidos}
+                {selector}
+              </>
+            }
+            accionesDerecha={
+              <>
+                <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
                   <input
                     placeholder={`${etiquetas.identificacion} o nombre…`}
                     value={busqueda}
                     onChange={(evento) => setBusqueda(evento.target.value)}
                   />
                 </div>
-                {selector}
-              </>
-            }
-            accionesDerecha={
-              <>
-                {compartidos}
                 <BotonesExportacion
                   exportando={exportando}
                   alExportarExcel={exportarAExcel}

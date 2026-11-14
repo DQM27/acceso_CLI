@@ -202,23 +202,26 @@ export default function EmpresasProveedor() {
             filas={filas}
             busqueda={busqueda}
             filtrosPorColumna
+            // Misma barra que el escritorio (auditoría 2026-11-14, U5): acción y
+            // filtros a la izquierda; buscador y «Tabla» a la derecha.
+            mensajeVacio="No hay empresas proveedoras con este filtro."
             controles={
-              <>
-                <SegmentadoOpciones
-                  opciones={opciones}
-                  valor={filtro}
-                  onCambiar={setFiltro}
-                  etiqueta="Filtrar por revisión"
+              <SegmentadoOpciones
+                opciones={opciones}
+                valor={filtro}
+                onCambiar={setFiltro}
+                etiqueta="Filtrar por revisión"
+              />
+            }
+            accionesDerecha={
+              <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
+                <input
+                  placeholder="Empresa…"
+                  value={busqueda}
+                  disabled={cargando}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
                 />
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Empresa…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-              </>
+              </div>
             }
           />
         </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
@@ -22,7 +22,7 @@ const ESTILO_IZQUIERDA: CellStyle = { textAlign: "left" };
 const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center", alignItems: "center" };
 
 /**
- * Vista, alta, edición y baja de contratistas. "+ Nuevo" y "Editar" abren
+ * Vista, alta, edición y baja de contratistas. "Nuevo contratista" y "Editar" abren
  * `FormularioContratista` (reglas del núcleo vía WebAssembly; guardan las Edge
  * Functions `admin-crear-contratista` / `admin-editar-contratista`). El
  * toggle "Activo" ES la baja (y la reactivación) -- global, no por sitio, ver
@@ -179,20 +179,24 @@ export default function Contratistas() {
             busqueda={busqueda}
             filtrosPorColumna
             onCeldaEditada={manejarEdicion}
+            // Misma barra que el escritorio (auditoría 2026-11-14, U5): acción y
+            // filtros a la izquierda; buscador y «Tabla» a la derecha.
+            mensajeVacio="No hay contratistas registrados. «Nuevo contratista» agrega el primero."
             controles={
-              <>
-                <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                  + Nuevo
-                </button>
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Cédula o nombre…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-              </>
+              <button type="button" className="boton boton-icono" onClick={() => setModalAbierto(true)}>
+                <Plus size={16} aria-hidden="true" />
+                Nuevo contratista
+              </button>
+            }
+            accionesDerecha={
+              <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
+                <input
+                  placeholder="Cédula o nombre…"
+                  value={busqueda}
+                  disabled={cargando}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
             }
           />
         </div>

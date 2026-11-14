@@ -63,12 +63,14 @@ export default function SelectorRangoFecha({
           {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
-      {/* Se abre al costado izquierdo del botón, a su misma altura (pedido
-          del usuario 2026-09-23), así nunca tapa los botones de al lado
-          (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
-          dos columnas, cada uno en una sola línea. */}
+      {/* Se abre debajo del botón. Antes se abría a su costado izquierdo
+          para no tapar Excel/CSV/PDF, que estaban al lado (pedido del
+          2026-09-23); desde que el período va a la izquierda de la barra
+          (auditoría 2026-11-14, U5) eso lo dejaba cortado fuera de la
+          ventana. Igual que el escritorio. Ancho fijo: lo que piden los
+          accesos rápidos en dos columnas, cada uno en una línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={260} direccion="izquierda">
+        <ListaFlotante posicion={posicion} ancho={260}>
           <div
             ref={popoverRef}
             className="flex flex-col gap-3 p-[0.9rem]"

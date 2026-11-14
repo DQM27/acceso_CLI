@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -282,20 +283,24 @@ export default function Usuarios() {
             busqueda={busqueda}
             filtrosPorColumna
             onCeldaEditada={manejarEdicion}
+            // Misma barra que el escritorio (auditoría 2026-11-14, U5): acción y
+            // filtros a la izquierda; buscador y «Tabla» a la derecha.
+            mensajeVacio="No hay usuarios. «Nuevo usuario» agrega el primero."
             controles={
-              <>
-                <button type="button" className="boton" onClick={abrirModal}>
-                  + Nuevo
-                </button>
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Cédula o nombre…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-              </>
+              <button type="button" className="boton boton-icono" onClick={abrirModal}>
+                <Plus size={16} aria-hidden="true" />
+                Nuevo usuario
+              </button>
+            }
+            accionesDerecha={
+              <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
+                <input
+                  placeholder="Cédula o nombre…"
+                  value={busqueda}
+                  disabled={cargando}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
             }
           />
         </div>
