@@ -1329,3 +1329,23 @@ textarea::placeholder {
   text-align: center;
   pointer-events: none;
 }
+
+/* `SegmentadoOpciones` con nombre visible en cada opción (ej. clases de
+   Activos): sin indicador deslizante, la elegida se rellena con el acento
+   (`.segmentado button[aria-pressed="true"]`). */
+.segmentado-con-texto button {
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.segmentado-con-texto button[aria-pressed="true"] .segmentado-cantidad {
+  opacity: 0.85;
+}
+
+/* Fila de pestañas encima de la grilla (`pestanas` de Tabla.tsx). */
+.tabla-pestanas {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-bottom: 0.375rem;
+}

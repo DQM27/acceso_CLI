@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
-import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
+import { BadgeCheck, Boxes, HardHat, Layers, LogIn, LogOut, Mail } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -15,7 +15,8 @@ import { idPorClave } from "../componentes/Tabla.logica";
 import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, cerrarActivos, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
-import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
+import { columnaGafete } from "../componentes/columnasComunes";
+import { textoDuracion, textoIngresoCorto } from "../tiempo";
 import {
   CLASE_SINGULAR,
   contarPorClase,
@@ -28,41 +29,12 @@ import {
 } from "./Activos.logica";
 import type { FiltroClase, FiltroGafete, FiltroPermanencia, OtroIngreso } from "./Activos.logica";
 
-/** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
- * números son el conteo de gente adentro: el total, y cuántos tienen gafete y
- * cuántos no (S/G). Mientras carga no se muestran, para no enseñar ceros
- * falsos. */
-function opcionesFiltroGafete(
-  conteo: { todos: number; con: number; sin: number } | null,
-): OpcionSegmentada<FiltroGafete>[] {
-  return [
-    {
-      valor: "todos",
-      Icono: Users,
-      titulo: conteo ? `${conteo.todos} adentro` : "Todos",
-      cantidad: conteo?.todos,
-    },
-    {
-      valor: "con",
-      Icono: IdCard,
-      titulo: conteo ? `${conteo.con} con gafete` : "Con gafete",
-      cantidad: conteo?.con,
-    },
-    {
-      valor: "sin",
-      Icono: CircleOff,
-      // Sólo los contratistas pueden entrar sin gafete: proveedores, visitas por
-      // correo y KOF lo llevan siempre.
-      titulo: conteo
-        ? `${conteo.sin} sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete`
-        : "Sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete",
-      cantidad: conteo?.sin,
-    },
-  ];
-}
-
-/** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
-function ToggleGafete({
+/** Filtro de gafete de los contratistas (los únicos que pueden entrar sin
+ * gafete): un desplegable compacto con el nombre y la cantidad de cada
+ * opción, en vez de tres botones de íconos que no cabían junto a las clases
+ * (auditoría 2026-11-14, U3). Mientras carga no se muestran números, para no
+ * enseñar ceros falsos. */
+function FiltroGafeteSelector({
   filtro,
   conteo,
   onCambiar,
@@ -71,13 +43,20 @@ function ToggleGafete({
   conteo: { todos: number; con: number; sin: number } | null;
   onCambiar: (filtro: FiltroGafete) => void;
 }) {
+  const numero = (n: number | undefined) => (n === undefined ? "" : ` (${n})`);
   return (
-    <SegmentadoOpciones
-      opciones={opcionesFiltroGafete(conteo)}
-      valor={filtro}
-      onCambiar={onCambiar}
-      etiqueta="Filtrar por gafete"
-    />
+    <div className="campo">
+      <select
+        aria-label="Filtrar por gafete"
+        title="Sólo los contratistas pueden entrar sin gafete (S/G)"
+        value={filtro}
+        onChange={(evento) => onCambiar(evento.target.value as FiltroGafete)}
+      >
+        <option value="todos">Gafete: todos{numero(conteo?.todos)}</option>
+        <option value="con">Con gafete{numero(conteo?.con)}</option>
+        <option value="sin">Sin gafete (S/G){numero(conteo?.sin)}</option>
+      </select>
+    </div>
   );
 }
 
@@ -100,12 +79,14 @@ function opcionesFiltroClase(
     {
       valor: "todas",
       Icono: Layers,
+      texto: "Todas",
       titulo: todas === undefined ? "Todas las clases" : `${todas} en total`,
       cantidad: todas,
     },
     ...CLASES.map((clase) => ({
       valor: clase,
       Icono: ICONO_CLASE[clase],
+      texto: ETIQUETA_CLASE[clase],
       titulo: conteo ? `${ETIQUETA_CLASE[clase]}: ${conteo[clase]}` : ETIQUETA_CLASE[clase],
       cantidad: conteo?.[clase],
     })),
@@ -170,7 +151,7 @@ export default function Activos({
       filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafeteEfectivo), filtroPermanencia),
     [activosDeClase, filtroGafeteEfectivo, filtroPermanencia],
   );
-  // Los números de los botones de los filtros (ver `opcionesFiltroGafete` y
+  // Los números de los filtros (ver `FiltroGafeteSelector` y
   // `opcionesFiltroClase`): son la única métrica de la pantalla, ya no hay texto
   // en la barra de estado. `total` sólo vale para "todas": es el de contratistas
   // más las otras clases.
@@ -263,6 +244,14 @@ export default function Activos({
   // "nuevo" y reaplica el orden/ancho literales de acá encima de lo que el
   // usuario ya había acomodado a mano — el layout persistido en
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
+  // Columnas rediseñadas el 2026-11-14 (auditoría, U1/U2): "Acción" fijada a
+  // la derecha (antes quedaba cortada a 1440 px o menos), "Clase" sólo con
+  // "Todas" (con un filtro puesto repetía lo mismo en cada fila), Fecha y
+  // Hora juntas en "Ingreso", "Tiempo adentro" (lo que de verdad se vigila,
+  // antes había que restar a mano) y "Dio ingreso" como columna opcional.
+  // "Clase" sólo con "Todas": se oculta sin sacarla del arreglo, así vuelve a
+  // su lugar (ver `columnasOcultasPorPantalla` de Tabla).
+  const ocultasPorClase = useMemo(() => (filtroClase === "todas" ? [] : ["clase"]), [filtroClase]);
   const columnas: ColDef<ActivoUnificado>[] = useMemo(
     () => [
       // A qué grupo pertenece la fila de un vistazo (la columna "Tipo" de más
@@ -271,15 +260,15 @@ export default function Activos({
         colId: "clase",
         headerName: "Clase",
         flex: 1.1,
-        minWidth: 120,
+        minWidth: 110,
         valueGetter: (p) => (p.data ? CLASE_SINGULAR[p.data.clase] : ""),
         getQuickFilterText: () => "",
       },
       {
         field: "cedula",
         headerName: "Cédula",
-        flex: 1.2,
-        minWidth: 120,
+        flex: 1.1,
+        minWidth: 105,
         cellStyle: { textAlign: "left" },
         // El préstamo KOF es de un encargado con código de empleado, sin cédula.
         valueFormatter: (p) => p.value ?? "—",
@@ -287,18 +276,18 @@ export default function Activos({
       {
         field: "nombre",
         headerName: "Nombre",
-        flex: 1.6,
-        minWidth: 170,
+        flex: 2,
+        minWidth: 165,
         cellStyle: { textAlign: "left" },
       },
       // Empresa (contratista, proveedor), motivo (por correo) o código de
       // empleado (KOF): lo que acompaña al nombre.
-      { field: "detalle", headerName: "Empresa / motivo", flex: 1.3, minWidth: 150 },
+      { field: "detalle", headerName: "Empresa / motivo", flex: 1.4, minWidth: 125 },
       {
         field: "tipo",
         headerName: "Tipo",
-        flex: 1,
-        minWidth: 100,
+        flex: 0.9,
+        minWidth: 90,
         // El texto ya viene armado en la fila (`ActivoUnificado.tipo`): el filtro
         // por columna, el orden y las exportaciones usan el mismo que se ve.
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
@@ -315,30 +304,59 @@ export default function Activos({
         field: "medio",
         headerName: "Medio",
         flex: 1,
-        minWidth: 100,
+        minWidth: 115,
         getQuickFilterText: () => "",
       },
       columnaGafete({ getQuickFilterText: () => "" }),
-      columnaFecha("fecha_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
-      columnaHora("hora_ingreso", (fila) => fila.fecha_hora_ingreso, { getQuickFilterText: () => "" }),
       {
-        field: "usuario_ingreso_nombre",
-        headerName: "Dio ingreso",
-        flex: 1.3,
-        minWidth: 130,
+        // El ISO crudo ordena cronológicamente; se ve la hora, y la fecha
+        // sólo si no fue hoy (`textoIngresoCorto`).
+        colId: "ingreso",
+        headerName: "Ingreso",
+        flex: 0.9,
+        minWidth: 100,
+        valueGetter: (p) => p.data?.fecha_hora_ingreso ?? "",
+        valueFormatter: (p) => (p.value ? textoIngresoCorto(p.value) : ""),
+        filterValueGetter: (p) => (p.data ? textoIngresoCorto(p.data.fecha_hora_ingreso) : ""),
         getQuickFilterText: () => "",
       },
       {
+        // Milisegundos desde el ingreso (ordena de menos a más tiempo);
+        // se refresca cada minuto sin recargar datos (ver el efecto de abajo).
+        colId: "tiempo_adentro",
+        // "Tiempo" a secas en el encabezado para que no se corte a 1366 px; el
+        // nombre completo queda en el tooltip y en "Tabla" > Columnas.
+        headerName: "Tiempo",
+        headerTooltip: "Tiempo adentro",
+        flex: 1,
+        minWidth: 110,
+        filter: false,
+        enableCellChangeFlash: false,
+        valueGetter: (p) => (p.data ? Date.now() - Date.parse(p.data.fecha_hora_ingreso) : null),
+        valueFormatter: (p) => (typeof p.value === "number" ? textoDuracion(p.value) : ""),
+        getQuickFilterText: () => "",
+      },
+      {
+        field: "usuario_ingreso_nombre",
+        headerName: "Dio ingreso",
+        flex: 1.2,
+        minWidth: 130,
+        // Opcional: se activa desde "Tabla" > Columnas visibles.
+        hide: true,
+        getQuickFilterText: () => "",
+      },
+      {
+        colId: "accion",
         headerName: "Acción",
-        flex: 0.9,
-        minWidth: 90,
+        // Fijada a la derecha: siempre visible, aunque falte ancho para el
+        // resto de las columnas.
+        pinned: "right",
+        lockPinned: true,
+        width: 96,
+        minWidth: 96,
+        resizable: false,
         filter: false,
         sortable: false,
-        // Sin pinned a propósito: una columna fijada reserva el ancho del
-        // scrollbar vertical aunque no haga falta scroll, dejando un
-        // espacio en blanco justo antes de ella — con las 10 columnas ya
-        // entrando sin scroll horizontal (ver el ajuste de anchos previo),
-        // fijarla no aporta nada y sí ese espacio no deseado.
         cellRenderer: (p: ICellRendererParams<ActivoUnificado>) => {
           const fila = p.data;
           return fila ? (
@@ -358,6 +376,19 @@ export default function Activos({
     [salidaIndividual],
   );
 
+  // "Tiempo adentro" cambia con el reloj: se recalcula cada minuto, sin
+  // volver a pedir los datos.
+  useEffect(() => {
+    const reloj = window.setInterval(() => tablaRef.current?.refrescarColumnas(["tiempo_adentro"]), 60_000);
+    return () => window.clearInterval(reloj);
+  }, []);
+
+  // Qué decir con la tabla vacía, según la clase elegida (U8).
+  const mensajeVacio =
+    filtroClase === "todas"
+      ? "No hay nadie adentro. Ctrl+N registra el ingreso de un contratista."
+      : `No hay ${ETIQUETA_CLASE[filtroClase].toLowerCase()} adentro.`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
@@ -371,11 +402,13 @@ export default function Activos({
             reglasClaseFila={REGLAS_PERMANENCIA}
             columnas={columnas}
             filas={filasVisibles}
+            mensajeVacio={mensajeVacio}
+            columnasOcultasPorPantalla={ocultasPorClase}
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
             accionesDerecha={
-              <div className="campo" style={{ flex: "0 0 20rem" }}>
+              <div className="campo" style={{ flex: "1 1 18rem", minWidth: "10rem", maxWidth: "20rem" }}>
                 <input
                   placeholder="Cédula, nombre, empresa o motivo…"
                   value={busqueda}
@@ -383,13 +416,26 @@ export default function Activos({
                 />
               </div>
             }
+            pestanas={
+              <>
+                <SegmentadoOpciones
+                  opciones={opcionesFiltroClase(conteoClases)}
+                  valor={filtroClase}
+                  onCambiar={setFiltroClase}
+                  etiqueta="Filtrar por clase"
+                />
+                {mostrarFiltroGafete && (
+                  <FiltroGafeteSelector filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+                )}
+              </>
+            }
             controles={
               <>
-                {/* Tres bloques de izquierda a derecha: qué registrar, qué
-                    ver (clase y gafete juntos) y, al otro extremo, el
-                    buscador. "Ingreso" abre la lista de qué registrar; el
-                    atajo de cada uno se ve en la lista (Ctrl+N) y al lado
-                    de "Salida" (Ctrl+S). */}
+                {/* Qué registrar, a la izquierda; el buscador va al otro
+                    extremo y las clases en la fila de pestañas, encima de
+                    la grilla. "Ingreso" abre la lista de qué registrar con
+                    el atajo de cada uno; el de "Salida" (Ctrl+S) está en su
+                    título. */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <MenuAcciones
                     texto="Ingreso"
@@ -410,19 +456,7 @@ export default function Activos({
                   >
                     <LogOut size={15} aria-hidden="true" />
                     Salida
-                    <span style={{ opacity: 0.6, fontSize: "0.72rem" }}>Ctrl+S</span>
                   </button>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem" }}>
-                  <SegmentadoOpciones
-                    opciones={opcionesFiltroClase(conteoClases)}
-                    valor={filtroClase}
-                    onCambiar={setFiltroClase}
-                    etiqueta="Filtrar por clase"
-                  />
-                  {mostrarFiltroGafete && (
-                    <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
-                  )}
                 </div>
               </>
             }
@@ -472,7 +506,11 @@ export default function Activos({
               onClick={confirmarSalidasSeleccionadas}
               disabled={procesando}
             >
-              {procesando ? "Registrando…" : "Confirmar"}
+              {procesando
+                ? "Registrando…"
+                : seleccionadas.length === 1
+                  ? "Registrar 1 salida"
+                  : `Registrar ${seleccionadas.length} salidas`}
             </button>
           </div>
         </Modal>

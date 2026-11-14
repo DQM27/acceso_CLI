@@ -179,6 +179,11 @@ const FILTRO_NUMERO: ColDef = {
   filterParams: {},
 };
 
+/** Avisos propios de AG Grid que se reemplazan por `mensajeSinFilas`.
+ * Constante de módulo: un arreglo nuevo en cada render sería un cambio de
+ * opción para la grilla. */
+const OVERLAYS_SUPRIMIDOS: ("noRows" | "noMatchingRows")[] = ["noRows", "noMatchingRows"];
+
 const columnaPorDefectoConFiltro: ColDef = {
   ...columnaPorDefecto,
   filter: true,
@@ -217,6 +222,16 @@ export interface TablaProps<T> {
   /** Al centro de la misma línea (ej. un selector de clase): los dos lados
    * se reparten el ancho por igual, así queda centrado de verdad. */
   accionesCentro?: ReactNode;
+  /** Segunda fila, justo encima de la grilla: las pestañas que eligen qué
+   * filas se ven (ej. clases de Activos e Historial). Separadas de las
+   * acciones, la barra no se parte en dos líneas al agregar un filtro y se
+   * lee igual en todas las pantallas (auditoría 2026-11-14, U3/U5). */
+  pestanas?: ReactNode;
+  /** Columnas que la pantalla oculta según su propio estado (ej. "Clase" de
+   * Activos con una clase elegida), sin tocar lo que eligió la persona en
+   * "Tabla" y sin sacarlas del arreglo (al volver, quedan en su lugar).
+   * Debe ser un arreglo estable o memoizado. */
+  columnasOcultasPorPantalla?: string[];
   /** Texto de búsqueda global (una sola caja, busca en todas las columnas)
    * — alternativa a `filtrosPorColumna` para listas donde un filtro por
    * columna es más de lo que hace falta. La pantalla es dueña del estado
@@ -297,6 +312,9 @@ export interface TablaHandle<T> {
   datosVisibles: () => DatosTabla;
   /** Quita la selección de todas las filas (ej. la ✕ de `BarraSeleccion`). */
   deseleccionarTodo: () => void;
+  /** Vuelve a calcular las celdas de esas columnas sin recargar datos (ej.
+   * "Tiempo adentro" de Activos, que cambia con el reloj). */
+  refrescarColumnas: (colIds: string[]) => void;
 }
 
 export interface DatosTabla {
@@ -311,6 +329,8 @@ function TablaBase<T>(
     controles,
     accionesDerecha,
     accionesCentro,
+    pestanas,
+    columnasOcultasPorPantalla,
     busqueda,
     seleccionMultiple,
     onSeleccionCambia,
@@ -389,7 +409,8 @@ function TablaBase<T>(
         // `type` se resuelve acá (no con `columnTypes` de AG Grid) para
         // que dependa de si los filtros están visibles.
         const { type, ...resto } = original;
-        let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        const oculta = clave !== undefined && (ocultas.has(clave) || columnasOcultasPorPantalla?.includes(clave) === true);
+        let columna: ColDef<T> = clave ? { ...resto, hide: oculta } : resto;
         // Columna sin dato (botón "Salida" de Activos): AG Grid 36 la
         // refresca a la fuerza en CADA actualización de filas -- no tiene un
         // valor que comparar -- y con `enableCellChangeFlash` la hacía
@@ -402,7 +423,7 @@ function TablaBase<T>(
         if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
         return columna;
       }),
-    [columnas, ocultas, conFiltro],
+    [columnas, ocultas, conFiltro, columnasOcultasPorPantalla],
   );
 
   // Depende de SI hay `idFila`, no de su identidad: un `defaultColDef` nuevo
@@ -470,6 +491,7 @@ function TablaBase<T>(
         .map((columna) => columna.colId),
     exportarCsv,
     deseleccionarTodo: () => apiRef.current?.deselectAll(),
+    refrescarColumnas: (colIds) => apiRef.current?.refreshCells({ columns: colIds, force: true }),
     datosVisibles: () => {
       const api = apiRef.current;
       if (!api) return { columnas: [], filas: [] };
@@ -682,10 +704,10 @@ function TablaBase<T>(
             alignItems: "center",
             justifyContent: "flex-end",
             gap: accionesCentro ? "0.5rem" : "0.375rem",
-            // Los botones de la derecha (filtros, anchos, columnas) nunca se
-            // recortan: si falta lugar, cede el lado izquierdo (que puede bajar
-            // de línea), no éste.
-            flexShrink: 0,
+            // Si falta lugar, primero se encoge lo que puede (el buscador, con
+            // su `minWidth`); los botones no bajan de su ancho mínimo. Recién
+            // después el lado izquierdo baja de línea.
+            flexShrink: 1,
             ...(accionesCentro ? { flex: "1 1 0" } : {}),
           }}
         >
@@ -745,7 +767,7 @@ function TablaBase<T>(
                         checked={!ocultas.has(clave)}
                         onChange={() => alternar(clave)}
                       />
-                      {columna.headerName ?? clave}
+                      {(typeof columna.headerTooltip === "string" ? columna.headerTooltip : null) ?? columna.headerName ?? clave}
                     </label>
                   ))}
               </div>
@@ -753,6 +775,8 @@ function TablaBase<T>(
           )}
         </div>
       </div>
+
+      {pestanas && <div className="tabla-pestanas">{pestanas}</div>}
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <AgGridReact<T>
@@ -780,8 +804,8 @@ function TablaBase<T>(
           quickFilterParser={quickFilterParser}
           quickFilterMatcher={quickFilterMatcher}
           // El mensaje de "no hay nada" es propio (`mensajeSinFilas`, abajo):
-          // el de AG Grid no cambia con la búsqueda.
-          suppressNoRowsOverlay
+          // los de AG Grid no dicen qué se buscó ni qué hacer.
+          suppressOverlays={OVERLAYS_SUPRIMIDOS}
           // Menús de filtro, "Cargando…", etc. en español -- sin esto AG
           // Grid mostraba "Contains", "Equals", "AND/OR" en inglés.
           localeText={AG_GRID_LOCALE_ES}

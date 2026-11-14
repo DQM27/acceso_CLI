@@ -178,11 +178,11 @@ describe("filtrosVisiblesIniciales", () => {
 });
 
 describe("ocultasIniciales", () => {
-  const columnas: ColDef<unknown>[] = [
+  const columnas = [
     { field: "nombre" },
     { field: "usuario_ingreso_nombre", hide: true },
     { colId: "tiempo", hide: false },
-  ];
+  ] as ColDef<unknown>[];
 
   it("sin layout guardado oculta las columnas marcadas hide en el código", () => {
     expect(ocultasIniciales(null, columnas)).toEqual(["usuario_ingreso_nombre"]);

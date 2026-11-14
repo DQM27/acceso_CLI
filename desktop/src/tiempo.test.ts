@@ -6,7 +6,9 @@ import {
   mascaraFechaDDMMAAAA,
   textoFechaDDMMAAAA,
   textoFechaDDMMYYYY,
+  textoDuracion,
   textoHora,
+  textoIngresoCorto,
 } from "./tiempo";
 
 // Se arma la fecha con getters LOCALES directos (no parseando un string UTC
@@ -92,5 +94,33 @@ describe("interpretarFechaDDMMAAAA / textoFechaDDMMAAAA", () => {
     expect(interpretarFechaDDMMAAAA("23/09/20")).toBeNull();
     expect(interpretarFechaDDMMAAAA("31/02/2026")).toBeNull();
     expect(interpretarFechaDDMMAAAA("00/01/2026")).toBeNull();
+  });
+});
+
+describe("textoDuracion", () => {
+  const MIN = 60_000;
+  it("menos de una hora en minutos", () => {
+    expect(textoDuracion(45 * MIN)).toBe("45 min");
+    expect(textoDuracion(30_000)).toBe("< 1 min");
+    expect(textoDuracion(-5 * MIN)).toBe("< 1 min");
+  });
+  it("horas y minutos", () => {
+    expect(textoDuracion(200 * MIN)).toBe("3 h 20 min");
+    expect(textoDuracion(60 * MIN)).toBe("1 h 0 min");
+  });
+  it("más de un día en días y horas", () => {
+    expect(textoDuracion((52 * 60 + 10) * MIN)).toBe("2 d 4 h");
+  });
+});
+
+describe("textoIngresoCorto", () => {
+  const ahora = new Date(2026, 10, 14, 16, 0);
+  it("hoy muestra sólo la hora", () => {
+    const iso = new Date(2026, 10, 14, 8, 5).toISOString();
+    expect(textoIngresoCorto(iso, ahora)).toBe(textoHora(iso));
+  });
+  it("otro día agrega día y mes", () => {
+    const iso = new Date(2026, 10, 13, 23, 40).toISOString();
+    expect(textoIngresoCorto(iso, ahora)).toBe(`13/11 ${textoHora(iso)}`);
   });
 });
