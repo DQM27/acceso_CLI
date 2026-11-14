@@ -712,3 +712,43 @@ los del escritorio.
 **Pendiente:** el nombre del sistema de diseño sigue siendo «Brisas»
 aunque la paleta de las apps sea Tokyo; renombrarlo toca el panel web y la
 página de visitas y no aporta al usuario.
+
+### Conexión persistente y detalles (rama `mejoras/conexion-y-detalles`, sobre `ux/escritorio-fase-2`, 2026-11-14)
+
+Pedido del dueño: «la conexión y lo visual»; el inglés queda fuera de
+prioridades.
+
+**Conexión de lectura persistente (R6 replanteado).**
+
+- `GuiState::con_lectura` (`desktop/src-tauri/src/estado.rs`): una conexión
+  de sólo lectura (`abrir_conexion_secundaria`, `PRAGMA query_only`) que se
+  abre la primera vez y se reutiliza. Si una consulta falla, la conexión se
+  descarta y la próxima llamada abre otra. Orden de candados: `con_lectura`
+  primero y después `core()`, nunca al revés.
+- La usan sólo las cinco lecturas chicas y frecuentes:
+  `aviso_bandeja_salida` (cada 15 s) y los cuatro listados remotos de
+  Activos (`listar_ingresos_remotos`, `..._proveedor_remotos`,
+  `..._correo_remotos`, `listar_prestamos_gafete_provisional_remotos`), que
+  además pasan a `prepare_cached`. Los historiales, la auditoría y las
+  escrituras siguen con `conexion_secundaria()`: una consulta larga sobre la
+  conexión compartida haría esperar a Activos.
+- La base sólo se borra al arrancar, antes de que exista `GuiState`
+  (`abrir_sin_base_descartada` en `lib.rs`), así que una conexión abierta
+  no impide borrarla.
+- Medición con el núcleo real y una base SQLite3MC (en este servidor):
+  abrir una conexión por llamada 1,6 ms contra 0,007 ms reutilizándola. En
+  las PCs del puesto pesa más (Windows y antivirus al abrir archivos; la
+  telemetría mostraba 25 ms por llamada). **Confirmar con la telemetría de
+  la versión instalada**: `aviso_bandeja_salida` y `listar_ingresos_remotos`
+  deberían bajar mucho.
+
+Comprobado: `cargo check` y `cargo clippy --all-targets` contra
+`x86_64-pc-windows-gnu` sin errores ni advertencias nuevas (el crate sólo
+compila para Windows); la lógica de reutilizar y descartar
+(`con_conexion_reutilizada`) tiene 3 tests, que se corrieron con el mismo
+código en un proyecto aparte porque el crate no compila en Linux.
+
+**Detalles visuales.** «Adentro» de Contratistas con el indicador de punto
+de color (`CeldaAdentro`); «Dispositivo» de Historial con ícono de lucide y
+el nombre («PC» / «Celular») para el filtro y el Excel/PDF, en vez de un
+emoji.

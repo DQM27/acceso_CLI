@@ -686,8 +686,11 @@ pub fn aviso_bandeja_salida(
     state: tauri::State<GuiState>,
 ) -> Result<Option<AvisoBandejaSalida>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let estado = nube::estado_bandeja_salida(&conexion).map_err(mensaje_sincronizacion)?;
+    // Se consulta cada 15 s: conexión de lectura compartida, sin abrir una
+    // nueva cada vez (ver `GuiState::con_lectura`).
+    let estado = state.con_lectura(|conexion| {
+        nube::estado_bandeja_salida(conexion).map_err(mensaje_sincronizacion)
+    })?;
     Ok(
         nube::aviso_bandeja_salida(&estado, chrono::Utc::now()).map(|aviso| AvisoBandejaSalida {
             texto: aviso.texto,
@@ -707,37 +710,39 @@ pub fn listar_ingresos_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoRemoto>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let mut statement = conexion
-        .prepare(
-            "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre,
+    // Conexión de lectura compartida (ver `GuiState::con_lectura`).
+    state.con_lectura(|conexion| {
+        let mut statement = conexion
+            .prepare_cached(
+                "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre,
                     contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
              FROM ingresos_remotos ORDER BY hora_entrada",
-        )
-        .map_err(super::mensaje_generico)?;
-    // El candado del núcleo sólo se toma el rato que dura este mapeo (sin red ni
-    // disco aparte de esta lectura de la caché local).
-    let core = state.core();
-    let filas = statement
-        .query_map([], |row| {
-            let hora_entrada: String = row.get(2)?;
-            Ok(IngresoRemoto {
-                uuid: row.get(0)?,
-                contratista_nombre: row.get(1)?,
-                nivel_permanencia: core.nivel_permanencia_de_entrada(&hora_entrada),
-                hora_entrada,
-                usuario_entrada_nombre: row.get(3)?,
-                contratista_cedula: row.get(4)?,
-                empresa_nombre: row.get(5)?,
-                tipo_ingreso: row.get(6)?,
-                medio_ingreso: row.get(7)?,
-                gafete_numero: row.get(8)?,
+            )
+            .map_err(super::mensaje_generico)?;
+        // El candado del núcleo sólo se toma el rato que dura este mapeo (sin red ni
+        // disco aparte de esta lectura de la caché local).
+        let core = state.core();
+        let filas = statement
+            .query_map([], |row| {
+                let hora_entrada: String = row.get(2)?;
+                Ok(IngresoRemoto {
+                    uuid: row.get(0)?,
+                    contratista_nombre: row.get(1)?,
+                    nivel_permanencia: core.nivel_permanencia_de_entrada(&hora_entrada),
+                    hora_entrada,
+                    usuario_entrada_nombre: row.get(3)?,
+                    contratista_cedula: row.get(4)?,
+                    empresa_nombre: row.get(5)?,
+                    tipo_ingreso: row.get(6)?,
+                    medio_ingreso: row.get(7)?,
+                    gafete_numero: row.get(8)?,
+                })
             })
-        })
-        .map_err(super::mensaje_generico)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(super::mensaje_generico)?;
-    Ok(filas)
+            .map_err(super::mensaje_generico)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(super::mensaje_generico)?;
+        Ok(filas)
+    })
 }
 
 /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo del
@@ -858,31 +863,33 @@ pub fn listar_ingresos_proveedor_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoProveedorRemoto>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let mut statement = conexion
-        .prepare(
-            "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
+    // Conexión de lectura compartida (ver `GuiState::con_lectura`).
+    state.con_lectura(|conexion| {
+        let mut statement = conexion
+            .prepare_cached(
+                "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
                     hora_entrada, usuario_entrada_nombre
              FROM ingresos_proveedor_remotos ORDER BY hora_entrada",
-        )
-        .map_err(super::mensaje_generico)?;
-    let filas = statement
-        .query_map([], |row| {
-            Ok(IngresoProveedorRemoto {
-                uuid: row.get(0)?,
-                cedula: row.get(1)?,
-                nombre: row.get(2)?,
-                empresa_nombre: row.get(3)?,
-                placa: row.get(4)?,
-                gafete_numero: row.get(5)?,
-                hora_entrada: row.get(6)?,
-                usuario_entrada_nombre: row.get(7)?,
+            )
+            .map_err(super::mensaje_generico)?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(IngresoProveedorRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    empresa_nombre: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    hora_entrada: row.get(6)?,
+                    usuario_entrada_nombre: row.get(7)?,
+                })
             })
-        })
-        .map_err(super::mensaje_generico)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(super::mensaje_generico)?;
-    Ok(filas)
+            .map_err(super::mensaje_generico)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(super::mensaje_generico)?;
+        Ok(filas)
+    })
 }
 
 /// Espejo de `cerrar_ingreso_remoto`, pero contra `ingresos_proveedor`.
@@ -913,31 +920,33 @@ pub fn listar_ingresos_correo_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoCorreoRemoto>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let mut statement = conexion
-        .prepare(
-            "SELECT uuid, cedula, nombre, motivo, placa, gafete_numero,
+    // Conexión de lectura compartida (ver `GuiState::con_lectura`).
+    state.con_lectura(|conexion| {
+        let mut statement = conexion
+            .prepare_cached(
+                "SELECT uuid, cedula, nombre, motivo, placa, gafete_numero,
                     hora_entrada, usuario_entrada_nombre
              FROM ingresos_correo_remotos ORDER BY hora_entrada",
-        )
-        .map_err(super::mensaje_generico)?;
-    let filas = statement
-        .query_map([], |row| {
-            Ok(IngresoCorreoRemoto {
-                uuid: row.get(0)?,
-                cedula: row.get(1)?,
-                nombre: row.get(2)?,
-                motivo: row.get(3)?,
-                placa: row.get(4)?,
-                gafete_numero: row.get(5)?,
-                hora_entrada: row.get(6)?,
-                usuario_entrada_nombre: row.get(7)?,
+            )
+            .map_err(super::mensaje_generico)?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(IngresoCorreoRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    motivo: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    hora_entrada: row.get(6)?,
+                    usuario_entrada_nombre: row.get(7)?,
+                })
             })
-        })
-        .map_err(super::mensaje_generico)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(super::mensaje_generico)?;
-    Ok(filas)
+            .map_err(super::mensaje_generico)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(super::mensaje_generico)?;
+        Ok(filas)
+    })
 }
 
 /// Espejo de `cerrar_ingreso_proveedor_remoto`, contra `ingresos_correo`.
@@ -1001,29 +1010,31 @@ pub fn listar_prestamos_gafete_provisional_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let mut statement = conexion
-        .prepare(
-            "SELECT uuid, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+    // Conexión de lectura compartida (ver `GuiState::con_lectura`).
+    state.con_lectura(|conexion| {
+        let mut statement = conexion
+            .prepare_cached(
+                "SELECT uuid, encargado_nombre, encargado_codigo_empleado, gafete_numero,
                     hora_entrega, usuario_entrega_nombre
              FROM prestamos_gafete_provisional_remotos ORDER BY hora_entrega",
-        )
-        .map_err(super::mensaje_generico)?;
-    let filas = statement
-        .query_map([], |row| {
-            Ok(PrestamoGafeteProvisionalRemoto {
-                uuid: row.get(0)?,
-                encargado_nombre: row.get(1)?,
-                encargado_codigo_empleado: row.get(2)?,
-                gafete_numero: row.get(3)?,
-                hora_entrega: row.get(4)?,
-                usuario_entrega_nombre: row.get(5)?,
+            )
+            .map_err(super::mensaje_generico)?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(PrestamoGafeteProvisionalRemoto {
+                    uuid: row.get(0)?,
+                    encargado_nombre: row.get(1)?,
+                    encargado_codigo_empleado: row.get(2)?,
+                    gafete_numero: row.get(3)?,
+                    hora_entrega: row.get(4)?,
+                    usuario_entrega_nombre: row.get(5)?,
+                })
             })
-        })
-        .map_err(super::mensaje_generico)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(super::mensaje_generico)?;
-    Ok(filas)
+            .map_err(super::mensaje_generico)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(super::mensaje_generico)?;
+        Ok(filas)
+    })
 }
 
 /// Espejo de `cerrar_ingreso_proveedor_remoto`, pero contra
