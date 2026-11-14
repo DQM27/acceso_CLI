@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.animation.core.animateFloatAsState
@@ -100,6 +101,9 @@ fun MenuCuenta(
     unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
+    // Alta de un contratista sin buscarlo antes (desde 2026-11-14 ya no hay
+    // botón propio arriba, ver `PantallaPrincipal`).
+    onNuevoContratista: () -> Unit,
     onAyuda: () -> Unit,
     onCerrarSesion: () -> Unit,
     actualizador: ActualizacionViewModel,
@@ -178,6 +182,10 @@ fun MenuCuenta(
                         unidad = unidad,
                         temaElegido = temaElegido,
                         onElegirTema = onElegirTema,
+                        onNuevoContratista = {
+                            cerrar()
+                            onNuevoContratista()
+                        },
                         onAyuda = {
                             cerrar()
                             onAyuda()
@@ -214,6 +222,7 @@ private fun PanelCuenta(
     unidad: String?,
     temaElegido: TemaApp?,
     onElegirTema: (TemaApp?) -> Unit,
+    onNuevoContratista: () -> Unit,
     onAyuda: () -> Unit,
     actualizacion: OpcionActualizacion?,
     onActualizacion: (AccionActualizacion) -> Unit,
@@ -271,11 +280,23 @@ private fun PanelCuenta(
             }
             SeparadorFino()
             FilaEscalonada(indice = 1) {
+                // Una ficha y no una persona con "+": ése es el ícono de
+                // "nuevo ingreso" en Proveedores y Correo.
+                OpcionMenu(texto = "Nuevo contratista", onClick = onNuevoContratista) {
+                    Icon(
+                        Icons.Default.Badge,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            SeparadorFino()
+            FilaEscalonada(indice = 2) {
                 // El menú queda abierto: se ve el cambio de tema en el acto.
                 SelectorTema(elegido = temaElegido, onElegir = onElegirTema)
             }
             SeparadorFino()
-            FilaEscalonada(indice = 2) {
+            FilaEscalonada(indice = 3) {
                 // El manual de uso, sin internet (ver [PantallaAyuda]).
                 OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
                     Icon(
@@ -286,7 +307,7 @@ private fun PanelCuenta(
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 3) {
+            FilaEscalonada(indice = 4) {
                 if (actualizacion != null) {
                     OpcionMenu(
                         texto = actualizacion.texto,
@@ -321,7 +342,7 @@ private fun PanelCuenta(
                     .height(6.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
-            FilaEscalonada(indice = 4) {
+            FilaEscalonada(indice = 5) {
                 OpcionMenu(texto = "Cerrar sesión", color = MaterialTheme.colorScheme.error, onClick = onCerrarSesion) {
                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }

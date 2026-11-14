@@ -71,7 +71,7 @@ import androidx.compose.ui.unit.dp
 // desde abajo, como la app Teléfono de iOS 26 (pedido del usuario 2026-10-21).
 
 /// Lo que hace el botón redondo de abajo: lo pone la pantalla a la vista
-/// (cámara en Ingreso, lupa en Salida y KOF, "+" en Proveedores y Correo).
+/// (un "+" de nuevo ingreso en todas las secciones desde 2026-11-14).
 internal class AccionInferior(
     val icono: ImageVector,
     val descripcion: String,

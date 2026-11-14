@@ -15,7 +15,9 @@ Cualquier usuario con sesión abierta.
 - Lo más común: al escanear o buscar a alguien en **Contratistas** que no
   aparece, toque **Registrar nuevo contratista**. Arranca con la cédula o
   el nombre que buscó.
-- También con la **persona con un +**, arriba en la pantalla principal.
+- Si ya sabe que es alguien nuevo: toque el cuadrito con su inicial (arriba
+  a la derecha) y luego **Nuevo contratista**. Conviene buscarlo antes: si
+  ya estaba registrado, darlo de alta otra vez lo duplica.
 
 ## Pasos — escaneando el carnet PRAIND (lo más rápido)
 

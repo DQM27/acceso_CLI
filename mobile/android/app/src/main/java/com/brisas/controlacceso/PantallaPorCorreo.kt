@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -230,7 +230,7 @@ fun PantallaPorCorreo(
 
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = {
+                    AccionPrincipal(Icons.Default.Add, "Nuevo ingreso por correo", onClick = {
                         mostrandoFormulario = true
                         escaneando = true
                         escaneoDirecto = true

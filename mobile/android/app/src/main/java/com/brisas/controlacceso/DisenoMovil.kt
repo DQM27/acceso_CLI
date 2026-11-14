@@ -75,5 +75,9 @@ internal val TipografiaBrisas = Typography(
     bodySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 13.sp, lineHeight = 18.sp),
     labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight(600)),
     labelMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight(500)),
-    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight(500)),
+    // 12sp, el mínimo de la app (2026-11-14, fase 2 de
+    // `docs/handoff-rediseno-movil-ux.md`; era 11sp): el nombre de las
+    // pestañas y "ADENTRO" se leen de pie y al sol. "Contratistas" sigue
+    // entrando en su pestaña en el A25 (~67dp de ~77dp).
+    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight(500)),
 )

@@ -35,7 +35,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -459,15 +458,12 @@ fun PantallaPrincipal(
             }
             // Sin separación propia: los 8dp entre cuadraditos los ponen sus
             // márgenes tocables.
+            // Sin botón "Nuevo contratista" (2026-11-14, decisión del dueño):
+            // su ícono era el mismo que "nuevo ingreso" de Proveedores y
+            // Correo, y dar de alta sin buscar antes dejaba duplicados. El
+            // alta se ofrece al buscar o escanear a alguien que no está
+            // registrado (`ResultadosIngreso`) y queda en el menú de la cuenta.
             Row {
-                BotonIconoCuadradoBrisas(onClick = {
-                    mostrarAvisos = false
-                    mostrarAyuda = false
-                    textoNuevoContratista = ""
-                    mostrarNuevoContratista = true
-                }) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
-                }
                 CampanitaAvisos(bandeja, onClick = {
                     mostrarNuevoContratista = false
                     mostrarAyuda = false
@@ -485,6 +481,12 @@ fun PantallaPrincipal(
                     unidad = textoUnidad,
                     temaElegido = GestorTema.temaForzado,
                     onElegirTema = GestorTema::elegir,
+                    onNuevoContratista = {
+                        mostrarAvisos = false
+                        mostrarAyuda = false
+                        textoNuevoContratista = ""
+                        mostrarNuevoContratista = true
+                    },
                     onAyuda = {
                         mostrarAvisos = false
                         mostrarNuevoContratista = false
@@ -954,6 +956,9 @@ private fun BarraSecciones(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = if (elegida) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
+                    // Con la letra del sistema agrandada, mejor "Contratis…"
+                    // que la palabra cortada en seco.
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

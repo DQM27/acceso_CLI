@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonSearch
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -55,9 +55,13 @@ internal const val AYUDA_BUSQUEDA_ACTIVOS = "Nombre, cédula o gafete"
 /// documento, para entrar o, si ya está adentro, para salir (lo decide
 /// [ActivosViewModel.elegir]). El escáner de gafetes se desconectó con las
 /// pestañas: en la práctica los gafetes se escriben.
+///
+/// Con el "+" de "nuevo ingreso" de todas las secciones y no una cámara
+/// (decisión del dueño, 2026-11-14): el mismo gesto en las cuatro; acá el
+/// ingreso empieza por la cámara.
 @Composable
 internal fun AccionActivos(onEscanearCedula: () -> Unit) {
-    AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
+    AccionPrincipal(Icons.Default.Add, "Nuevo ingreso: escanear documento", onEscanearCedula)
 }
 
 /// Fallas de consulta, el resultado de una salida por gafetes y el
