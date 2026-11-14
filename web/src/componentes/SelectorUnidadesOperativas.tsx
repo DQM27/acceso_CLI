@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
 import { textoUnidadesOperativas } from "./SelectorUnidadesOperativas.logica";
@@ -30,16 +31,7 @@ export default function SelectorUnidadesOperativas({
 
   // Mismo mecanismo que `SelectorRangoFecha`/"Columnas ▾": cierra al
   // clickear afuera del botón y del popover (portal a `document.body`).
-  useEffect(() => {
-    if (!abierto) return;
-    function alHacerClicAfuera(evento: MouseEvent) {
-      const objetivo = evento.target as Node;
-      if (campoRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setAbierto(false);
-    }
-    document.addEventListener("mousedown", alHacerClicAfuera);
-    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
-  }, [abierto, campoRef]);
+  useCerrarAlClicAfuera(abierto, [campoRef, popoverRef], () => setAbierto(false), { conEscape: false });
 
   function alternar(id: string) {
     const siguiente = new Set(excluidas);

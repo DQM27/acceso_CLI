@@ -23,3 +23,9 @@ export function compararFechaYMD(filtroMedianoche: Date, valorCelda: unknown): n
   const filtro = filtroMedianoche.getTime();
   return celda < filtro ? -1 : celda > filtro ? 1 : 0;
 }
+
+/** Identidad de fila (`idFila` de `Tabla`) para las filas con `id`: función
+ * de módulo, estable. Una función nueva en cada render (`idFila={(f) => ...}`
+ * en línea) hacía que la grilla reconstruyera sus columnas en cada refresco
+ * y perdiera los anchos ajustados. */
+export const idPorId = (fila: { id: string | number }) => String(fila.id);

@@ -24,7 +24,7 @@ import {
 } from "./Avisos.logica";
 import type { SeleccionAviso } from "./Avisos.logica";
 import { mensajeError } from "../mensajeError";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
 
 interface DatosAvisos {
   sitios: Sitio[];
@@ -55,10 +55,6 @@ async function cargarDatos(): Promise<DatosAvisos> {
   };
 }
 
-/** "18/10/2026 14:32", en la hora del navegador. */
-function textoFechaAviso(iso: string): string {
-  return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
-}
 
 /** Historial: lo último que se mandó, con quién lo mandó, a quién y a
  * cuántos llegó. Los equipos a los que no llegó se nombran en rojo. */
@@ -87,7 +83,7 @@ function HistorialAvisos({
                   {aviso.tipo === "emergente" && <Siren size={16} className="text-error" aria-label="Emergente" />}
                   {aviso.titulo}
                 </span>
-                <span className="text-sm text-(--muted)">{textoFechaAviso(aviso.enviado_en)}</span>
+                <span className="text-sm text-(--muted)">{textoFechaHora(aviso.enviado_en)}</span>
               </div>
               <p className="line-clamp-2 whitespace-pre-wrap text-sm">{aviso.cuerpo}</p>
               <p className="text-sm text-(--muted)">
@@ -99,7 +95,7 @@ function HistorialAvisos({
               )}
               {aviso.avisos_acciones.map((accion) => (
                 <p key={`${accion.accion}-${accion.dispositivo_etiqueta}-${accion.ocurrio_en}`} className="text-sm text-(--muted)">
-                  {textoAccion(accion, textoFechaAviso(accion.ocurrio_en))}
+                  {textoAccion(accion, textoFechaHora(accion.ocurrio_en))}
                 </p>
               ))}
             </li>

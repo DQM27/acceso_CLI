@@ -1,13 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 /**
- * Buscador con lista de resultados flotante — el mecanismo (no el contenido)
- * que `NuevoIngresoModal` y `SalidaModal` reimplementaban byte a byte cada
- * uno: posicionar la lista por coordenadas reales del campo, portal a
- * `document.body` para escapar el `overflow-y:auto` del modal, y navegación
- * con flechas/Enter. El contenido de cada fila (contratista vs. ingreso
- * activo) sigue siendo de cada pantalla — acá sólo vive lo que era idéntico.
+ * Posición de una lista o menú flotante junto a su botón o campo: por
+ * coordenadas reales, en un portal a `document.body` para escapar el
+ * `overflow` de quien lo contiene (menú de usuario, selectores de fecha y de
+ * unidades, "Columnas"). Copiado del escritorio; la navegación con flechas de
+ * allá no se trajo porque el panel no tiene buscadores con lista (se quitó
+ * la copia sin uso, auditoría 2026-11-14).
  */
 
 export interface PosicionLista {
@@ -99,40 +98,4 @@ export function useListaFlotante(visible: boolean) {
   }, [visible]);
 
   return { campoRef, posicion };
-}
-
-/** ↑/↓ mueve `resaltado` dentro de `items`, Enter llama `onSeleccionar` con
- * el ítem resaltado. Se reinicia a 0 cada vez que cambia la lista de items
- * (si no, una búsqueda nueva con menos resultados puede dejarlo apuntando a
- * un índice que ya no existe). `activo` es la misma condición de
- * "¿la lista está visible?" que ya calcula cada pantalla (búsqueda con
- * texto, no en modo gafete, etc.) — el hook no la vuelve a inventar. */
-export function useNavegacionFlechas<T>(
-  items: T[],
-  activo: boolean,
-  onSeleccionar: (item: T) => void,
-) {
-  const [resaltado, setResaltado] = useState(0);
-
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setResaltado` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => setResaltado(0));
-  }, [items]);
-
-  function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) {
-    if (!activo || items.length === 0) return;
-    if (evento.key === "ArrowDown") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.min(actual + 1, items.length - 1));
-    } else if (evento.key === "ArrowUp") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.max(actual - 1, 0));
-    } else if (evento.key === "Enter") {
-      evento.preventDefault();
-      onSeleccionar(items[resaltado]);
-    }
-  }
-
-  return { resaltado, setResaltado, manejarTecla };
 }

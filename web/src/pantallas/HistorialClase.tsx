@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import Tabla from "../componentes/Tabla";
 import type { OrigenServidor, TablaHandle } from "../componentes/Tabla";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
@@ -154,9 +154,6 @@ export default function HistorialClase({
     if (!imprimirHtml(html)) toast.error("No se pudo preparar el PDF.");
   }
 
-  const tituloExportar = (formato: string) =>
-    exportando ? "Exportando…" : `Exportar a ${formato} — todo el resultado del filtro actual, con las columnas visibles`;
-
   return (
     <div className="flex h-full flex-col">
       <div className="pantalla-cuerpo min-h-0 flex-1">
@@ -183,35 +180,12 @@ export default function HistorialClase({
             accionesDerecha={
               <>
                 {compartidos}
-                <div className="segmentado" role="group" aria-label="Exportar">
-                  <button
-                    type="button"
-                    title={tituloExportar("Excel")}
-                    aria-label="Exportar a Excel"
-                    onClick={exportarAExcel}
-                    disabled={exportando}
-                  >
-                    <FileSpreadsheet size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    title={tituloExportar("CSV")}
-                    aria-label="Exportar a CSV"
-                    onClick={exportarACsv}
-                    disabled={exportando}
-                  >
-                    <Sheet size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    title={tituloExportar("PDF")}
-                    aria-label="Exportar a PDF"
-                    onClick={exportarAPdf}
-                    disabled={exportando}
-                  >
-                    <FileText size={16} />
-                  </button>
-                </div>
+                <BotonesExportacion
+                  exportando={exportando}
+                  alExportarExcel={exportarAExcel}
+                  alExportarCsv={exportarACsv}
+                  alExportarPdf={exportarAPdf}
+                />
               </>
             }
           />

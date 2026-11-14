@@ -110,6 +110,11 @@ export default function Modal({
         // `modal`: títulos, etiquetas y botones en mayúsculas en TODOS los
         // modales (ver `.modal` en index.css).
         className="tarjeta modal"
+        // Diálogo para los lectores de pantalla, con su título como nombre --
+        // el panel web ya lo tenía (auditoría 2026-11-14).
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo}
         style={{
           background: "var(--elevado)",
           boxShadow: "var(--sombra-panel)",
@@ -129,7 +134,7 @@ export default function Modal({
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--acento)" }}>{titulo}</h2>
-          <button type="button" className="boton" onClick={cerrar}>
+          <button type="button" className="boton" onClick={cerrar} aria-label="Cerrar" title="Cerrar">
             ✕
           </button>
         </div>

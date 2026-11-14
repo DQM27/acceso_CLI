@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { OrdenTabla, OrigenServidor, TablaHandle } from "../componentes/Tabla";
@@ -11,7 +11,7 @@ import { useDebounced } from "../componentes/useDebounced";
 import { useAuth } from "../contexto/useAuth";
 import { listarMovimientosPagina, listarMovimientosParaExportar } from "../api/historial";
 import type { ConsultaMovimientos, MovimientoHistorial } from "../api/historial";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { columnaFecha, columnaGafete, columnaHora } from "../componentes/columnasComunes";
 import { mensajeError } from "../mensajeError";
 import {
   definicionesVisibles as columnasAExportar,
@@ -261,52 +261,28 @@ export default function HistorialContratistas({
         minWidth: 100,
         valueGetter: (p) => p.data?.medio_texto ?? "",
       },
-      {
-        field: "gafete_numero",
-        type: "numero",
-        headerName: "Gafete",
-        flex: 0.9,
-        minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-      },
-      {
-        colId: "fecha_ingreso",
-        type: "fecha",
+      columnaGafete(),
+      columnaFecha("fecha_ingreso", (fila) => fila.hora_entrada, {
         headerName: "Fecha ingreso",
         flex: 1.4,
-        minWidth: 140,
-        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.hora_entrada) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        colId: "hora_ingreso",
+      }),
+      // Las horas se filtran con su columna de fecha (ver `columnaHora`).
+      columnaHora("hora_ingreso", (fila) => fila.hora_entrada, {
         headerName: "Hora ingreso",
         flex: 1.3,
         minWidth: 130,
-        // Sin filtro propio: un filtro de texto sobre "HH:MI" era engañoso
-        // ("7" también trae 17:xx y 10:07). Para acotar por tiempo se usa
-        // "Fecha ingreso", que filtra el instante completo con índice.
-        filter: false,
-        valueGetter: (p) => (p.data ? textoHora(p.data.hora_entrada) : ""),
-      },
-      {
-        colId: "fecha_salida",
-        type: "fecha",
+      }),
+      columnaFecha("fecha_salida", (fila) => fila.hora_salida, {
         headerName: "Fecha salida",
         flex: 1.4,
-        minWidth: 140,
-        valueGetter: (p) => (p.data ? (p.data.hora_salida ? fechaLocalYMD(p.data.hora_salida) : "Activo") : ""),
-        valueFormatter: (p) => (p.value === "Activo" || !p.value ? (p.value ?? "") : textoFechaDDMMYYYY(p.value)),
-      },
-      {
-        colId: "hora_salida",
+        sinValor: "Activo",
+      }),
+      columnaHora("hora_salida", (fila) => fila.hora_salida, {
         headerName: "Hora salida",
         flex: 1.3,
         minWidth: 130,
-        // Ver "Hora ingreso": se filtra con "Fecha salida" (vacío = sigue adentro).
-        filter: false,
-        valueGetter: (p) => (p.data ? (p.data.hora_salida ? textoHora(p.data.hora_salida) : "Activo") : ""),
-      },
+        sinValor: "Activo",
+      }),
       { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
       { field: "usuario_salida_nombre", headerName: "Dio salida", flex: 1.3, minWidth: 130 },
     ],
@@ -339,51 +315,12 @@ export default function HistorialContratistas({
             accionesDerecha={
               <>
                 {compartidos}
-                {/* Excel · CSV · PDF en una sola pieza de íconos, como en
-                    escritorio. Los tres traen TODO el resultado del filtro
-                    actual (no sólo la página en pantalla), con las columnas
-                    visibles y el orden vigente. */}
-                <div className="segmentado" role="group" aria-label="Exportar">
-                  <button
-                    type="button"
-                    title={
-                      exportando
-                        ? "Exportando…"
-                        : "Exportar a Excel — todo el resultado del filtro actual, con las columnas visibles"
-                    }
-                    aria-label="Exportar a Excel"
-                    onClick={exportarAExcel}
-                    disabled={exportando}
-                  >
-                    <FileSpreadsheet size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    title={
-                      exportando
-                        ? "Exportando…"
-                        : "Exportar a CSV — todo el resultado del filtro actual, con las columnas visibles"
-                    }
-                    aria-label="Exportar a CSV"
-                    onClick={exportarACsv}
-                    disabled={exportando}
-                  >
-                    <Sheet size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    title={
-                      exportando
-                        ? "Exportando…"
-                        : "Exportar a PDF — todo el resultado del filtro actual, con las columnas visibles"
-                    }
-                    aria-label="Exportar a PDF"
-                    onClick={exportarAPdf}
-                    disabled={exportando}
-                  >
-                    <FileText size={16} />
-                  </button>
-                </div>
+                <BotonesExportacion
+                  exportando={exportando}
+                  alExportarExcel={exportarAExcel}
+                  alExportarCsv={exportarACsv}
+                  alExportarPdf={exportarAPdf}
+                />
               </>
             }
           />

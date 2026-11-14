@@ -31,10 +31,9 @@ export default function Login() {
           <div className="marca-sello" aria-hidden="true">
             <img src={marca} alt="" />
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-texto">Panel administrativo</h1>
-            <p className="text-sm text-muted">Lattis</p>
-          </div>
+          {/* Sin "Lattis" en texto: el logo ya lo trae escrito (mismo criterio
+              que el login del escritorio). */}
+          <h1 className="text-lg font-semibold text-texto">Panel administrativo</h1>
         </div>
 
         {error && (

@@ -11,6 +11,7 @@ import { textoUnidadesOperativas } from "../componentes/SelectorUnidadesOperativ
 import { listarUnidadesOperativas } from "../api/historial";
 import { fechaHaceMeses } from "../tiempo";
 import { mensajeError } from "../mensajeError";
+import { SeccionActivaProvider, useSeccionActiva } from "../contexto/SeccionActivaContexto";
 import HistorialContratistas from "./HistorialContratistas";
 import HistorialClase from "./HistorialClase";
 import type { ClaseHistorial, FiltroHistorial } from "./Historial.logica";
@@ -35,6 +36,7 @@ const OPCIONES_CLASE: OpcionSegmentada<ClaseHistorial>[] = [
  * los filtros de columna.
  */
 export default function Historial() {
+  const seccionActiva = useSeccionActiva();
   const [clase, setClase] = useState<ClaseHistorial>("contratistas");
   const [abiertas, setAbiertas] = useState<ClaseHistorial[]>(["contratistas"]);
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
@@ -96,17 +98,20 @@ export default function Historial() {
     <div className="h-full">
       {abiertas.map((abierta) => (
         <div key={abierta} className={abierta === clase ? "h-full" : "hidden"}>
-          {abierta === "contratistas" ? (
-            <HistorialContratistas selector={selector} compartidos={compartidos} filtro={filtro} textoFiltro={textoFiltro} />
-          ) : (
-            <HistorialClase
-              clase={abierta}
-              selector={selector}
-              compartidos={compartidos}
-              filtro={filtro}
-              textoFiltro={textoFiltro}
-            />
-          )}
+          {/* Una clase oculta tampoco refresca (ver `SeccionActivaContexto`). */}
+          <SeccionActivaProvider value={seccionActiva && abierta === clase}>
+            {abierta === "contratistas" ? (
+              <HistorialContratistas selector={selector} compartidos={compartidos} filtro={filtro} textoFiltro={textoFiltro} />
+            ) : (
+              <HistorialClase
+                clase={abierta}
+                selector={selector}
+                compartidos={compartidos}
+                filtro={filtro}
+                textoFiltro={textoFiltro}
+              />
+            )}
+          </SeccionActivaProvider>
         </div>
       ))}
     </div>

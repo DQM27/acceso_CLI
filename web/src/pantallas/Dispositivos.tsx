@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import { MonitorSmartphone, ShieldAlert } from "lucide-react";
 import Tabla from "../componentes/Tabla";
+import { idPorId } from "../componentes/Tabla.logica";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
@@ -12,7 +13,7 @@ import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
 import { TEXTO_CREDENCIAL, TEXTO_EVENTO, detalleEvento, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useLista } from "../componentes/useLista";
 import { usePresenciaPorSitio } from "../presenciaSitios";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
   autorizarReconexion,
@@ -59,9 +60,6 @@ interface CodigoMostrado {
   expira_en: string;
 }
 
-function textoFechaHora(iso: string): string {
-  return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
-}
 
 /**
  * Las acciones sobre un equipo: Registrar, Retirar y, sobre uno retirado,
@@ -545,7 +543,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               columnas={columnasEventos}
               filas={eventos}
               filtrosPorColumna
-              idFila={(evento) => String(evento.id)}
+              idFila={idPorId}
               controles={
                 <>
                   {selectorVista}

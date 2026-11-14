@@ -4,6 +4,7 @@ import { CircleDashed, FlaskConical, History, Layers, MonitorSmartphone, RotateC
 import type { ColDef } from "ag-grid-community";
 import Modal from "../componentes/Modal";
 import Tabla from "../componentes/Tabla";
+import { idPorId } from "../componentes/Tabla.logica";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
@@ -33,7 +34,7 @@ import {
   venceEnDesde,
 } from "./Telemetria.logica";
 import { mensajeError } from "../mensajeError";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
 
 interface DatosTelemetria {
   sitios: Sitio[];
@@ -56,10 +57,6 @@ async function cargarDatos(): Promise<DatosTelemetria> {
   };
 }
 
-/** "18/10/2026 14:32", en la hora del navegador. */
-function textoFecha(iso: string): string {
-  return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
-}
 
 const TEXTO_TIPO: Record<Dispositivo["tipo"], string> = { pc: "PC", mobile: "Celular", visor: "Visor" };
 
@@ -174,7 +171,7 @@ function EditarOrden({
           Vence en
           <select value={vencimiento} disabled={guardando} onChange={(evento) => setVencimiento(evento.target.value)}>
             {puedeMantener && orden.vence_en && (
-              <option value="mantener">Mantener (hasta el {textoFecha(orden.vence_en)})</option>
+              <option value="mantener">Mantener (hasta el {textoFechaHora(orden.vence_en)})</option>
             )}
             {OPCIONES_VENCIMIENTO.map((opcion) => (
               <option key={opcion.etiqueta} value={opcion.horas === null ? "nunca" : String(opcion.horas)}>
@@ -254,7 +251,7 @@ const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
     flex: 1.1,
     minWidth: 150,
     sort: "desc",
-    valueGetter: ({ data }) => (data ? textoFecha(data.cambiado_en) : ""),
+    valueGetter: ({ data }) => (data ? textoFechaHora(data.cambiado_en) : ""),
     comparator: (_a, _b, nodoA, nodoB) =>
       (nodoA.data?.cambiado_en ?? "").localeCompare(nodoB.data?.cambiado_en ?? ""),
     filter: false,
@@ -280,7 +277,7 @@ const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
     headerName: "Vence",
     flex: 1.1,
     minWidth: 150,
-    valueGetter: ({ data }) => (data?.vence_en ? textoFecha(data.vence_en) : "Sin vencimiento"),
+    valueGetter: ({ data }) => (data?.vence_en ? textoFechaHora(data.vence_en) : "Sin vencimiento"),
     comparator: (_a, _b, nodoA, nodoB) =>
       (nodoA.data?.vence_en ?? "9999").localeCompare(nodoB.data?.vence_en ?? "9999"),
     filter: false,
@@ -314,6 +311,10 @@ const COLUMNAS_CAMBIOS: ColDef<CambioOrdenTelemetria>[] = [
  * propio equipo en su evento `orden_telemetria`, que va a la telemetría de
  * staging (Grafana), no a esta base.
  */
+/** Identidad de fila, fuera del componente para que sea estable (en línea,
+ * la grilla perdía los anchos ajustados en cada refresco). */
+const idPorEquipo = (fila: FilaTelemetria) => fila.equipo.id;
+
 export default function Telemetria() {
   // Sin Realtime: las órdenes sólo las escribe este panel, que recarga al guardar.
   const { datos, cargando, recargar } = useLista(["telemetria-equipos"], cargarDatos, {
@@ -391,7 +392,7 @@ export default function Telemetria() {
         flex: 1.3,
         minWidth: 170,
         filter: false,
-        valueGetter: ({ data }) => (data && ahora ? textoVence(data.orden, ahora, textoFecha) : ""),
+        valueGetter: ({ data }) => (data && ahora ? textoVence(data.orden, ahora, textoFechaHora) : ""),
         // Por el instante, no por el texto; sin vencimiento al final.
         comparator: (_a, _b, nodoA, nodoB) => {
           const instante = (fila: FilaTelemetria | undefined) =>
@@ -454,7 +455,7 @@ export default function Telemetria() {
               filas={filasVisibles}
               busqueda={busqueda}
               filtrosPorColumna
-              idFila={(fila) => fila.equipo.id}
+              idFila={idPorEquipo}
               onFilaDobleClic={cambiar}
               controles={
                 <>
@@ -485,7 +486,7 @@ export default function Telemetria() {
               filas={cambios}
               busqueda={busqueda}
               filtrosPorColumna
-              idFila={(cambio) => String(cambio.id)}
+              idFila={idPorId}
               controles={
                 <>
                   {selectorVista}

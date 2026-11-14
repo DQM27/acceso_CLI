@@ -1,6 +1,7 @@
 import { CAMPOS_ORDENABLES } from "../api/historial";
 import type { CampoOrdenable, MovimientoHistorial } from "../api/historial";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFecha, textoHora } from "../tiempo";
+import { textoGafete } from "../componentes/columnasComunes";
 import { generarCsv, generarHtmlTabla } from "../exportacion";
 import type { DefinicionColumnaExport as DefinicionColumnaExportGenerica } from "../exportacion";
 
@@ -70,18 +71,18 @@ export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
   {
     colId: "gafete_numero",
     etiqueta: "Gafete",
-    valor: (f) => (f.gafete_numero == null ? "S/G" : String(f.gafete_numero)),
+    valor: (f) => textoGafete(f.gafete_numero),
   },
   {
     colId: "fecha_ingreso",
     etiqueta: "Fecha ingreso",
-    valor: (f) => textoFechaDDMMYYYY(fechaLocalYMD(f.hora_entrada)),
+    valor: (f) => textoFecha(f.hora_entrada),
   },
   { colId: "hora_ingreso", etiqueta: "Hora ingreso", valor: (f) => textoHora(f.hora_entrada) },
   {
     colId: "fecha_salida",
     etiqueta: "Fecha salida",
-    valor: (f) => (f.hora_salida ? textoFechaDDMMYYYY(fechaLocalYMD(f.hora_salida)) : "Activo"),
+    valor: (f) => (f.hora_salida ? textoFecha(f.hora_salida) : "Activo"),
   },
   {
     colId: "hora_salida",

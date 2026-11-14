@@ -6,9 +6,10 @@ import Tabla from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { useLista } from "../componentes/useLista";
-import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, nivelPermanencia, textoTiempoAdentro } from "../api/adentro";
+import { TEXTO_TIPO_ADENTRO, listarAdentroAhora, textoTiempoAdentro } from "../api/adentro";
 import type { PersonaAdentro, TipoAdentro } from "../api/adentro";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFechaHora } from "../tiempo";
+import { textoGafete } from "../componentes/columnasComunes";
 import {
   CLASES,
   ETIQUETA_CLASE,
@@ -60,15 +61,6 @@ function opcionesFiltroGafete(conteo: { todos: number; con: number; sin: number 
   ];
 }
 
-/** Resaltado de la fila según cuánto lleva adentro: la misma regla y los
- * mismos colores que escritorio (más de 12 h aviso, más de 14 h crítico).
- * Fuera del componente: `claseFila` tiene que ser una función estable. */
-function claseFilaActivo(fila: PersonaAdentro): string | undefined {
-  const nivel = nivelPermanencia(fila.hora_entrada);
-  if (nivel === "critico") return "fila-permanencia-critico";
-  if (nivel === "aviso") return "fila-permanencia-aviso";
-  return undefined;
-}
 
 /**
  * Activos: quién está adentro ahora en cada unidad (contratistas, proveedores,
@@ -84,6 +76,11 @@ function claseFilaActivo(fila: PersonaAdentro): string | undefined {
  * préstamos KOF e ingresos por correo no están en la publicación de Realtime,
  * así que dependen del intervalo.
  */
+/** Identidad de fila: el mismo `id` puede repetirse entre clases. Fuera del
+ * componente, estable: en línea, la grilla perdía los anchos ajustados en cada
+ * refresco (cada 30 s). */
+const idPorTipoEId = (fila: PersonaAdentro) => `${fila.tipo}:${fila.id}`;
+
 export default function Activos() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
@@ -127,7 +124,7 @@ export default function Activos() {
         headerName: "Gafete",
         flex: 0.8,
         minWidth: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+        valueFormatter: (p) => textoGafete(p.value as number | null),
       },
       { field: "placa", headerName: "Placa", flex: 0.9, minWidth: 100 },
       {
@@ -138,7 +135,7 @@ export default function Activos() {
         // Ordena por el instante, muestra fecha y hora de Costa Rica.
         valueGetter: (p) => p.data?.hora_entrada ?? "",
         valueFormatter: (p) =>
-          p.value ? `${textoFechaDDMMYYYY(fechaLocalYMD(p.value))} ${textoHora(p.value)}` : "",
+          p.value ? textoFechaHora(p.value) : "",
         filter: false,
       },
       {
@@ -169,8 +166,7 @@ export default function Activos() {
             filas={filasVisibles}
             busqueda={busqueda}
             filtrosPorColumna
-            idFila={(fila) => `${fila.tipo}:${fila.id}`}
-            claseFila={claseFilaActivo}
+            idFila={idPorTipoEId}
             controles={
               <>
                 {/* Primero el buscador y después los filtros (pedido del

@@ -164,10 +164,12 @@ textarea::placeholder {
    oscuro y esquinas redondeadas horneadas en el asset — el contenedor sólo
    lo tamaña/recorta, sin agregar un segundo fondo/borde que se vería como un
    marco doble alrededor del ícono. */
+/* Logo del login (`marca.png`, el de la "L" con el nombre): mismo tamaño que
+   en el escritorio. */
 .marca-sello {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 8rem;
+  height: 8rem;
   flex-shrink: 0;
   place-items: center;
   overflow: hidden;
@@ -581,6 +583,47 @@ textarea::placeholder {
   animation: modal-salir 150ms ease-in forwards;
 }
 
+/* Modales: título, etiquetas de campos y botones en mayúsculas, igual que en
+   el escritorio (`.modal` en desktop/src/index.css, pedido del usuario
+   2026-09-23) -- en el panel faltaba (auditoría 2026-11-14). Las etiquetas
+   van chicas y un poco espaciadas. Los ejemplos (placeholder) y los
+   mensajes dentro de una etiqueta (`span`) quedan en texto normal. Lo que se
+   escribe en los campos va en mayúscula por la regla global de `input`. */
+.modal-tarjeta h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal-tarjeta .campo {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.modal-tarjeta .campo select,
+.modal-tarjeta .campo span {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Hereda el espaciado de la etiqueta, pero no le quita la mayúscula (la pone
+   la regla global de `input`). */
+.modal-tarjeta .campo input,
+.modal-tarjeta .campo textarea {
+  letter-spacing: normal;
+}
+
+/* Opciones (radio/checkbox) dentro de un `.campo`: en mayúsculas como el
+   resto, pero con su tamaño normal (son opciones, no etiquetas). */
+.modal-tarjeta .campo label {
+  font-size: 0.85rem;
+  letter-spacing: normal;
+}
+
+.modal-tarjeta .boton {
+  text-transform: uppercase;
+}
+
 @keyframes velo-entrar {
   from {
     opacity: 0;
@@ -909,19 +952,6 @@ textarea::placeholder {
   .segmentado-indicador {
     transition: none;
   }
-}
-
-/* Larga permanencia (Activos, `claseFilaActivo`), igual que en escritorio.
-   Aviso (más de 12 h): fondo suave de advertencia y marca a la izquierda.
-   Crítico (más de 14 h): lo mismo en rojo. */
-.ag-row.fila-permanencia-aviso {
-  background: var(--advertencia-suave);
-  box-shadow: inset 3px 0 0 var(--advertencia);
-}
-
-.ag-row.fila-permanencia-critico {
-  background: var(--error-suave);
-  box-shadow: inset 3px 0 0 var(--error);
 }
 
 /* Botones dentro de una celda de la grilla (Dispositivos, Usuarios). Van en CSS

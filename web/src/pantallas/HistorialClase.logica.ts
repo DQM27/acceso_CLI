@@ -1,7 +1,8 @@
 import type { ColDef } from "ag-grid-community";
 import type { ClaseOtra, MovimientoClase } from "../api/historialClases";
 import type { DefinicionColumnaExport } from "../exportacion";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoFecha, textoHora } from "../tiempo";
+import { columnaFecha, columnaGafete, columnaHora, textoGafete } from "../componentes/columnasComunes";
 import { textoDispositivo } from "./Historial.logica";
 
 /** Cómo se rotula cada dato en cada clase -- los mismos nombres que en el
@@ -88,14 +89,14 @@ export function definicionesExportClase(clase: ClaseOtra): DefinicionColumnaExpo
     {
       colId: "gafete_numero",
       etiqueta: "Gafete",
-      valor: (f) => (f.gafete_numero == null ? "S/G" : String(f.gafete_numero)),
+      valor: (f) => textoGafete(f.gafete_numero),
     },
-    { colId: "fecha_entrada", etiqueta: e.fechaEntrada, valor: (f) => textoFechaDDMMYYYY(fechaLocalYMD(f.hora_entrada)) },
+    { colId: "fecha_entrada", etiqueta: e.fechaEntrada, valor: (f) => textoFecha(f.hora_entrada) },
     { colId: "hora_entrada", etiqueta: e.horaEntrada, valor: (f) => textoHora(f.hora_entrada) },
     {
       colId: "fecha_salida",
       etiqueta: e.fechaSalida,
-      valor: (f) => (f.hora_salida ? textoFechaDDMMYYYY(fechaLocalYMD(f.hora_salida)) : e.sinSalida),
+      valor: (f) => (f.hora_salida ? textoFecha(f.hora_salida) : e.sinSalida),
     },
     { colId: "hora_salida", etiqueta: e.horaSalida, valor: (f) => (f.hora_salida ? textoHora(f.hora_salida) : e.sinSalida) },
     { colId: "usuario_entrada_nombre", etiqueta: e.usuarioEntrada, izquierda: true, valor: (f) => f.usuario_entrada_nombre ?? "" },
@@ -122,48 +123,17 @@ export function columnasClase(clase: ClaseOtra): ColDef<MovimientoClase>[] {
       valueFormatter: (p) => textoDispositivo(p.value ?? null),
     },
     e.placa ? { colId: "placa", field: "placa", headerName: e.placa, flex: 0.9, minWidth: 100 } : null,
-    {
-      field: "gafete_numero",
-      type: "numero",
-      headerName: "Gafete",
-      flex: 0.8,
-      minWidth: 90,
-      valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
-    },
-    {
-      colId: "fecha_entrada",
-      type: "fecha",
-      headerName: e.fechaEntrada,
-      flex: 1.3,
-      minWidth: 140,
-      valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.hora_entrada) : ""),
-      valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-    },
-    {
-      colId: "hora_entrada",
-      headerName: e.horaEntrada,
-      flex: 1,
-      minWidth: 110,
-      filter: false,
-      valueGetter: (p) => (p.data ? textoHora(p.data.hora_entrada) : ""),
-    },
-    {
-      colId: "fecha_salida",
-      type: "fecha",
+    columnaGafete<MovimientoClase>({ flex: 0.8 }),
+    columnaFecha<MovimientoClase>("fecha_entrada", (fila) => fila.hora_entrada, { headerName: e.fechaEntrada }),
+    columnaHora<MovimientoClase>("hora_entrada", (fila) => fila.hora_entrada, { headerName: e.horaEntrada }),
+    columnaFecha<MovimientoClase>("fecha_salida", (fila) => fila.hora_salida, {
       headerName: e.fechaSalida,
-      flex: 1.3,
-      minWidth: 140,
-      valueGetter: (p) => (p.data ? (p.data.hora_salida ? fechaLocalYMD(p.data.hora_salida) : e.sinSalida) : ""),
-      valueFormatter: (p) => (p.value === e.sinSalida || !p.value ? (p.value ?? "") : textoFechaDDMMYYYY(p.value)),
-    },
-    {
-      colId: "hora_salida",
+      sinValor: e.sinSalida,
+    }),
+    columnaHora<MovimientoClase>("hora_salida", (fila) => fila.hora_salida, {
       headerName: e.horaSalida,
-      flex: 1,
-      minWidth: 110,
-      filter: false,
-      valueGetter: (p) => (p.data ? (p.data.hora_salida ? textoHora(p.data.hora_salida) : e.sinSalida) : ""),
-    },
+      sinValor: e.sinSalida,
+    }),
     { field: "usuario_entrada_nombre", headerName: e.usuarioEntrada, flex: 1.2, minWidth: 130 },
     { field: "usuario_salida_nombre", headerName: e.usuarioSalida, flex: 1.2, minWidth: 130 },
   ];

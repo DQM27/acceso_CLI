@@ -9,16 +9,16 @@ import { Toaster } from "sonner";
 import {
   Activity,
   BellRing,
-  Building2,
+  Boxes,
+  HardHat,
   History,
-  LifeBuoy,
+  CircleQuestionMark,
   LogIn,
   Menu,
   MonitorSmartphone,
   Sparkles,
   UserCheck,
   UserCog,
-  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
@@ -28,6 +28,7 @@ import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
 import { AuthProvider } from "./contexto/AuthContexto";
 import { useAuth } from "./contexto/useAuth";
+import { SeccionActivaProvider } from "./contexto/SeccionActivaContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { rutaSeccion, type Seccion } from "./secciones";
 
@@ -66,10 +67,14 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
   // "Activos" como en escritorio (antes "Adentro ahora"), mismo ícono.
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
-  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  // Casco, como en escritorio (pedido del usuario 2026-09-21): el grupo de
+  // personas se confundía con otros íconos.
+  { id: "contratistas", etiqueta: "Contratistas", Icono: HardHat },
   // El catálogo de empresas de proveedor: revisar lo creado en la portería y
   // fusionar los nombres mal escritos.
-  { id: "proveedores", etiqueta: "Proveedores", Icono: Building2 },
+  // Cajas, el ícono de proveedor en todas partes (menú "Ingreso" y filtro de
+  // clase de Activos, Historial). El edificio es "Empresas" en escritorio.
+  { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
@@ -77,7 +82,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "telemetria", etiqueta: "Telemetría", Icono: Activity },
   { id: "asistente", etiqueta: "Asistente", Icono: Sparkles },
   // El manual de uso de las tres apps (`docs/manual/`).
-  { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
+  { id: "ayuda", etiqueta: "Ayuda", Icono: CircleQuestionMark },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -259,17 +264,13 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // en index.css.
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
-  useEffect(() => {
-    if (!seccionActual) return;
-    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
-    // -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto.
-    Promise.resolve().then(() => {
-      setVisitadas((actual) =>
-        actual.includes(seccionActual) ? actual : [...actual, seccionActual],
-      );
-    });
-  }, [seccionActual]);
+  // Ajuste durante el render (patrón de React): la sección nueva se monta en
+  // el mismo render en que se elige, sin un efecto que la agregue después
+  // (antes se difería con `Promise.resolve().then` por la regla
+  // `react-hooks/set-state-in-effect`). Mismo criterio que el escritorio.
+  if (seccionActual && !visitadas.includes(seccionActual)) {
+    setVisitadas([...visitadas, seccionActual]);
+  }
 
   useEffect(() => {
     const etiqueta = SECCIONES.find((s) => s.id === seccionActual)?.etiqueta;
@@ -342,6 +343,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                 key={id}
                 className={`min-h-0 flex-1 flex-col ${id === seccionActual ? "flex" : "hidden"}`}
               >
+                {/* Cada sección sabe si está a la vista: oculta, no
+                    refresca sus datos (ver `SeccionActivaContexto`). */}
+                <SeccionActivaProvider value={id === seccionActual}>
                 {/* Suspense por sección, no uno compartido -- así la
                     primera visita a una sección NUEVA (bajando su chunk)
                     no vuelve a tapar con "Cargando pantalla…" las que ya
@@ -377,6 +381,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Dispositivos sesion={sesion} />
                   )}
                 </Suspense>
+                </SeccionActivaProvider>
               </div>
             ))}
           </main>

@@ -30,6 +30,18 @@ export function textoFechaDDMMYYYY(ymd: string): string {
   return `${dia}/${mes}/${anio}`;
 }
 
+/** "18/10/2026" de un instante ISO, en la hora del navegador. */
+export function textoFecha(iso: string): string {
+  return textoFechaDDMMYYYY(fechaLocalYMD(iso));
+}
+
+/** "18/10/2026 14:32" de un instante ISO, en la hora del navegador. Estaba
+ * repetida como función propia en Avisos, Dispositivos, Sesiones y
+ * Telemetría, y escrita a mano en Activos y Contratistas. */
+export function textoFechaHora(iso: string): string {
+  return `${textoFecha(iso)} ${textoHora(iso)}`;
+}
+
 // Costa Rica no usa horario de verano (fijo UTC-6 todo el año) -- mismo
 // criterio que `ZONA_APLICACION`/`inicio_dia_costa_rica_utc` en
 // `src/tiempo.rs`. La web no tiene backend propio (habla directo con
