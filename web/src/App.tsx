@@ -12,7 +12,7 @@ import {
   Boxes,
   HardHat,
   History,
-  LifeBuoy,
+  CircleQuestionMark,
   LogIn,
   Menu,
   MonitorSmartphone,
@@ -82,7 +82,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "telemetria", etiqueta: "Telemetría", Icono: Activity },
   { id: "asistente", etiqueta: "Asistente", Icono: Sparkles },
   // El manual de uso de las tres apps (`docs/manual/`).
-  { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
+  { id: "ayuda", etiqueta: "Ayuda", Icono: CircleQuestionMark },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";

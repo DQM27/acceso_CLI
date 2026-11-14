@@ -46,7 +46,7 @@ import {
   HardHat,
   History,
   IdCard,
-  LifeBuoy,
+  CircleQuestionMark,
   Loader2,
   Route,
   Truck,
@@ -353,7 +353,7 @@ const TODAS_LAS_SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   // El manual de uso, también con F1 desde cualquier pantalla.
-  { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
+  { id: "ayuda", etiqueta: "Ayuda", Icono: CircleQuestionMark },
   // "Por correo", "Proveedores" y "KOF" ya no son secciones: se registran desde
   // el menú "Ingreso" de Activos, están en su tabla y en Historial. "Por correo"
   // se quitó el 2026-10-05, las otras dos con el Activos unificado. Un orden
