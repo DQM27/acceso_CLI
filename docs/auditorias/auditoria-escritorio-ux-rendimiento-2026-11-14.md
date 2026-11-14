@@ -681,3 +681,34 @@ textos en español en 73 archivos del frontend; ~800 mensajes en el núcleo
 Rust (errores, avisos, textos de Excel/PDF), que hoy llegan ya redactados
 en español; y el manual de Ayuda (`docs/manual`). Complejidad estimada 7/10
 (ver la conversación del 2026-11-14 para el desglose).
+
+### Fase 2 (rama `ux/escritorio-fase-2`, sobre `ux/escritorio-fase-3`, 2026-11-14)
+
+Decisiones del dueño: 8.1 la paleta de toda la app es **Tokyo Day / Night**
+(no Brisas); 8.5 mayúsculas sólo en datos y encabezados. El pull request
+de las fases 1, 3 y 2 se abre al final, no todavía.
+
+| Punto | Estado | Qué se hizo |
+| --- | --- | --- |
+| Paleta única | Hecho | Tokyo pasa a `design/brisas.json` (temas `tokyo-day` y `tokyo-night`) y se genera en `desktop/src/tokyo.css` y `web/src/tokyo.css`; se borraron los `tokyo-*.css` escritos a mano. `web-visitas` sigue con `light`/`dark` |
+| Contraste | Hecho | Antes Tokyo no se verificaba y fallaba 8 combinaciones en el claro y 2 en el oscuro. Ajuste mínimo de `muted`, `borde-fuerte` y colores de estado. `verificar.mjs` revisa los 4 temas (128 combinaciones) |
+| Filas de permanencia | Hecho | Fondos de estado teñidos con el amarillo y el rosa de Tokyo: en el claro, la fila de «más de 12 h» tenía contraste 1,13 con una fila normal. El verificador ahora exige que esos fondos se distingan del panel |
+| Login y splash | Hecho | `temaInicial()`: el último tema usado en esta PC o el del sistema, aplicado antes del primer render. El splash usa el acento Tokyo (sigue al sistema: la CSP no permite scripts en línea) |
+| Regla de acento | Hecho | Escrita en `index.css`. Títulos de modal y marca a color de texto. Los demás usos del acento como texto eran estados elegidos, enlaces o acciones: se quedan |
+| Mayúsculas | Hecho | Fuera de títulos, etiquetas y botones de modal, del título del login y de los botones del período. Se quedan en los datos, los encabezados de grilla y los rótulos pequeños de sección |
+| Tipografía | Hecho | 4 tokens (`--tam-xs`, `--tam-sm`, `--tam-base`, `--tam-titulo`) en lugar de 15 tamaños: 70 reemplazos. Excepciones documentadas: letra del engranaje y unidad bajo la marca |
+| Regresión de la fase 3 | Corregida | El selector de período se abría hacia la izquierda y quedaba cortado al estar en el extremo izquierdo; ahora se abre hacia abajo |
+
+Comprobado: lint, `tsc --noEmit`, 71 archivos de test (540 tests),
+`npm run build` del escritorio, `generar.mjs --check`, `verificar.mjs` y
+capturas en claro y oscuro (login, Activos, modal, período).
+
+**No comprobado aquí:** el panel web no se pudo instalar en la sesión (la
+política de red bloquea `cdn.sheetjs.com`, de donde baja `xlsx`). Su único
+cambio es importar el `tokyo.css` generado, idéntico al del escritorio; lo
+valida el CI (`web.yml`). Los colores de estado del panel cambian igual que
+los del escritorio.
+
+**Pendiente:** el nombre del sistema de diseño sigue siendo «Brisas»
+aunque la paleta de las apps sea Tokyo; renombrarlo toca el panel web y la
+página de visitas y no aporta al usuario.
