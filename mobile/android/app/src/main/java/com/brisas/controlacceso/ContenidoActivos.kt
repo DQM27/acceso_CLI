@@ -6,13 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -25,11 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +36,8 @@ import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.GafeteSinPortador
 import uniffi.control_acceso_mobile.SituacionGafete
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
 // contenido por modo y la ficha de salida (sacado de `PantallaActivos.kt`,
@@ -308,7 +306,7 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// demasiado para confirmar una salida). Lo comparten contratistas,
 /// proveedores, correo, visitas y KOF.
 ///
-/// Al abrir, la flecha entra hacia la izquierda ([IconoPaso]). Al confirmar,
+/// La flecha apunta hacia la izquierda ([IconoPaso]). Al confirmar,
 /// el panel baja primero y recién entonces avisa: si el que llama lo quitara
 /// de la composición en el acto, desaparecería de golpe. `confirmado` evita
 /// que un segundo toque registre dos veces mientras baja.
@@ -332,7 +330,6 @@ internal fun DialogoRegistrarSalida(
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
-    val arriba = rememberHojaArriba(estado)
     fun cerrarY(accionAlCerrar: () -> Unit) {
         alcance.launch { estado.hide() }.invokeOnCompletion { accionAlCerrar() }
     }
@@ -350,9 +347,9 @@ internal fun DialogoRegistrarSalida(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (aviso != null) {
-                SenalAdvertencia(arriba = arriba)
+                SenalAdvertencia()
             } else {
-                IconoPaso(Paso.SALIDA, arriba = arriba)
+                IconoPaso(Paso.SALIDA)
             }
             if (aviso != null) {
                 Text(

@@ -168,7 +168,6 @@ internal fun HojaIngreso(
     val reservaTeclado = remember { if (abriraTeclado) AltoTeclado.leer(contexto) else 0 }
     var reservar by remember { mutableStateOf(reservaTeclado > 0) }
 
-    val arriba = rememberHojaArriba(estado)
     ModalBottomSheet(
         onDismissRequest = onCancelar,
         sheetState = estado,
@@ -235,7 +234,7 @@ internal fun HojaIngreso(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconoPaso(Paso.INGRESO, arriba = arriba, tamano = 48.dp)
+                IconoPaso(Paso.INGRESO, tamano = 48.dp)
                 Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                     Text(preparacion.nombre, style = MaterialTheme.typography.titleLarge)
                     Text(

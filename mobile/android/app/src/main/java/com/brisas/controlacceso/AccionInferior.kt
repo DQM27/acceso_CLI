@@ -1,18 +1,12 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -163,8 +157,8 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
             .fillMaxWidth()
             .height(ALTO_PILDORA_BUSQUEDA)
             .clip(FormaBusquedaBrisas)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, FormaBusquedaBrisas)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(ANCHO_BORDE_PIEZA, paletaActual.bordeSuave, FormaBusquedaBrisas)
             .clickable(onClick = busqueda::abrir)
             .semantics {
                 contentDescription = busqueda.ayuda
@@ -198,7 +192,7 @@ internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 /// gafete), así que va relleno del azul de los botones, con el ícono en
 /// blanco (2026-11-14, fase 2 de `docs/handoff-rediseno-movil-ux.md`): antes
 /// era del mismo vidrio que la barra y se perdía junto a ella. Al cambiar de
-/// acción, el ícono nuevo entra con rebote.
+/// acción cambia el ícono, sin animar.
 @Composable
 internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
     // Redondo, no la mitad de una pieza (pedido del usuario 2026-10-29): la
@@ -215,27 +209,13 @@ internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Mo
             },
         contentAlignment = Alignment.Center,
     ) {
-        // Por acción y no por ícono: rebota en cada cambio de sección, también
-        // entre dos con el mismo ícono (Proveedores y Correo).
-        AnimatedContent(
-            targetState = accion,
-            transitionSpec = {
-                (fadeIn(tween(MS_FUNDIDO_ENTRADA)) + scaleIn(ResorteBoton, initialScale = 0.4f)) togetherWith
-                    (fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.4f)) using null
-            },
-            label = "iconoAccion",
-        ) { mostrada ->
-            Icon(mostrada.icono, contentDescription = null, tint = ColorSobreRellenoBrisas, modifier = Modifier.size(24.dp))
-        }
+        // Sin rebote al cambiar de sección (2026-11-14): desde que es el
+        // mismo "+" en las cuatro, el rebote sólo distraía.
+        Icon(accion.icono, contentDescription = null, tint = ColorSobreRellenoBrisas, modifier = Modifier.size(24.dp))
     }
 }
 
-/// Opacidad del fondo de la barra de secciones y del botón redondo: casi
-/// opaco, para que el texto se lea sin desenfocar lo de atrás (ver
-/// `BarraSecciones`).
-internal const val ALFA_VELO = 0.94f
-
-/// Botón cuadrado con el mismo velo que la barra de secciones ([ALFA_VELO]);
+/// Botón cuadrado de la misma superficie y borde que la barra de secciones;
 /// [forma] dice de qué lado va el corte cuando forma pieza con otra.
 @Composable
 internal fun BotonRedondoVidrio(
@@ -251,8 +231,8 @@ internal fun BotonRedondoVidrio(
         modifier = modifier
             .size(tamano)
             .clip(forma)
-            .background(superficie.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
+            .background(superficie)
+            .border(ANCHO_BORDE_PIEZA, paletaActual.bordeSuave, forma)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = descripcion
@@ -370,7 +350,3 @@ internal fun BuscadorInferior(
     }
 }
 
-private val ResorteBoton = spring<Float>(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
-    stiffness = Spring.StiffnessMediumLow,
-)

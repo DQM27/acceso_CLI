@@ -55,7 +55,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -166,15 +165,16 @@ fun MenuCuenta(
                 onDismissRequest = ::cerrar,
                 properties = PopupProperties(focusable = true),
             ) {
-                // Como los menús de iOS 26: el panel brota del botón (crece
-                // desde su esquina, con un resorte que se pasa un poco) y al
-                // cerrarse se encoge de vuelta hacia él.
+                // El panel brota del botón (crece desde su esquina) y al
+                // cerrarse se encoge de vuelta hacia él: dice de dónde salió.
+                // Sin resorte ni filas escalonadas desde 2026-11-14 (fase 3):
+                // el guardia lo abre muchas veces por turno.
                 AnimatedVisibility(
                     visibleState = visible,
                     enter = fadeIn(tween(MS_SALIDA)) +
-                        scaleIn(ResorteMenu, initialScale = 0.25f, transformOrigin = OrigenEsquina),
+                        scaleIn(tween(MS_ENTRADA, easing = CurvaEntrada), initialScale = 0.25f, transformOrigin = OrigenEsquina),
                     exit = fadeOut(tween(MS_SALIDA)) +
-                        scaleOut(tween(MS_SALIDA + 40), targetScale = 0.25f, transformOrigin = OrigenEsquina),
+                        scaleOut(tween(MS_SALIDA), targetScale = 0.25f, transformOrigin = OrigenEsquina),
                     label = "panelCuenta",
                 ) {
                     PanelCuenta(
@@ -215,7 +215,6 @@ fun MenuCuenta(
 /// El contenido del menú, a la manera de iOS: tarjeta de esquinas grandes con
 /// sombra suave; en cada opción el texto a la izquierda y el ícono a la
 /// derecha; un separador grueso aparta "Cerrar sesión", en rojo, del resto.
-/// Las filas entran escalonadas, una tras otra.
 @Composable
 private fun PanelCuenta(
     sesion: UsuarioSesion,
@@ -236,7 +235,7 @@ private fun PanelCuenta(
         modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 230.dp),
     ) {
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
-            FilaEscalonada(indice = 0) {
+            Box {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -279,7 +278,7 @@ private fun PanelCuenta(
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 1) {
+            Box {
                 // Una ficha y no una persona con "+": ése es el ícono de
                 // "nuevo ingreso" en Proveedores y Correo.
                 OpcionMenu(texto = "Nuevo contratista", onClick = onNuevoContratista) {
@@ -291,12 +290,12 @@ private fun PanelCuenta(
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 2) {
+            Box {
                 // El menú queda abierto: se ve el cambio de tema en el acto.
                 SelectorTema(elegido = temaElegido, onElegir = onElegirTema)
             }
             SeparadorFino()
-            FilaEscalonada(indice = 3) {
+            Box {
                 // El manual de uso, sin internet (ver [PantallaAyuda]).
                 OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
                     Icon(
@@ -307,7 +306,7 @@ private fun PanelCuenta(
                 }
             }
             SeparadorFino()
-            FilaEscalonada(indice = 4) {
+            Box {
                 if (actualizacion != null) {
                     OpcionMenu(
                         texto = actualizacion.texto,
@@ -342,7 +341,7 @@ private fun PanelCuenta(
                     .height(6.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
-            FilaEscalonada(indice = 5) {
+            Box {
                 OpcionMenu(texto = "Cerrar sesión", color = MaterialTheme.colorScheme.error, onClick = onCerrarSesion) {
                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
@@ -451,25 +450,6 @@ private fun SeparadorFino() {
     )
 }
 
-/// Cada fila entra un poco después que la anterior, subiendo apenas y
-/// fundiéndose: el menú se "arma" en vez de aparecer de golpe.
-@Composable
-private fun FilaEscalonada(indice: Int, contenido: @Composable () -> Unit) {
-    val avance = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(indice * MS_ESCALON)
-        avance.animateTo(1f, tween(MS_FUNDIDO_ENTRADA))
-    }
-    Box(
-        modifier = Modifier.graphicsLayer {
-            alpha = avance.value
-            translationY = (1f - avance.value) * 8.dp.toPx()
-        },
-    ) {
-        contenido()
-    }
-}
-
 /// Sol (claro) o luna (oscuro), los íconos del escritorio ([IconosLucide]).
 /// Al cambiar, con rebote (pedido del usuario 2026-10-21): el nuevo entra
 /// creciendo y girando, se pasa un poco y vuelve; el que se va se encoge con
@@ -503,14 +483,6 @@ private val ALTO_BOTON_CUENTA = TAMANO_BOTON_CUADRADO + MARGEN_TACTIL_BOTON_CUAD
 
 /// El panel crece desde la esquina superior derecha, donde está el botón.
 private val OrigenEsquina = TransformOrigin(1f, 0f)
-
-private const val MS_ESCALON = 35L
-
-/// Resorte del panel al brotar: rápido y con un rebote corto.
-private val ResorteMenu = spring<Float>(
-    dampingRatio = 0.7f,
-    stiffness = Spring.StiffnessMedium,
-)
 
 /// Puntito sobre la inicial: late unas veces al aparecer (llama la atención
 /// una vez) y queda fijo. Si el sistema tiene las animaciones apagadas, las

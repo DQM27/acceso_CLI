@@ -393,7 +393,7 @@ fun FilaPildoras(
             val activo = indice == seleccionado
             val colorTexto by animateColorAsState(
                 targetValue = if (activo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+                animationSpec = tween(MS_FUNDIDO_ENTRADA),
                 label = "textoPildora",
             )
             Box(
@@ -423,7 +423,6 @@ fun FilaPildoras(
     }
 }
 
-private const val DURACION_FUNDIDO_PILDORA_MS = 300
 
 /// Lado visible de [BotonIconoCuadradoBrisas]: 36dp y no 40 para que la barra
 /// de arriba ocupe menos (pedido del usuario 2026-10-29).

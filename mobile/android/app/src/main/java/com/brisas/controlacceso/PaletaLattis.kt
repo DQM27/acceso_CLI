@@ -35,9 +35,6 @@ internal class Paleta(
     val textoSecundario: Color,
     val borde: Color,
     val bordeSuave: Color,
-    /// Contorno de la barra de secciones, la píldora de búsqueda y el botón
-    /// redondo, de [ANCHO_BORDE_VIDRIO].
-    val bordeVidrio: Color,
     /// Acento general, fuera de las secciones (login, avisos, ayuda).
     val acento: Color,
     val acentoSuave: Color,
@@ -108,7 +105,6 @@ internal val PaletaDia = Paleta(
     textoSecundario = Color(0xFF4B5563),
     borde = Color(0xFF667085),
     bordeSuave = Color(0xFFD0D5DD),
-    bordeVidrio = Color(0xFF667085).copy(alpha = 0.25f),
     acento = Color(0xFF1D4ED8),
     acentoSuave = Color(0xFFE0E7FF),
     acentoInverso = Color(0xFF6EA8FF),
@@ -152,7 +148,6 @@ internal val PaletaNoche = Paleta(
     textoSecundario = Color(0xFFA1A1AA),
     borde = Color(0xFF48484F),
     bordeSuave = Color(0xFF2E2E35),
-    bordeVidrio = Color(0xFFFFFFFF).copy(alpha = 0.22f),
     acento = Color(0xFF6EA8FF),
     acentoSuave = Color(0xFF1E2A40),
     acentoInverso = Color(0xFF2959AA),
@@ -182,8 +177,11 @@ internal val PaletaNoche = Paleta(
     porCorreo = Color(0xFFB79CFF),
 )
 
-/// Ancho del contorno [Paleta.bordeVidrio].
-internal val ANCHO_BORDE_VIDRIO = 1.dp
+/// Contorno de las piezas de abajo (barra de secciones, píldora de búsqueda,
+/// botón de cerrar la búsqueda), en [Paleta.bordeSuave]: opacas desde
+/// 2026-11-14 (fase 3 de `docs/handoff-rediseno-movil-ux.md`); el velo al
+/// 94 % no dejaba ver nada útil de lo que pasaba detrás.
+internal val ANCHO_BORDE_PIEZA = 1.dp
 
 /// La paleta del tema elegido en la app ([temaActual]), no sólo el del sistema.
 internal val paletaActual: Paleta

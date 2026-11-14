@@ -48,10 +48,10 @@ import androidx.compose.runtime.getValue
 /// opciones. Más baja que la `NavigationBar` de Material 3 (80dp) y separada
 /// de los bordes.
 ///
-/// - El fondo: un velo casi opaco del color de la superficie ([ALFA_VELO]).
-///   Sin desenfoque a propósito (Haze, 2026-10-22): redibujar el contenido
-///   desenfocado detrás de la barra en cada frame duplicó el render de
-///   Activos (p90 de 5,5 a 10,1 ms) y subió los frames trabados.
+/// - El fondo: la superficie, opaca, con el borde suave (era un velo al 94 %,
+///   hasta 2026-11-14). Sin desenfoque a propósito (Haze, 2026-10-22):
+///   redibujar el contenido desenfocado detrás de la barra en cada frame
+///   duplicó el render de Activos (p90 de 5,5 a 10,1 ms).
 /// - La pestaña elegida: una píldora gris suave que acompaña al carrusel de
 ///   secciones ([posicion], en páginas: se mueve con el dedo al deslizar y
 ///   con la animación al tocar); su ícono y su nombre van en el acento de la
@@ -86,8 +86,8 @@ internal fun BarraSecciones(
         modifier = modifier
             .height(ALTO_BARRA_SECCIONES)
             .clip(forma)
-            .background(superficie.copy(alpha = ALFA_VELO))
-            .border(ANCHO_BORDE_VIDRIO, paletaActual.bordeVidrio, forma)
+            .background(superficie)
+            .border(ANCHO_BORDE_PIEZA, paletaActual.bordeSuave, forma)
             .padding(MARGEN_INTERIOR_BARRA)
             .drawBehind {
                 val cantidad = SECCIONES_VISIBLES.size

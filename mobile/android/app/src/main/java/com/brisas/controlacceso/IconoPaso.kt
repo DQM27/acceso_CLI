@@ -1,9 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,17 +10,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,7 +33,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -52,38 +43,6 @@ import androidx.compose.runtime.setValue
 internal enum class Paso(val sentido: Float) {
     INGRESO(1f),
     SALIDA(-1f),
-}
-
-/// Lo que dura la entrada de la flecha. La hoja de ingreso abre el teclado
-/// recién cuando termina: las dos cosas a la vez se trababan.
-internal const val MS_FLECHA = 320
-
-/// `true` desde que la hoja terminó de subir (y ya no vuelve a `false`). La
-/// flecha arranca recién ahí: mientras la hoja sube, el ojo sigue a la hoja y
-/// la flecha pasaba sin que nadie la viera.
-///
-/// `currentValue` pasa a `Expanded` a mitad de camino (cuando la hoja ya está
-/// más cerca de arriba que de abajo), no al detenerse: por eso, después, se
-/// espera cuadro a cuadro a que su posición deje de cambiar. Es sólo el
-/// último tramo de la subida y no compone nada.
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun rememberHojaArriba(estado: SheetState): Boolean {
-    var arriba by remember { mutableStateOf(false) }
-    LaunchedEffect(estado) {
-        snapshotFlow { estado.currentValue }.first { it == SheetValue.Expanded }
-        var anterior = Float.NaN
-        // Con tope (medio segundo a 60 cuadros): si la posición no se puede
-        // leer, la flecha igual entra.
-        for (cuadro in 0 until 30) {
-            val actual = runCatching { estado.requireOffset() }.getOrDefault(Float.NaN)
-            if (actual == anterior) break
-            anterior = actual
-            withFrameNanos { }
-        }
-        arriba = true
-    }
-    return arriba
 }
 
 /// `true` cuando ya no hay teclado a la vista: recién entonces se muestra una
@@ -112,24 +71,12 @@ private const val MS_ESPERA_TECLADO = 600L
 /// "Persona con ingreso activo" (se escaneó a alguien que ya estaba adentro):
 /// una señal de advertencia de tránsito, triángulo amarillo con borde y "!"
 /// negros (pedido del usuario 2026-10-27: el triángulo ámbar sobre un círculo
-/// pálido no se leía como alerta). Cuando la hoja ya está [arriba] entra con
-/// un rebote, una sola vez. Se dibuja a mano en un `Canvas` y el rebote es
-/// sólo escala en la fase de dibujo: no vuelve a medir ni a componer.
+/// pálido no se leía como alerta). Quieta desde 2026-11-14 (fase 3 de
+/// `docs/handoff-rediseno-movil-ux.md`): la señal se entiende sin rebote.
+/// Se dibuja a mano en un `Canvas`.
 @Composable
-internal fun SenalAdvertencia(arriba: Boolean, modifier: Modifier = Modifier) {
-    val escala = remember { Animatable(0.6f) }
-    LaunchedEffect(arriba) {
-        if (!arriba) return@LaunchedEffect
-        escala.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow))
-    }
-    Canvas(
-        modifier = modifier
-            .size(width = 64.dp, height = 56.dp)
-            .graphicsLayer {
-                scaleX = escala.value
-                scaleY = escala.value
-            },
-    ) {
+internal fun SenalAdvertencia(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(width = 64.dp, height = 56.dp)) {
         dibujarSenal()
     }
 }
@@ -167,31 +114,18 @@ private fun DrawScope.dibujarSenal() {
     drawCircle(NegroSenal, radius = ancho * 0.05f, center = Offset(ancho / 2, alto * 0.76f))
 }
 
-/// El ícono redondo de las hojas de ingreso y de salida. La flecha entra
-/// deslizándose en el sentido del [paso] una sola vez, cuando la hoja ya está
-/// [arriba] (nunca en bucle: el operador la ve cientos de veces por turno).
-/// Al confirmar no hace nada: la hoja se cierra en el acto y una animación de
-/// cierre no se llegaba a ver (se probó y se quitó, 2026-10-27). Quieta
-/// también se entiende: la de ingreso apunta a la puerta, la de salida se
-/// aleja de ella (el ícono de salida va en espejo para apuntar a la
-/// izquierda). Sólo se mueve en la fase de dibujo: no vuelve a medir ni a
-/// componer.
+/// El ícono redondo de las hojas de ingreso y de salida: la de ingreso
+/// apunta a la puerta, la de salida se aleja de ella (el ícono de salida va
+/// en espejo para apuntar a la izquierda). Quieto desde 2026-11-14 (fase 3 de
+/// `docs/handoff-rediseno-movil-ux.md`): la flecha entraba deslizándose
+/// cuando la hoja terminaba de subir, y para eso había que esperar cuadro a
+/// cuadro a que se asentara; el operador la ve cientos de veces por turno.
 @Composable
 internal fun IconoPaso(
     paso: Paso,
-    arriba: Boolean,
     modifier: Modifier = Modifier,
     tamano: Dp = 56.dp,
 ) {
-    // En unidades de recorrido: -1 = atrás de su lugar, 0 = en su lugar.
-    val desplazamiento = remember { Animatable(-paso.sentido) }
-    val opacidad = remember { Animatable(0f) }
-    LaunchedEffect(arriba) {
-        if (!arriba) return@LaunchedEffect
-        launch { opacidad.animateTo(1f, tween(MS_FUNDIDO_ENTRADA)) }
-        desplazamiento.animateTo(0f, tween(MS_FLECHA, easing = CurvaEntrada))
-    }
-    val recorrido = with(LocalDensity.current) { 14.dp.toPx() }
     Box(
         modifier = modifier
             .size(tamano)
@@ -204,8 +138,6 @@ internal fun IconoPaso(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.graphicsLayer {
-                translationX = desplazamiento.value * recorrido
-                alpha = opacidad.value
                 if (paso == Paso.SALIDA) scaleX = -1f
             },
         )
