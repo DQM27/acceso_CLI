@@ -20,12 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -322,8 +324,12 @@ internal fun DialogoRegistrarSalida(
     accion: String = "Registrar salida",
     aviso: String? = null,
 ) {
-    // Con el teclado del buscador todavía bajando, la hoja espera.
-    if (!rememberTecladoCerrado()) return
+    // Si se eligió desde el buscador, su teclado baja mientras la hoja sube:
+    // no se lo espera (ver [rememberAltoTecladoAlAbrir]).
+    if (rememberAltoTecladoAlAbrir() > 0) {
+        val teclado = LocalSoftwareKeyboardController.current
+        LaunchedEffect(Unit) { teclado?.hide() }
+    }
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
     var confirmado by remember { mutableStateOf(false) }
@@ -334,7 +340,8 @@ internal fun DialogoRegistrarSalida(
         onDismissRequest = onDismiss,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
-        // Sin el lugar del teclado: no tiene campos.
+        // Sin el lugar del teclado: no tiene campos, y así tampoco la mueve
+        // el del buscador mientras termina de bajar.
         contentWindowInsets = { WindowInsets.navigationBars },
     ) {
         Column(

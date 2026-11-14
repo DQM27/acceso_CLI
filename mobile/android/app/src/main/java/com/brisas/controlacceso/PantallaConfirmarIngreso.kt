@@ -20,7 +20,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -51,11 +53,15 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.SheetValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import android.view.WindowManager
 import android.content.Context
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -128,13 +134,51 @@ internal fun HojaIngreso(
     onCerrada: () -> Unit,
 ) {
     RegistrarPantalla("confirmar_ingreso")
-    // Con el teclado del buscador todavía bajando, la hoja espera.
-    if (!rememberTecladoCerrado()) return
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val teclado = LocalSoftwareKeyboardController.current
     val hapticos = rememberHapticos()
+
+    // El teclado del gafete se abre solo. Para que la hoja no suba en dos
+    // tiempos (a su alto y otra vez empujada por el teclado, 2026-10-27),
+    // sube de una vez con el lugar del teclado ya reservado abajo, con el
+    // alto que tuvo la vez anterior ([AltoTeclado]); el teclado después
+    // ocupa ese hueco sin mover nada. La primera vez no se sabe el alto:
+    // el teclado se pide enseguida y sube junto con la hoja.
+    //
+    // Eligiendo desde el buscador, su teclado sigue a la vista
+    // ([tecladoDelBuscador]) y la hoja no lo espera (2026-11-14: esperaba a
+    // que bajara para después volver a subirlo). Si va a pedir el gafete, sube
+    // ya con el hueco reservado y toma el foco enseguida, así el teclado no
+    // llega a irse; si no, sube sin mirarlo mientras termina de bajar
+    // ([tecladoAjeno]).
+    val contexto = LocalContext.current
+    val densidad = LocalDensity.current
+    val tecladoDelBuscador = rememberAltoTecladoAlAbrir()
+    val abriraTeclado = remember { preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty() }
+    val reservaTeclado = remember {
+        if (abriraTeclado) AltoTeclado.leer(contexto).takeIf { it > 0 } ?: tecladoDelBuscador else 0
+    }
+    // Lugar fijo (px) debajo de la hoja, en vez del alto del teclado cuadro a
+    // cuadro: al abrir, el reservado; al cerrar, el que tenía el teclado.
+    var huecoFijo by remember { mutableIntStateOf(reservaTeclado) }
+    var tecladoAjeno by remember { mutableStateOf(tecladoDelBuscador > 0 && !abriraTeclado) }
+    var cerrando by remember { mutableStateOf(false) }
+    // Alto del teclado ahora, visto desde la ventana de la hoja. No es estado
+    // de Compose: sólo se lee al cerrar.
+    val altoTecladoAhora = remember { intArrayOf(0) }
+    if (tecladoAjeno) {
+        LaunchedEffect(Unit) {
+            teclado?.hide()
+            delay(MS_CIERRE_TECLADO_AJENO)
+            tecladoAjeno = false
+        }
+    }
     LaunchedEffect(abierta) {
         if (abierta) return@LaunchedEffect
+        // La hoja baja entera, con el hueco del teclado fijo: si se achicara
+        // cuadro a cuadro junto con el teclado mientras baja, daba tirones.
+        cerrando = true
+        huecoFijo = maxOf(huecoFijo, altoTecladoAhora[0])
         teclado?.hide()
         estado.hide()
         onCerrada()
@@ -157,30 +201,32 @@ internal fun HojaIngreso(
         if (puedeRegistrar) onRegistrar(campos.medio, campos.gafeteTexto, campos.placaTexto)
     }
 
-    // El teclado del gafete se abre solo. Para que la hoja no suba en dos
-    // tiempos (a su alto y otra vez empujada por el teclado, 2026-10-27),
-    // sube de una vez con el lugar del teclado ya reservado abajo, con el
-    // alto que tuvo la vez anterior ([AltoTeclado]); el teclado después
-    // ocupa ese hueco sin mover nada. La primera vez no se sabe el alto:
-    // el teclado se pide enseguida y sube junto con la hoja.
-    val contexto = LocalContext.current
-    val densidad = LocalDensity.current
-    val abriraTeclado = remember { preparacion.requiereGafete && !campos.sinGafete && campos.gafeteTexto.isEmpty() }
-    val reservaTeclado = remember { if (abriraTeclado) AltoTeclado.leer(contexto) else 0 }
-    var reservar by remember { mutableStateOf(reservaTeclado > 0) }
-
     ModalBottomSheet(
         onDismissRequest = onCancelar,
         sheetState = estado,
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = {
-            if (reservar) {
-                BottomSheetDefaults.windowInsets.union(WindowInsets(bottom = reservaTeclado))
-            } else {
-                BottomSheetDefaults.windowInsets
+            when {
+                huecoFijo > 0 -> BottomSheetDefaults.windowInsets.union(WindowInsets(bottom = huecoFijo))
+                tecladoAjeno -> WindowInsets.navigationBars
+                else -> BottomSheetDefaults.windowInsets
             }
         },
     ) {
+        // El teclado que venía del buscador se queda para el gafete: sin esto
+        // el sistema lo esconde cuando la ventana de la hoja toma el foco, y
+        // hay que volver a subirlo. Si no llegara a aplicarse, sólo baja y
+        // vuelve; la hoja no se mueve, tiene el hueco reservado.
+        if (tecladoDelBuscador > 0 && abriraTeclado) {
+            val ventana = (LocalView.current.parent as? DialogWindowProvider)?.window
+            DisposableEffect(ventana) {
+                ventana?.setSoftInputMode(
+                    (ventana.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE.inv()) or
+                        WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED,
+                )
+                onDispose { }
+            }
+        }
         // Acá adentro y no afuera: la hoja es su propia ventana, y el teclado
         // se abre para ella; la ventana de la app no lo ve y el alto no se
         // guardaba nunca.
@@ -188,29 +234,32 @@ internal fun HojaIngreso(
         val imeFinal = WindowInsets.imeAnimationTarget
         LaunchedEffect(ime, imeFinal) {
             snapshotFlow { ime.getBottom(densidad) to imeFinal.getBottom(densidad) }.collect { (alto, altoFinal) ->
+                altoTecladoAhora[0] = alto
                 // Terminó de abrirse: de acá en más manda el teclado de verdad.
-                if (alto > 0 && alto == altoFinal) {
+                // No con el del buscador, que es de otra ventana y se va.
+                if (alto > 0 && alto == altoFinal && !tecladoAjeno && !cerrando) {
                     AltoTeclado.guardar(contexto, alto)
-                    reservar = false
+                    huecoFijo = 0
                 }
             }
         }
         val focoGafete = remember { FocusRequester() }
         LaunchedEffect(Unit) {
             if (!abriraTeclado) return@LaunchedEffect
-            if (reservaTeclado > 0) {
+            if (reservaTeclado > 0 && tecladoDelBuscador == 0) {
                 // Con el lugar reservado: primero la hoja, después el teclado.
                 snapshotFlow { estado.currentValue }.first { it == SheetValue.Expanded }
             } else {
                 // Un cuadro: el campo ya tiene que estar en pantalla para
-                // poder tomar el foco.
+                // poder tomar el foco. Con el teclado del buscador a la vista
+                // no se espera a la hoja: se queda para el gafete.
                 withFrameNanos { }
             }
             runCatching { focoGafete.requestFocus() }
             // Si el teclado no llega a abrirse (uno físico, por ejemplo), el
             // hueco no se queda para siempre.
             delay(MS_ESPERA_TECLADO)
-            reservar = false
+            if (!cerrando) huecoFijo = 0
         }
         // Si lo de abajo no entra (nombre largo, vehículo con placa y el
         // teclado abierto), la hoja se corre sola hasta el fondo: los botones
