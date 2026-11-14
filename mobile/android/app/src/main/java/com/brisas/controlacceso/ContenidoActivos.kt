@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonSearch
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -59,7 +56,7 @@ internal const val AYUDA_BUSQUEDA_ACTIVOS = "Nombre, cédula o gafete"
 /// ingreso empieza por la cámara.
 @Composable
 internal fun AccionActivos(onEscanearCedula: () -> Unit) {
-    AccionPrincipal(Icons.Default.Add, "Nuevo ingreso: escanear documento", onEscanearCedula)
+    AccionPrincipal(IconosLucide.Mas, "Nuevo ingreso: escanear documento", onEscanearCedula)
 }
 
 /// Fallas de consulta, el resultado de una salida por gafetes y el
@@ -95,8 +92,8 @@ internal fun ContenidoListaActivos(
     ListaActivos(
         activos = activos,
         cargando = cargando,
-        tituloVacio = "Nadie adentro por ahora",
-        detalleVacio = "Cuando alguien ingrese, aparece aquí.",
+        tituloVacio = "Ningún contratista adentro",
+        detalleVacio = DETALLE_VACIO_INGRESO,
         onClick = onElegirActivo,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
@@ -119,7 +116,7 @@ internal fun ResultadosIngreso(
     onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre, una cédula o un gafete.", Icons.Default.PersonSearch)
+        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre, una cédula o un gafete.", IconosLucide.BuscarPersona)
         return
     }
     if (resultadosBusqueda.isEmpty() && !cargando) {
@@ -128,7 +125,7 @@ internal fun ResultadosIngreso(
             EstadoVacio(
                 "No está registrado",
                 "Regístrelo con su carnet PRAIND y enseguida se le da el ingreso.",
-                Icons.Default.PersonSearch,
+                IconosLucide.BuscarPersona,
             )
         }
         return
@@ -142,7 +139,7 @@ internal fun ResultadosIngreso(
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = PADDING_RESULTADOS,
-        iconoVacio = Icons.Default.PersonSearch,
+        iconoVacio = IconosLucide.BuscarPersona,
     ) { contratista ->
         FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
     }

@@ -20,8 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -84,7 +82,7 @@ internal fun <T> ListaConEstados(
     contentPadding: PaddingValues = PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     // El del mensaje sin filas: el de la sección (cajas en Proveedores, sobre
     // en Correo, insignia en KOF), como el ícono de su pestaña.
-    iconoVacio: ImageVector = Icons.Default.Groups,
+    iconoVacio: ImageVector = IconosLucide.Personas,
     // Un renglón chico arriba de las filas que dice cuántas hay y qué pasa al
     // tocarlas (ver [pistaListaAdentro]). Sólo en la lista de la pantalla, no
     // en los resultados del buscador.
@@ -150,6 +148,11 @@ internal fun <T> ListaConEstados(
     }
 }
 
+/// Lo que dice una lista de gente adentro cuando no hay nadie: lo mismo en
+/// Contratistas, Proveedores y Correo (2026-11-14; antes cada una a su
+/// manera). KOF dice "Para entregar uno, toque el + de abajo.", su acción.
+internal const val DETALLE_VACIO_INGRESO = "Para registrar un ingreso, toque el + de abajo."
+
 /// Clave del renglón de [ListaConEstados] `pista`: no choca con las de las
 /// filas, que son números o textos con prefijo (`local-`, `remota-`).
 private const val CLAVE_PISTA = "pista-lista"
@@ -212,7 +215,7 @@ private fun BarraMarcadora(ancho: Float, alto: androidx.compose.ui.unit.Dp) {
 /// Con `verticalScroll` aunque no haya nada que desplazar: sin un hijo
 /// desplazable, tirar hacia abajo para sincronizar no responde.
 @Composable
-internal fun EstadoVacio(titulo: String, detalle: String, icono: ImageVector = Icons.Default.Groups) {
+internal fun EstadoVacio(titulo: String, detalle: String, icono: ImageVector = IconosLucide.Personas) {
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -105,7 +105,7 @@ android {
         release {
             isMinifyEnabled = true
             // Quita del APK los recursos que el código ya no referencia
-            // (íconos de material-icons-extended, recursos de librerías). Corre
+            // (recursos de librerías). Corre
             // después de R8, así que sólo saca lo que de verdad nadie usa.
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -159,8 +159,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.material:material-icons-extended")
+    // Sin material-icons-core/-extended (2026-11-14): todos los íconos son los
+    // Lucide del escritorio, en IconosLucide.kt (ver
+    // docs/handoff-rediseno-movil-ux.md, fase 2).
     implementation("androidx.compose.ui:ui-tooling-preview")
     // 1.6: CameraX corre sobre CameraPipe, el mismo motor de la cámara de los
     // Pixel (2026-10-27, para bajar lo que tarda en abrir; se mide con

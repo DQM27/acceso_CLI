@@ -1,8 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.NotificationImportant
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -26,7 +23,7 @@ internal fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
     BadgedBox(badge = { if (contador != null) Badge { Text(contador) } }) {
         BotonIconoCuadradoBrisas(onClick = onClick) {
             Icon(
-                if (hayEmergencia) Icons.Default.NotificationImportant else Icons.Default.Notifications,
+                if (hayEmergencia) IconosLucide.CampanaUrgente else IconosLucide.Campana,
                 contentDescription = if (contador == null) "Avisos" else "Avisos, ${bandeja?.noLeidos} sin leer",
                 tint = if (hayEmergencia) MaterialTheme.colorScheme.error else LocalContentColor.current,
             )

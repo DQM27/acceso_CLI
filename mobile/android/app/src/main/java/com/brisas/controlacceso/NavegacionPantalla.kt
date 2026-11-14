@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,7 +44,7 @@ internal fun EncabezadoPantalla(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         BotonDiscretoBrisas(onClick = onVolver, modifier = Modifier.offset(x = (-12).dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(IconosLucide.Volver, contentDescription = null, modifier = Modifier.size(16.dp))
             Text("Volver")
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

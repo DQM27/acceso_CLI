@@ -32,12 +32,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -175,7 +169,7 @@ internal fun AvisoPorteria(texto: String?) {
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
+            Icon(IconosLucide.Error, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
             Text(ultimo, color = tinte, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -346,7 +340,7 @@ internal fun CampoClaveAgrupado(
         alFinal = {
             IconButton(onClick = { visible = !visible }) {
                 Icon(
-                    if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    if (visible) IconosLucide.Ocultar else IconosLucide.Ver,
                     contentDescription = if (visible) "Ocultar contraseña" else "Mostrar contraseña",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -380,7 +374,7 @@ internal fun RequisitoPorteria(texto: String, cumplido: Boolean) {
     ) {
         val color = if (cumplido) ColorExitoBrisas else MaterialTheme.colorScheme.onSurfaceVariant
         Icon(
-            if (cumplido) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            if (cumplido) IconosLucide.Confirmado else IconosLucide.Pendiente,
             contentDescription = null,
             tint = color,
             modifier = Modifier.size(18.dp),

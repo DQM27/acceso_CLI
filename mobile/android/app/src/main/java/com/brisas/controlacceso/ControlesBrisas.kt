@@ -29,11 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -158,7 +153,7 @@ internal fun CampoBusquedaBrisas(
             visualTransformation = VisualTransformation.None,
             interactionSource = interaccion,
             placeholder = { Text(ayuda, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = { Icon(IconosLucide.Lupa, contentDescription = null) },
             trailingIcon = if (valor.isEmpty()) {
                 null
             } else {
@@ -175,7 +170,7 @@ internal fun CampoBusquedaBrisas(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.Cancel,
+                            IconosLucide.BorrarTexto,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
@@ -507,7 +502,7 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+        Icon(IconosLucide.Cerrar, contentDescription = "Cancelar", tint = Color.White)
     }
 }
 
@@ -531,7 +526,7 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(IconosLucide.Lapiz, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
 }

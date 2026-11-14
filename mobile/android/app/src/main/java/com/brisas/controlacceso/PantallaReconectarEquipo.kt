@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -97,7 +94,7 @@ fun PantallaReconectarEquipo(
                 onClick = { if (paso is PasoReconexion.Confirmar) viewModel.volverAlCodigo() else onVolver() },
                 modifier = Modifier.offset(x = (-12).dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(IconosLucide.Volver, contentDescription = null, modifier = Modifier.size(16.dp))
                 Text("Volver")
             }
         }
@@ -194,7 +191,7 @@ fun FranjaEquipoRetirado(onReconectar: () -> Unit, modifier: Modifier = Modifier
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(IconosLucide.Advertencia, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Text(
                 "Este teléfono fue retirado en el panel.",

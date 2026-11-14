@@ -23,9 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -86,7 +83,7 @@ fun PantallaGafetesProvisionales(
         }
     }
 
-    AccionPrincipal(Icons.Default.Add, "Entregar un gafete provisional", onClick = { buscandoEncargado = true })
+    AccionPrincipal(IconosLucide.Mas, "Entregar un gafete provisional", onClick = { buscandoEncargado = true })
     // Sólo con gafetes prestados: si no, la única búsqueda es la del "+".
     BusquedaPrincipal(
         ayuda = "Nombre, código o gafete",
@@ -243,9 +240,9 @@ internal fun FilaGafeteProvisionalActiva.coincideCon(busqueda: String): Boolean 
 private fun ResultadosEncargado(texto: String, resultados: List<EncargadoRuta>, onElegir: (EncargadoRuta) -> Unit) {
     if (resultados.isEmpty()) {
         if (texto.isBlank()) {
-            EstadoVacio("¿A quién se le entrega?", "Escriba el nombre o el código de empleado.", Icons.Default.PersonSearch)
+            EstadoVacio("¿A quién se le entrega?", "Escriba el nombre o el código de empleado.", IconosLucide.BuscarPersona)
         } else {
-            EstadoVacio("Sin resultados", "Pruebe con otro nombre o código.", Icons.Default.PersonSearch)
+            EstadoVacio("Sin resultados", "Pruebe con otro nombre o código.", IconosLucide.BuscarPersona)
         }
         return
     }

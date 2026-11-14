@@ -13,10 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -109,7 +105,7 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.DocumentScanner, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(IconosLucide.EscanearDocumento, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         }
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -117,7 +113,7 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
             Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            IconosLucide.FlechaDerecha,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
@@ -159,7 +155,7 @@ internal fun FilaSelector(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            IconosLucide.FlechaDerecha,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -229,7 +225,7 @@ internal fun FilaCrear(texto: String, etiqueta: String = "Crear «$texto»", onC
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Icon(IconosLucide.MasEnCirculo, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(12.dp))
         Text(
             etiqueta,

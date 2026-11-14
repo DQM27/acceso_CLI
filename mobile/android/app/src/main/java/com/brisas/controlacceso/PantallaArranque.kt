@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -41,7 +39,7 @@ internal fun PantallaFalloArranque(mensaje: String, onReintentar: () -> Unit) {
     HojaPorteria(
         encabezado = { compacto ->
             IconoPorteria(
-                Icons.Outlined.ErrorOutline,
+                IconosLucide.Error,
                 compacto,
                 fondo = MaterialTheme.colorScheme.errorContainer,
                 tinte = MaterialTheme.colorScheme.error,

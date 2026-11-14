@@ -18,10 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,8 +35,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -113,7 +107,7 @@ fun PantallaAvisos(
         ) { mostrada ->
             if (mostrada == 0) {
                 if (estado.grupos.isEmpty()) {
-                    EstadoVacio("Todo al día", "Aquí verá los avisos que mande la administración.", Icons.Default.NotificationsNone)
+                    EstadoVacio("Todo al día", "Aquí verá los avisos que mande la administración.", IconosLucide.Campana)
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -141,7 +135,7 @@ fun PantallaAvisos(
                     }
                 }
             } else if (estado.archivados.isEmpty()) {
-                EstadoVacio("Sin archivados", "Los avisos que archive se guardan aquí hasta que se borren solos.", Icons.Default.Archive)
+                EstadoVacio("Sin archivados", "Los avisos que archive se guardan aquí hasta que se borren solos.", IconosLucide.Archivar)
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -234,7 +228,7 @@ private fun FilaAviso(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        if (aviso.emergente) Icons.Default.Warning else Icons.Default.Notifications,
+                        if (aviso.emergente) IconosLucide.Advertencia else IconosLucide.Campana,
                         contentDescription = if (aviso.emergente) "Emergencia" else null,
                         tint = if (aviso.emergente) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
@@ -283,9 +277,9 @@ private fun FilaAviso(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (onArchivar != null) {
-                        PildoraAccion("Archivar", Icons.Default.Archive, MaterialTheme.colorScheme.onSurface, onArchivar)
+                        PildoraAccion("Archivar", IconosLucide.Archivar, MaterialTheme.colorScheme.onSurface, onArchivar)
                     }
-                    PildoraAccion("Borrar", Icons.Default.DeleteOutline, error, onBorrar)
+                    PildoraAccion("Borrar", IconosLucide.Borrar, error, onBorrar)
                 }
             }
         }
@@ -322,7 +316,7 @@ fun FranjaEmergencia(aviso: AvisoBandeja, onAbrir: () -> Unit, modifier: Modifie
         modifier = modifier.fillMaxWidth().clickable(onClick = onAbrir),
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(IconosLucide.Advertencia, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

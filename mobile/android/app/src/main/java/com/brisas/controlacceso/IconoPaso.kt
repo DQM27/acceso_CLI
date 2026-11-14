@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Login
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -134,7 +131,7 @@ internal fun IconoPaso(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (paso == Paso.INGRESO) Icons.AutoMirrored.Filled.Login else Icons.AutoMirrored.Filled.Logout,
+            if (paso == Paso.INGRESO) IconosLucide.Ingreso else IconosLucide.Salida,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.graphicsLayer {

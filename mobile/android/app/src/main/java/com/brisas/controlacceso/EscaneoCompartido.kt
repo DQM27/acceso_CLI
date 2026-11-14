@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -276,7 +274,7 @@ private fun PantallaPermisoCamara(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        IconoPorteria(Icons.Outlined.PhotoCamera)
+        IconoPorteria(IconosLucide.Camara)
         Text(
             "Permiso de cámara",
             style = MaterialTheme.typography.titleLarge,

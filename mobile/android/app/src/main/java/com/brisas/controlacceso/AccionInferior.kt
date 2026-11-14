@@ -24,9 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -168,7 +165,7 @@ internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Mo
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.Default.Search,
+            IconosLucide.Lupa,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
@@ -343,7 +340,7 @@ internal fun BuscadorInferior(
                     onClick = onCerrar,
                     forma = FormaPiezaFin,
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = null)
+                    Icon(IconosLucide.Cerrar, contentDescription = null)
                 }
             }
         }

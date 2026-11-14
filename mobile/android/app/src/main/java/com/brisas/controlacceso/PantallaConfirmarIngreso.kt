@@ -10,8 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -304,7 +302,7 @@ internal fun HojaIngreso(
                     // `top` por la etiqueta flotante del campo, que corre su
                     // marco hacia abajo: así el botón queda a la par del marco.
                     BotonCuadradoBordeBrisas(
-                        icono = Icons.Default.PhotoCamera,
+                        icono = IconosLucide.Camara,
                         descripcion = "Escanear placa",
                         onClick = onEscanearPlaca,
                         tamano = 56.dp,

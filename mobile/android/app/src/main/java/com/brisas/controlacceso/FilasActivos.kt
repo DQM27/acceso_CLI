@@ -32,8 +32,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -315,7 +313,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
                     // La misma flecha de la hoja de salida ([IconoPaso]),
                     // en espejo para que se aleje hacia la izquierda.
                     MarcaContratista.ADENTRO -> Icon(
-                        Icons.AutoMirrored.Filled.Logout,
+                        IconosLucide.Salida,
                         contentDescription = null,
                         tint = paleta.acento,
                         modifier = Modifier.size(24.dp).graphicsLayer { scaleX = -1f },

@@ -12,8 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Business
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -255,7 +253,7 @@ fun PantallaNuevoContratista(
                 vm.empresas.filter { textoEmpresa.isBlank() || rangosCoincidencia(it.nombre, textoEmpresa).isNotEmpty() }
             }
             if (coincidentes.isEmpty()) {
-                EstadoVacio("Sin resultados", "Pruebe con otro nombre. Las empresas nuevas se dan de alta en el panel.", Icons.Default.Business)
+                EstadoVacio("Sin resultados", "Pruebe con otro nombre. Las empresas nuevas se dan de alta en el panel.", IconosLucide.Empresa)
             } else {
                 LazyColumn(contentPadding = PADDING_RESULTADOS, verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(coincidentes, key = { it.id }) { empresa ->

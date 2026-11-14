@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -86,10 +81,10 @@ private fun IconoEstado(tipo: TipoEstado) {
     }
     Icon(
         when (tipo) {
-            TipoEstado.ERROR -> Icons.Default.ErrorOutline
-            TipoEstado.AVISO -> Icons.Default.Warning
-            TipoEstado.EXITO -> Icons.Default.CheckCircle
-            else -> Icons.Default.Info
+            TipoEstado.ERROR -> IconosLucide.Error
+            TipoEstado.AVISO -> IconosLucide.Advertencia
+            TipoEstado.EXITO -> IconosLucide.Confirmado
+            else -> IconosLucide.Informacion
         },
         contentDescription = null,
         modifier = Modifier.size(20.dp),

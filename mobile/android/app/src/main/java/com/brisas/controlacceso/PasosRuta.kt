@@ -15,9 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -79,7 +76,7 @@ private fun PasoEncabezado(numero: Int, titulo: String, completado: Boolean) {
         ) {
             if (completado) {
                 Icon(
-                    Icons.Default.Check,
+                    IconosLucide.Check,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(16.dp),
@@ -98,7 +95,7 @@ private fun PasoEncabezado(numero: Int, titulo: String, completado: Boolean) {
 
 @Composable
 private fun BotonCamaraCuadrado(onEscanear: () -> Unit) =
-    BotonCuadradoBordeBrisas(icono = Icons.Default.PhotoCamera, descripcion = "Escanear", onClick = onEscanear)
+    BotonCuadradoBordeBrisas(icono = IconosLucide.Camara, descripcion = "Escanear", onClick = onEscanear)
 
 /// Paso "Encargado" -- buscador real por nombre o código de empleado
 /// (pedido explícito del usuario, 2026-09-15: "que funcione de las dos

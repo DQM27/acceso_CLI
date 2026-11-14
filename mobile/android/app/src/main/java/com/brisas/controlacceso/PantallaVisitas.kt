@@ -17,10 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DocumentScanner
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -129,7 +125,7 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.weight(1f),
             )
-            BotonCuadrado(Icons.Default.DocumentScanner, "Escanear documento") { escaneando = true }
+            BotonCuadrado(IconosLucide.EscanearDocumento, "Escanear documento") { escaneando = true }
         }
 
         if (viewModel.verificacion == null) {
@@ -234,7 +230,7 @@ private fun Entrada(visita: VisitaParaEntrar, viewModel: VisitasViewModel, onEsc
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.weight(1f),
             )
-            BotonCuadrado(Icons.Default.PhotoCamera, "Escanear placa", onClick = onEscanearPlaca)
+            BotonCuadrado(IconosLucide.Camara, "Escanear placa", onClick = onEscanearPlaca)
         }
     }
     OutlinedTextField(
@@ -267,7 +263,7 @@ private fun Aviso(mensaje: String, informativo: Boolean, onOtraCedula: () -> Uni
         modifier = Modifier.fillMaxWidth().background(fondo, MaterialTheme.shapes.medium).padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(Icons.Default.Info, contentDescription = null, tint = texto)
+        Icon(IconosLucide.Informacion, contentDescription = null, tint = texto)
         Text(mensaje, style = MaterialTheme.typography.bodyLarge, color = texto)
     }
     BotonDiscretoBrisas(onClick = onOtraCedula, modifier = Modifier.fillMaxWidth()) {

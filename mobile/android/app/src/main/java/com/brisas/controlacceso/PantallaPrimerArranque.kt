@@ -21,10 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -119,10 +115,10 @@ fun PantallaPrimerArranque(
                 label = "iconoVinculacion",
             ) { actual ->
                 when (actual) {
-                    PasoVinculacion.CODIGO -> IconoPorteria(Icons.Outlined.QrCodeScanner, compacto)
-                    PasoVinculacion.SINCRONIZANDO -> IconoPorteria(Icons.Outlined.CloudSync, compacto)
+                    PasoVinculacion.CODIGO -> IconoPorteria(IconosLucide.EscanearQr, compacto)
+                    PasoVinculacion.SINCRONIZANDO -> IconoPorteria(IconosLucide.NubeSincronizando, compacto)
                     PasoVinculacion.LISTO -> IconoPorteria(
-                        Icons.Outlined.CheckCircle,
+                        IconosLucide.Confirmado,
                         compacto,
                         fondo = ColorExitoBrisas.copy(alpha = 0.16f),
                         tinte = ColorExitoBrisas,

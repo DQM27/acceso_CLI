@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CenterFocusWeak
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -107,10 +102,10 @@ private fun colorDeTono(tono: TonoEscaneo): Color = when (tono) {
 }
 
 private fun iconoDeTono(tono: TonoEscaneo): ImageVector = when (tono) {
-    TonoEscaneo.GUIA -> Icons.Default.CenterFocusWeak
-    TonoEscaneo.EXITO -> Icons.Default.CheckCircle
-    TonoEscaneo.ERROR -> Icons.Default.ErrorOutline
-    TonoEscaneo.ADVERTENCIA -> Icons.Default.Schedule
+    TonoEscaneo.GUIA -> IconosLucide.Encuadre
+    TonoEscaneo.EXITO -> IconosLucide.Confirmado
+    TonoEscaneo.ERROR -> IconosLucide.Error
+    TonoEscaneo.ADVERTENCIA -> IconosLucide.Reloj
 }
 
 private const val DURACION_FONDO_MS = 200

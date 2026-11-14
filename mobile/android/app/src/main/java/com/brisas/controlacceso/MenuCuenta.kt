@@ -21,12 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -283,7 +277,7 @@ private fun PanelCuenta(
                 // "nuevo ingreso" en Proveedores y Correo.
                 OpcionMenu(texto = "Nuevo contratista", onClick = onNuevoContratista) {
                     Icon(
-                        Icons.Default.Badge,
+                        IconosLucide.Ficha,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -299,7 +293,7 @@ private fun PanelCuenta(
                 // El manual de uso, sin internet (ver [PantallaAyuda]).
                 OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
                     Icon(
-                        Icons.AutoMirrored.Filled.HelpOutline,
+                        IconosLucide.Ayuda,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -321,7 +315,7 @@ private fun PanelCuenta(
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tinte)
                         } else {
                             Icon(
-                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) Icons.Default.Download else Icons.Default.Refresh,
+                                if (actualizacion.accion == AccionActualizacion.ACTUALIZAR) IconosLucide.Descargar else IconosLucide.Actualizar,
                                 contentDescription = null,
                                 tint = tinte,
                             )
@@ -343,7 +337,7 @@ private fun PanelCuenta(
             )
             Box {
                 OpcionMenu(texto = "Cerrar sesión", color = MaterialTheme.colorScheme.error, onClick = onCerrarSesion) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(IconosLucide.Salida, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
             }
         }

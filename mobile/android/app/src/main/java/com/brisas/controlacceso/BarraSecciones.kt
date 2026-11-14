@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -189,8 +186,8 @@ internal fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccio
     SeccionPrincipal.PROVEEDORES -> IconosLucide.Cajas
     SeccionPrincipal.CORREO -> IconosLucide.Sobre
     // Ocultas de la barra (en desarrollo).
-    SeccionPrincipal.RUTAS -> Icons.Default.Route
-    SeccionPrincipal.VISITAS -> Icons.Default.Event
+    SeccionPrincipal.RUTAS -> IconosLucide.Ruta
+    SeccionPrincipal.VISITAS -> IconosLucide.Calendario
 }
 
 /// Secciones de la pantalla principal, en el orden de la barra de abajo

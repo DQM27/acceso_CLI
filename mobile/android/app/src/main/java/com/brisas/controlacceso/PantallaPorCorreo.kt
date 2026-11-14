@@ -12,8 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,8 +63,8 @@ private fun ListaCorreoActivos(
         filas = filas,
         clave = { it.clave() },
         cargando = cargando,
-        tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
-        detalleVacio = if (busqueda.isBlank()) "Cuando alguien ingrese, aparece aquí." else "Pruebe con otro dato de la persona.",
+        tituloVacio = if (busqueda.isBlank()) "Nadie adentro por correo" else "Sin resultados",
+        detalleVacio = if (busqueda.isBlank()) DETALLE_VACIO_INGRESO else "Pruebe con otra cédula, nombre o motivo.",
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
         contentPadding = contentPadding,
@@ -230,7 +228,7 @@ fun PantallaPorCorreo(
 
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.Add, "Nuevo ingreso por correo", onClick = {
+                    AccionPrincipal(IconosLucide.Mas, "Nuevo ingreso por correo", onClick = {
                         mostrandoFormulario = true
                         escaneando = true
                         escaneoDirecto = true
