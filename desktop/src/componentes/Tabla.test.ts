@@ -6,7 +6,11 @@ import {
   compararFechaYMD,
   identidad,
   leerEstadoGuardado,
+  plegar,
+  plegarConCache,
+  tamanoCachePlegado,
   textoTooltip,
+  TOPE_CACHE_PLEGADO,
 } from "./Tabla.logica";
 import type { ITooltipParams } from "ag-grid-community";
 import type { EstadoGuardado } from "./Tabla.logica";
@@ -126,5 +130,31 @@ describe("compararFechaYMD", () => {
   it("un valor que no es fecha (ej. Activo) queda antes de cualquier fecha", () => {
     expect(compararFechaYMD(filtro, "Activo")).toBeLessThan(0);
     expect(compararFechaYMD(filtro, null)).toBeLessThan(0);
+  });
+});
+
+describe("plegar", () => {
+  it("quita tildes y pasa a mayúsculas, igual que PLEGAR de SQLite", () => {
+    expect(plegar("Sánchez Ureña")).toBe("SANCHEZ URENA");
+    expect(plegar("ÁLVAREZ")).toBe("ALVAREZ");
+  });
+});
+
+describe("plegarConCache", () => {
+  it("devuelve lo mismo que plegar", () => {
+    expect(plegarConCache("José Pablo Jiménez")).toBe(plegar("José Pablo Jiménez"));
+  });
+
+  it("recuerda cada texto una sola vez", () => {
+    const antes = tamanoCachePlegado();
+    plegarConCache("texto único de prueba á");
+    plegarConCache("texto único de prueba á");
+    expect(tamanoCachePlegado()).toBe(antes + 1);
+  });
+
+  it("al llegar al tope se vacía en vez de crecer sin límite", () => {
+    for (let i = 0; i <= TOPE_CACHE_PLEGADO; i++) plegarConCache(`fila ${i}`);
+    expect(tamanoCachePlegado()).toBeLessThanOrEqual(TOPE_CACHE_PLEGADO);
+    expect(plegarConCache("Peña")).toBe("PENA");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha.logica";
+import { PRESETS, desdeInicialHistorial, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha.logica";
 
 function rangoDe(etiqueta: string, hoy: Date) {
   const preset = PRESETS.find((p) => p.etiqueta === etiqueta);
@@ -42,8 +42,8 @@ describe("PRESETS de SelectorRangoFecha", () => {
     });
   });
 
-  it("Últimos 7 días incluye hoy (6 días atrás + hoy = 7)", () => {
-    expect(rangoDe("Últimos 7 días", hoy)).toEqual({ desde: "2026-08-06", hasta: "2026-08-12" });
+  it("Últimos 7 días incluye hoy (6 días atrás + hoy = 7) y deja 'hasta' abierto", () => {
+    expect(rangoDe("Últimos 7 días", hoy)).toEqual({ desde: "2026-08-06", hasta: "" });
   });
 
   it("Últimos 30 días incluye hoy (29 días atrás + hoy = 30)", () => {
@@ -75,7 +75,7 @@ describe("etiquetaCortaRango (texto del botón)", () => {
   it("usa el nombre del acceso rápido cuando el rango coincide con uno", () => {
     expect(etiquetaCortaRango("2026-08-12", "2026-08-12", hoy)).toBe("Hoy");
     expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Mes");
-    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("7 días");
+    expect(etiquetaCortaRango("2026-08-06", "", hoy)).toBe("7 días");
   });
 
   it("si no coincide, muestra las fechas con año corto", () => {
@@ -85,7 +85,7 @@ describe("etiquetaCortaRango (texto del botón)", () => {
   });
 
   it("los accesos para anular el filtro se muestran por su nombre", () => {
-    // Período con que abre Historial: 6 meses atrás, `hasta` abierto.
+    // Acceso rápido de 6 meses, `hasta` abierto.
     expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("6 meses");
     expect(etiquetaCortaRango("", "", hoy)).toBe("Todo");
   });
@@ -94,11 +94,23 @@ describe("etiquetaCortaRango (texto del botón)", () => {
 describe("accesos para anular el filtro de fechas", () => {
   const hoy = new Date(2026, 7, 12);
 
-  it("Últimos 6 meses deja 'hasta' abierto, igual que el arranque de Historial", () => {
+  it("Últimos 6 meses deja 'hasta' abierto", () => {
     expect(rangoDe("Últimos 6 meses", hoy)).toEqual({ desde: "2026-02-12", hasta: "" });
   });
 
   it("Todo el historial deja los dos extremos abiertos", () => {
     expect(rangoDe("Todo el historial", hoy)).toEqual({ desde: "", hasta: "" });
+  });
+});
+
+describe("desdeInicialHistorial", () => {
+  it("es el mismo período que el atajo «Últimos 7 días», así el botón lo nombra al abrir", () => {
+    const hoy = new Date(2026, 7, 12);
+    expect(desdeInicialHistorial(hoy)).toBe("2026-08-06");
+    expect(etiquetaCortaRango(desdeInicialHistorial(hoy), "", hoy)).toBe("7 días");
+  });
+
+  it("cruza el cambio de mes", () => {
+    expect(desdeInicialHistorial(new Date(2026, 2, 3))).toBe("2026-02-25");
   });
 });

@@ -12,16 +12,12 @@ import {
 import type { ResumenSincronizacion } from "./api/nube";
 import { esCierreDeEstaSesion, esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { esOrdenDeEsteEquipo } from "./ordenTelemetria";
-import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
+import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, emitirActualizacion } from "./eventosNube";
 import { mide, realtimeTelemetria } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
 
-export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
-
-export interface NubeActualizadaDetalle {
-  origen: "realtime" | "manual";
-  resumen: ResumenSincronizacion;
-}
+export { EVENTO_NUBE_ACTUALIZADA, emitirActualizacion } from "./eventosNube";
+export type { NubeActualizadaDetalle } from "./eventosNube";
 
 /** Mismos 4 valores que entrega `RealtimeChannel.subscribe` de
  * supabase-js -- ver `EstadoConexionNube` en `componentes/BarraNube.tsx`,
@@ -66,21 +62,6 @@ interface OpcionesRealtimeNube {
   // ve el panel -- la cédula es la única clave que coincide en los dos
   // lados).
   usuario?: { cedula: string; nombre: string };
-}
-
-/** Avisa a quien esté escuchando (hoy: la pantalla Nube, si está montada)
- * que hay un resumen nuevo — lo usa tanto el aviso en vivo de Realtime como
- * el botón "Sincronizar" de la barra de estado (`BarraNube.tsx`), para que
- * ambos caminos actualicen lo mismo sin duplicar la lógica de refresco. */
-export function emitirActualizacion(
-  resumen: ResumenSincronizacion,
-  origen: NubeActualizadaDetalle["origen"] = "realtime",
-) {
-  window.dispatchEvent(
-    new CustomEvent<NubeActualizadaDetalle>(EVENTO_NUBE_ACTUALIZADA, {
-      detail: { origen, resumen },
-    }),
-  );
 }
 
 /** Tablas cuyo historial en esta PC es SÓLO la copia que baja de la nube

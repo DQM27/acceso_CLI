@@ -502,3 +502,30 @@ Están en `AGENTS.md`; se repiten porque condicionan este trabajo:
   `design/brisas.json`. `desktop/src/diseno.css` es un archivo generado.
 - Una pantalla no importa a otra pantalla; sólo `api/*.ts` llama a
   `invoke()` (convención al inicio de `App.tsx`).
+
+## 11. Avance
+
+### Fase 1 (rama `perf/escritorio-fase-1`, 2026-11-14)
+
+El dueño aprobó la fase 1 del plan, que incluye R1 y R7 (decisiones 8.2 y
+8.3: el piso del splash baja a 300 ms y Historial abre con 7 días).
+
+| Punto | Estado | Qué se hizo |
+| --- | --- | --- |
+| R1 | Hecho | `DURACION_MINIMA_SPLASH_MS` de 2000 a 300 ms (`App.tsx`) |
+| R2 | Hecho | Logo de escritorio a 320 px con paleta de 64 colores: 822 kB → 35 kB cada copia. `scripts/icono_navideno.py` ahora reduce al copiar (`copiar_logo`), así `poner`/`quitar` no devuelven el PNG grande. El de Android queda igual |
+| R3 | Hecho | Sin `<ViewTransition>` ni `startTransition` al cambiar de sección. El salto desde una sección oculta pasó de efecto a ajuste durante el render (lo pidió el lint) |
+| R4 | Hecho | `nubeRealtime` se importa con `import()` dentro de `Shell`. `emitirActualizacion` y `NubeActualizadaDetalle` se mudaron a `eventosNube.ts` (se reexportan desde `nubeRealtime.ts`). Chunk inicial: 490 kB → 271 kB (gzip 141 → 84 kB) |
+| R5 | Hecho | `useDeferredValue` en el buscador, `cacheQuickFilter` en AG Grid y `plegarConCache` (`Tabla.logica.ts`, con tope de 20.000 textos). `plegar` se mudó a `Tabla.logica.ts` |
+| R6 | **Pendiente** | No se pudo compilar el crate de escritorio en el entorno de la sesión (falta WebKitGTK). Además conviene medir antes con la telemetría de `rendimiento` (ver R6) |
+| R7 | Hecho | `desdeInicialHistorial()` en `SelectorRangoFecha.logica.ts`: Historial y Visitas abren con los últimos 7 días. El atajo "Últimos 7 días" deja `hasta` abierto, igual que "Últimos 6 meses", para no perder lo posterior a medianoche con la app abierta |
+| R8 | Parcial | Quitado `backdrop-filter` del login. La nieve ya no cuesta nada con `NAVIDAD_ACTIVA = false` (sale antes de pedir cuadros): no se tocó. La animación de alto del modal se dejó: es un pedido del 2026-09-24 y el costo es chico (sólo el modal) |
+
+Comprobado: `npm run lint`, `tsc --noEmit`, `npm test` (71 archivos, todos
+pasan), `npm run build`, `node design/generar.mjs --check` y una prueba de
+humo en Chromium con Tauri simulado (Supabase no se pide antes del login;
+buscar "karen angeles" encuentra "KAREN DE LOS ÁNGELES"; Historial abre en
+"7 DÍAS"; sin errores de página).
+
+**Falta comprobar en Windows** con el instalador: tiempo de arranque (R1,
+R2, R4) y que el cambio de sección se sienta inmediato (R3).

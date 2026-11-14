@@ -207,9 +207,11 @@ textarea::placeholder {
   width: 100%;
 }
 
+/* Sin `backdrop-filter`: la tarjeta es opaca (`.tarjeta`), el desenfoque no
+   se veía y sólo obligaba a una capa de composición extra (auditoría
+   2026-11-14, R8). `position: relative` ubica la versión (`.login-version`). */
 .login-card {
   position: relative;
-  backdrop-filter: blur(16px);
 }
 
 /* `src/assets/marca.png` ya trae el isotipo Y el texto "Lattis" horneados

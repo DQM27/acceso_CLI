@@ -7,7 +7,7 @@ import type { TablaHandle } from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
-import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
+import { desdeInicialHistorial, textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
@@ -28,7 +28,7 @@ import {
   listarHistorialIngresosCorreoSitio,
   listarTodosLosCorreosActivos,
 } from "../api/correo";
-import { fechaHaceMeses, fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
   TEXTO_ORIGEN,
   textoMedioDePlaca,
@@ -90,8 +90,8 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const [modal, setModal] = useState<{ cedula?: string } | null>(null);
   const [busqueda, setBusqueda] = useState("");
   // Período del historial: mismo arranque que los demás historiales
-  // ("Últimos 6 meses", `hasta` abierto).
-  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  // ("Últimos 7 días", `hasta` abierto).
+  const [desde, setDesde] = useState(() => desdeInicialHistorial());
   const [hasta, setHasta] = useState("");
   // Para que la exportación lea lo que muestra la grilla (filtros incluidos).
   const tablaHistorialRef = useRef<TablaHandle<FilaVisitaHistorial>>(null);

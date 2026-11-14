@@ -1,5 +1,13 @@
 import "./modulosTabla";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useDeferredValue,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { useCerrarAlClicAfuera } from "./useCerrarAlClicAfuera";
 import { AgGridReact } from "ag-grid-react";
@@ -31,6 +39,8 @@ import FiltroFechaTabla from "./FiltroFechaTabla";
 import { guardarCsv } from "../api/exportacion";
 import type { ColumnaDatosTabla } from "../api/exportacion";
 import {
+  plegar,
+  plegarConCache,
   textoTooltip,
   clicEnControlInteractivo,
   compararFechaYMD,
@@ -56,25 +66,13 @@ import type { ConteoVisible } from "./conteoTabla";
  * server-side, exportar) se agregan recién cuando una pantalla real las
  * necesite — no antes.
  */
-/** Espejo en JS de `PLEGAR` (SQLite, `database/schema.rs`) -- mismo criterio
- * de "sin tildes/mayúsculas no importa" que ya tiene el buscador de Rust
- * (`database/search.rs`). El `quickFilterText` propio de AG Grid sólo hace
- * `.toUpperCase()`, sin tocar diacríticos -- sin esto, buscar "Sanches" en
- * la grilla no encontraba a "Sánchez" aunque el mismo texto sí funcionara en
- * el buscador del modal "Nuevo ingreso" (hallazgo real del usuario,
- * 2026-09-21: dos buscadores con reglas distintas para el mismo dato). */
-function plegar(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase();
-}
-
 /** `quickFilterParser`/`quickFilterMatcher` de AG Grid -- el parser pliega
- * cada palabra tecleada, el matcher pliega el texto agregado de la fila
- * antes de comparar (AG Grid ya lo entrega en mayúsculas, `plegar` sólo le
- * saca los acentos). Mismo AND implícito que el default de AG Grid: todas
- * las palabras tienen que aparecer en algún lado de la fila. */
+ * cada palabra tecleada (ver `plegar` en Tabla.logica.ts), el matcher pliega
+ * el texto agregado de la fila antes de comparar (AG Grid ya lo entrega en
+ * mayúsculas, `plegar` sólo le saca los acentos). Mismo AND implícito que el
+ * default de AG Grid: todas las palabras tienen que aparecer en algún lado de
+ * la fila. El texto de la fila se pliega con caché: con `cacheQuickFilter`
+ * es el mismo en cada tecla. */
 function quickFilterParser(texto: string): string[] {
   return plegar(texto)
     .split(" ")
@@ -82,7 +80,7 @@ function quickFilterParser(texto: string): string[] {
 }
 
 function quickFilterMatcher(partes: string[], textoFila: string): boolean {
-  const plegado = plegar(textoFila);
+  const plegado = plegarConCache(textoFila);
   return partes.every((parte) => plegado.includes(parte));
 }
 
@@ -323,6 +321,9 @@ function TablaBase<T>(
 ) {
   const usuarioId = useUsuarioId();
   const idGrilla = idPorUsuario(id, usuarioId);
+  // El buscador responde a cada tecla y la grilla filtra después, con menor
+  // prioridad: con miles de filas (Historial) escribir no se traba.
+  const busquedaDiferida = useDeferredValue(busqueda);
   const [ocultas, setOcultas] = useState<Set<string>>(
     () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
   );
@@ -771,7 +772,11 @@ function TablaBase<T>(
           // "Álvarez" junto a las A, no al final de la lista.
           accentedSort
           columnDefs={columnasConVisibilidad}
-          quickFilterText={busqueda}
+          quickFilterText={busquedaDiferida}
+          // AG Grid arma el texto de búsqueda de cada fila una vez y lo
+          // guarda hasta que cambian sus datos, en vez de rearmarlo (un
+          // `valueGetter` por columna y fila) en cada tecla.
+          cacheQuickFilter
           quickFilterParser={quickFilterParser}
           quickFilterMatcher={quickFilterMatcher}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}

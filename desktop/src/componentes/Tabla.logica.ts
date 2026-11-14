@@ -4,6 +4,45 @@ import type { ColDef, ITooltipParams, ColumnState } from "ag-grid-community";
  * "S/G", "23/09/2026") si la columna tiene `valueFormatter`, si no el valor
  * crudo; `undefined` (sin tooltip) para cualquier cosa que no sea texto o
  * número. */
+/** Espejo en JS de `PLEGAR` (SQLite, `database/schema.rs`) -- mismo criterio
+ * de "sin tildes/mayúsculas no importa" que ya tiene el buscador de Rust
+ * (`database/search.rs`). El `quickFilterText` propio de AG Grid sólo hace
+ * `.toUpperCase()`, sin tocar diacríticos -- sin esto, buscar "Sanches" en
+ * la grilla no encontraba a "Sánchez" aunque el mismo texto sí funcionara en
+ * el buscador del modal "Nuevo ingreso" (hallazgo real del usuario,
+ * 2026-09-21: dos buscadores con reglas distintas para el mismo dato). */
+export function plegar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+}
+
+/** Tope de textos recordados por `plegarConCache`: de sobra para el historial
+ * más grande que trae una grilla (ver `LIMITE_CARGA_COMPLETA_MAXIMO`). Al
+ * llenarse se vacía entero, sin llevar la cuenta de cuál se usó último. */
+export const TOPE_CACHE_PLEGADO = 20_000;
+
+const cachePlegado = new Map<string, string>();
+
+/** `plegar` recordando el resultado. El buscador de las grillas compara el
+ * texto de CADA fila en cada tecla; con `cacheQuickFilter` AG Grid entrega
+ * siempre el mismo texto por fila, así que cada uno se pliega una sola vez
+ * en vez de una vez por tecla (auditoría 2026-11-14, R5). */
+export function plegarConCache(texto: string): string {
+  const guardado = cachePlegado.get(texto);
+  if (guardado !== undefined) return guardado;
+  if (cachePlegado.size >= TOPE_CACHE_PLEGADO) cachePlegado.clear();
+  const plegado = plegar(texto);
+  cachePlegado.set(texto, plegado);
+  return plegado;
+}
+
+/** Para los tests: cuántos textos hay recordados. */
+export function tamanoCachePlegado(): number {
+  return cachePlegado.size;
+}
+
 export function textoTooltip({ valueFormatted, value }: ITooltipParams): string | undefined {
   if (typeof valueFormatted === "string" && valueFormatted !== "") return valueFormatted;
   if (typeof value === "string" && value !== "") return value;
