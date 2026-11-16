@@ -34,8 +34,22 @@ export function permisosCarnePraind(): Promise<PermisosCarne> {
 }
 
 /** Los bytes del carné (de este equipo si ya se abrió; si no, de la nube). */
-export function verCarnePraind(contratistaId: number): Promise<ArrayBuffer> {
-  return invoke("ver_carne_praind", { contratistaId });
+export async function verCarnePraind(contratistaId: number): Promise<Uint8Array<ArrayBuffer>> {
+  return comoBytes(await invoke<unknown>("ver_carne_praind", { contratistaId }));
+}
+
+/** Por el canal binario de Tauri la respuesta llega como `ArrayBuffer`; si
+ * el WebView cae al canal de mensajes, llega como lista de números. Un
+ * `Blob` hecho con la lista guarda el TEXTO "137,80,78,…" y la imagen sale
+ * rota: por eso se normaliza acá. */
+export function comoBytes(respuesta: unknown): Uint8Array<ArrayBuffer> {
+  if (respuesta instanceof ArrayBuffer) return new Uint8Array(respuesta);
+  if (ArrayBuffer.isView(respuesta)) {
+    // Copia: el buffer de una vista puede ser compartido o más grande.
+    return Uint8Array.from(new Uint8Array(respuesta.buffer, respuesta.byteOffset, respuesta.byteLength));
+  }
+  if (Array.isArray(respuesta)) return Uint8Array.from(respuesta as number[]);
+  throw new Error("El carné llegó en un formato inesperado.");
 }
 
 export function cargarCarnePraindDesdeQr(

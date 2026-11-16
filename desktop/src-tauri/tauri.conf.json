@@ -35,7 +35,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; font-src 'self'; connect-src 'self' https://xidaepyaljzkpbsxrqsm.supabase.co wss://xidaepyaljzkpbsxrqsm.supabase.co https://pmrytjktlyiuikxuuxpr.supabase.co wss://pmrytjktlyiuikxuuxpr.supabase.co"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://xidaepyaljzkpbsxrqsm.supabase.co wss://xidaepyaljzkpbsxrqsm.supabase.co https://pmrytjktlyiuikxuuxpr.supabase.co wss://pmrytjktlyiuikxuuxpr.supabase.co"
     }
   },
   "bundle": {
