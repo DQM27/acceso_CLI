@@ -17,7 +17,7 @@
     // Clave publicable (no es secreta): la misma que usa el panel.
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Sr9DPGMD7MFirLQfG7ViWg_6pJeEpqU",
     // Orígenes web que pueden llamar con CORS. Las apps nativas no usan CORS.
-    "ORIGENES_PERMITIDOS": "https://panel.megabrisas.com"
+    "ORIGENES_PERMITIDOS": "https://megabrisas.com,https://www.megabrisas.com,https://panel.megabrisas.com"
   },
   "env": {
     "staging": {
