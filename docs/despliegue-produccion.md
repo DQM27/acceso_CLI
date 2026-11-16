@@ -619,9 +619,13 @@ Rama `feat/reglas-compartidas`. Contexto completo en
 - **Qué hace:** `contratistas.praind_foto`, la bitácora `fotos_praind`, el
   interruptor `ajustes_praind.carga_desde_equipos` y las RPC `praind_*`. Ver
   `docs/features-futuras/plan-fotos-praind.md`.
-- **Probada:** primero con su batería (`supabase/tests/carnes_praind.sql`)
-  dentro de una transacción revertida; después **aplicada en staging** (queda
-  en el historial como `carnes_praind`) para probar el Worker de staging.
+- **Segunda migración:** `20261115130000_catalogo_del_sitio_con_carne.sql`
+  suma `praind_foto` a `catalogo_del_sitio` (la primera página del catálogo
+  de los equipos llega por esa función, con columnas explícitas).
+- **Probadas:** primero con su batería (`supabase/tests/carnes_praind.sql`)
+  dentro de una transacción revertida; después **aplicadas en staging** (en el
+  historial como `carnes_praind` y `catalogo_del_sitio_con_carne`) para probar
+  el Worker de staging.
 - **Compatibilidad:** no rompe apps viejas: el catálogo pide columnas
   explícitas, y un trigger conserva `praind_foto` si un equipo sube la fila.
 - **Worker** `praind-brisas` (carpeta `worker-praind/`, despliegue manual):
