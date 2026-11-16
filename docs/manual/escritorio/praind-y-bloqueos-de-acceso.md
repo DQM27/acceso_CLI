@@ -34,8 +34,8 @@ un ingreso.
 
 | Mensaje al registrar | En Contratistas se ve | Qué significa | Qué hacer |
 |---|---|---|---|
-| "Acceso denegado · PRAIND vencido" | "PRAIND vencida" | La fecha de vencimiento ya pasó. | No registre el ingreso. La persona debe renovar su PRAIND. Cuando presente el carnet renovado, se actualiza la fecha en su ficha (ver abajo). |
-| "Acceso denegado · PRAIND sin fecha registrada" | "Sin PRAIND registrada" | Necesita PRAIND pero su ficha no tiene fecha. | No registre el ingreso. Si presenta el carnet vigente, se registra la fecha en su ficha. |
+| "Acceso denegado · PRAIND vencido" | "PRAIND vencida" | La fecha de vencimiento ya pasó. | No registre el ingreso. La persona debe renovar su PRAIND. Cuando presente el gafete PRAIND renovado, se actualiza la fecha en su ficha (ver abajo). |
+| "Acceso denegado · PRAIND sin fecha registrada" | "Sin PRAIND registrada" | Necesita PRAIND pero su ficha no tiene fecha. | No registre el ingreso. Si presenta el gafete PRAIND vigente, se registra la fecha en su ficha. |
 | "Acceso denegado · no tiene acceso autorizado" | "Acceso denegado" | Un administrador le quitó el acceso. Aplica también si intenta entrar como proveedor o visita. | No registre el ingreso. Sólo un administrador puede devolverle el acceso, desde el panel web. |
 | "Acceso denegado · la empresa está inactiva" | "Empresa inactiva" | Su empresa está desactivada; nadie de esa empresa puede entrar. | No registre el ingreso. Avise a un administrador. |
 
@@ -48,17 +48,17 @@ vencer)"**. Registre el ingreso y recuérdele que debe renovarlo.
 
 ### Actualizar la fecha del PRAIND
 
-El operador puede hacerlo él mismo cuando la persona presenta el carnet
+El operador puede hacerlo él mismo cuando la persona presenta el gafete PRAIND
 renovado.
 
 1. Vaya a **Contratistas**.
 2. Busque a la persona, haga **doble clic** en su fila y pulse **Editar**.
-3. Cambie **Fecha de vencimiento PRAIND** con la fecha del carnet renovado.
+3. Cambie **Fecha de vencimiento PRAIND** con la fecha del gafete PRAIND renovado.
 4. Pulse **Guardar**.
 5. Vuelva a **Nuevo ingreso** (Ctrl+N) y registre la entrada.
 
-Si el equipo tiene permiso, aproveche para cargar el carné nuevo (ver
-[Ver el carné PRAIND de un contratista](carne-praind.md)).
+Si el equipo tiene permiso, aproveche para cargar el gafete PRAIND nuevo (ver
+[Ver el gafete PRAIND de un contratista](carne-praind.md)).
 
 ## Relacionado
 

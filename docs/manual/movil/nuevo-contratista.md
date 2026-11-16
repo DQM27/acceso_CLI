@@ -19,13 +19,13 @@ Cualquier usuario con sesión abierta.
   a la derecha) y luego **Nuevo contratista**. Conviene buscarlo antes: si
   ya estaba registrado, darlo de alta otra vez lo duplica.
 
-## Pasos — escaneando el carnet PRAIND (lo más rápido)
+## Pasos — escaneando el gafete PRAIND (lo más rápido)
 
-1. Se abre directo la cámara: apunte al carnet PRAIND.
-2. La app llena cédula, nombre, empresa y vencimiento, y dice **"Carnet
+1. Se abre directo la cámara: apunte al gafete PRAIND.
+2. La app llena cédula, nombre, empresa y vencimiento, y dice **"Gafete
    PRAIND leído — revise los datos antes de guardar"**.
-3. **Revise todo** contra el carnet. Si la empresa del carnet no coincide
-   con ninguna de la lista, verá debajo de la empresa: "El carnet dice
+3. **Revise todo** contra el gafete PRAIND. Si la empresa del gafete PRAIND no coincide
+   con ninguna de la lista, verá debajo de la empresa: "El gafete PRAIND dice
    «(empresa)»: no hay una empresa igual, elija la correcta."
 4. Toque **Guardar**.
 5. Pasa directo al formulario de ingreso de esa persona: ver
@@ -48,20 +48,20 @@ cancela sin registrar a nadie.
    el calendario, cuando el tipo lo pide.
 5. Toque **Guardar**. Pasa directo a su ingreso.
 
-**Escanear carnet PRAIND**, arriba del formulario, vuelve a abrir la
+**Escanear gafete PRAIND**, arriba del formulario, vuelve a abrir la
 cámara (borra lo escrito). **‹ Volver** cancela sin guardar.
 
 ## Mensajes que pueden aparecer
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "PRAIND vencido: elija una fecha vigente." | La fecha elegida ya pasó. **Guardar** queda deshabilitado. | Elija la fecha de un carnet vigente. Si la persona no tiene uno vigente, no puede quedar registrada. |
+| "PRAIND vencido: elija una fecha vigente." | La fecha elegida ya pasó. **Guardar** queda deshabilitado. | Elija la fecha de un gafete PRAIND vigente. Si la persona no tiene uno vigente, no puede quedar registrada. |
 | "Elija la empresa" | No eligió empresa. | Toque **Elegir** en **Empresa**. |
-| "Documento inválido" | Lo escaneado no es un carnet PRAIND que la app pueda leer. | Vuelva a escanear con mejor luz, o escriba los datos. |
+| "Documento inválido" | Lo escaneado no es un gafete PRAIND que la app pueda leer. | Vuelva a escanear con mejor luz, o escriba los datos. |
 | "La cédula es obligatoria" / "El nombre es obligatorio" | Falta ese dato. | Complételo. |
 | "La cédula debe tener sólo números, entre 9 y 13 dígitos" | La cédula no tiene el formato correcto. | Revísela. |
 | "Ya existe un contratista con esa cédula" | La persona ya está registrada. | Búsquela en **Contratistas** y registre su ingreso. Para corregir sus datos, use el escritorio. |
-| "Fecha PRAIND requerida" | El tipo elegido necesita fecha de PRAIND. | Elija la fecha del carnet. |
+| "Fecha PRAIND requerida" | El tipo elegido necesita fecha de PRAIND. | Elija la fecha del gafete PRAIND. |
 
 ## Relacionado
 

@@ -58,7 +58,7 @@ export default function Contratistas() {
     setCargaEquipos(permitir);
     try {
       await cambiarCargaDesdeEquipos(permitir);
-      toast.success(permitir ? "Los equipos ya pueden cargar carnés PRAIND." : "Sólo el panel carga carnés PRAIND.");
+      toast.success(permitir ? "Los equipos ya pueden cargar gafetes PRAIND." : "Sólo el panel carga gafetes PRAIND.");
     } catch (error) {
       setCargaEquipos(!permitir);
       toast.error(mensajeError(error));
@@ -110,13 +110,14 @@ export default function Contratistas() {
       {
         colId: "carne",
         headerName: "",
-        flex: 0.7,
-        minWidth: 90,
+        flex: 1,
+        // "Gafete PRAIND" entero, sin cortarse.
+        minWidth: 140,
         filter: false,
         sortable: false,
         cellRenderer: ({ data }: { data: ContratistaConEstado }) => (
           <button type="button" className="boton boton-celda-angosto" onClick={() => setCarneDe(data)}>
-            Carné
+            Gafete PRAIND
           </button>
         ),
       },
@@ -235,14 +236,14 @@ export default function Contratistas() {
                 {cargaEquipos !== null && (
                   <label
                     className="flex items-center gap-2 text-(--texto)"
-                    title="Apagado: sólo el panel carga carnés PRAIND"
+                    title="Apagado: sólo el panel carga gafetes PRAIND"
                   >
                     <input
                       type="checkbox"
                       checked={cargaEquipos}
                       onChange={(evento) => void cambiarCargaEquipos(evento.target.checked)}
                     />
-                    Equipos cargan carnés
+                    Equipos cargan gafetes PRAIND
                   </label>
                 )}
               </>

@@ -83,7 +83,7 @@ class CarnePraindViewModel(
                 try {
                     VistaCarne.Imagen(nombre, fuente.ver(contratistaId).bytes)
                 } catch (excepcion: Exception) {
-                    VistaCarne.Error(nombre, excepcion.mensajeDeErrorEsperado() ?: "No se pudo mostrar el carné.")
+                    VistaCarne.Error(nombre, excepcion.mensajeDeErrorEsperado() ?: "No se pudo mostrar el gafete PRAIND.")
                 }
             }
         }

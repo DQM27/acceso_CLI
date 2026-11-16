@@ -133,7 +133,7 @@ fun PantallaNuevoContratista(
         EncabezadoPantalla(titulo = "Nuevo contratista", onVolver = onVolver)
 
         TarjetaEscaner(
-            "Escanear carnet PRAIND",
+            "Escanear gafete PRAIND",
             "Llena cédula, nombre, empresa y vencimiento.",
             onClick = {
                 // Un solo escaneo llena TODOS los campos, así que se parte de
@@ -171,7 +171,7 @@ fun PantallaNuevoContratista(
         val sugerenciaEmpresa = vm.empresaSugeridaTexto
         SeccionFormulario(
             "Acceso",
-            pie = sugerenciaEmpresa?.let { "El carnet dice «$it»: no hay una empresa igual, elija la correcta." },
+            pie = sugerenciaEmpresa?.let { "El gafete PRAIND dice «$it»: no hay una empresa igual, elija la correcta." },
             pieEsError = true,
         ) {
             FilaSelector(

@@ -18,7 +18,7 @@ Sección **Contratistas** (es la que se ve al entrar).
 
 1. En **Contratistas**, toque el botón redondo azul **+**, abajo a la
    derecha: se abre la cámara.
-2. Coloque la cédula (o el carnet) **dentro del recuadro**.
+2. Coloque la cédula (o el gafete PRAIND) **dentro del recuadro**.
 3. Si la app reconoce a la persona, pasa directo al formulario de ingreso.
    Si hay varias parecidas, lo leído queda en la búsqueda: elija la
    correcta.
@@ -59,12 +59,12 @@ la derecha, y un renglón chico que dice qué hacer:
 
 ## El formulario de ingreso
 
-Arriba se ve el nombre y "cédula · empresa". Si la persona tiene su carné
-PRAIND cargado, a la derecha aparece **Ver carné**: lo muestra a pantalla
+Arriba se ve el nombre y "cédula · empresa". Si la persona tiene su gafete
+PRAIND cargado, a la derecha aparece **Ver gafete PRAIND**: lo muestra a pantalla
 completa para comparar la foto con quien está en la portería (**Cerrar**
-vuelve al formulario). La primera vez que se ve un carné en este teléfono
+vuelve al formulario). La primera vez que se ve un gafete PRAIND en este teléfono
 hace falta internet; después queda guardado y se ve aunque no haya señal.
-Si no hay internet y nunca se vio, aparece **"Para ver este carné por
+Si no hay internet y nunca se vio, aparece **"Para ver este gafete PRAIND por
 primera vez, conectate a internet…"**.
 
 Luego:
@@ -118,7 +118,7 @@ Otros mensajes al registrar:
 
 Si escanea o busca y no aparece, dice **"No está registrado"** con la
 opción **Registrar nuevo contratista**. Tóquela: se abre la cámara del
-carnet PRAIND con lo que buscó ya puesto y, al guardar, pasa directo a su
+gafete PRAIND con lo que buscó ya puesto y, al guardar, pasa directo a su
 ingreso. Ver [Nuevo contratista](nuevo-contratista.md).
 
 ## Relacionado

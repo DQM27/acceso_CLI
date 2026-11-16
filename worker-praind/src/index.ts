@@ -117,7 +117,7 @@ async function enrutar(request: Request, env: Env, deps: Dependencias): Promise<
 async function servirFoto(request: Request, env: Env, deps: Dependencias, clave: string): Promise<Response> {
   const token = tokenDe(request);
   if (!(await permisos(env, deps, token, { usarCache: true })).puede_ver) {
-    throw new ErrorHttp(403, "sin_permiso", "No tiene permiso para ver carnés PRAIND.");
+    throw new ErrorHttp(403, "sin_permiso", "No tiene permiso para ver gafetes PRAIND.");
   }
   const sha = clave.split("/")[2].split(".")[0];
   const etag = `"${sha}"`;
@@ -142,7 +142,7 @@ async function servirFoto(request: Request, env: Env, deps: Dependencias, clave:
 
 async function exigirCarga(env: Env, deps: Dependencias, token: string): Promise<void> {
   if (!(await permisos(env, deps, token, { usarCache: false })).puede_cargar) {
-    throw new ErrorHttp(403, "sin_permiso", "No tiene permiso para cargar carnés PRAIND.");
+    throw new ErrorHttp(403, "sin_permiso", "No tiene permiso para cargar gafetes PRAIND.");
   }
 }
 
@@ -185,7 +185,7 @@ async function cargarArchivo(
 ): Promise<Response> {
   const token = tokenDe(request);
   const largo = Number(request.headers.get("Content-Length") ?? "0");
-  const demasiadoGrande = new ErrorHttp(413, "imagen_grande", "La imagen del carné pasa de 10 MB.");
+  const demasiadoGrande = new ErrorHttp(413, "imagen_grande", "La imagen del gafete PRAIND pasa de 10 MB.");
   if (largo > MAXIMO_IMAGEN) throw demasiadoGrande;
 
   // Antes de leer el cuerpo: sin permiso no se recibe el archivo.

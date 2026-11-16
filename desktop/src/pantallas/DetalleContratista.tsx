@@ -117,9 +117,9 @@ export default function DetalleContratista({
         </dl>
 
         <div className="detalle-contratista-carne" aria-live="polite">
-          {vista.tipo === "cargando" && <p className="texto-tenue">Cargando carné…</p>}
+          {vista.tipo === "cargando" && <p className="texto-tenue">Cargando gafete PRAIND…</p>}
           {vista.tipo === "sin_carne" && (
-            <p className="texto-tenue">Este contratista no tiene carné PRAIND cargado.</p>
+            <p className="texto-tenue">Este contratista no tiene el gafete PRAIND cargado.</p>
           )}
           {vista.tipo === "error" && <p style={{ color: "var(--error)" }}>{vista.mensaje}</p>}
           {vista.tipo === "imagen" && (
@@ -129,7 +129,7 @@ export default function DetalleContratista({
               onClick={() => setAmpliado(true)}
               title="Ver en grande"
             >
-              <img src={vista.url} alt={`Carné PRAIND de ${contratista.nombre}`} />
+              <img src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
               <span className="detalle-contratista-pista">Clic para ampliar</span>
             </button>
           )}
@@ -153,7 +153,7 @@ export default function DetalleContratista({
           {permisos?.puede_cargar && (
             <button type="button" className="boton boton-icono" onClick={() => setCargando(true)}>
               <QrCode size={16} aria-hidden="true" />
-              {vista.tipo === "imagen" ? "Reemplazar carné" : "Cargar carné"}
+              {vista.tipo === "imagen" ? "Reemplazar gafete PRAIND" : "Cargar gafete PRAIND"}
             </button>
           )}
           <button type="button" className="boton boton-primario boton-icono" onClick={onEditar}>
@@ -164,8 +164,8 @@ export default function DetalleContratista({
       )}
 
       {ampliado && vista.tipo === "imagen" && (
-        <Modal titulo={`Carné PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
-          <img className="detalle-contratista-ampliado" src={vista.url} alt={`Carné PRAIND de ${contratista.nombre}`} />
+        <Modal titulo={`Gafete PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
+          <img className="detalle-contratista-ampliado" src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
         </Modal>
       )}
     </Modal>
@@ -225,7 +225,7 @@ function CargaDeCarne({
   return (
     <div className="detalle-contratista-carga">
       <label className="campo">
-        Enlace del QR del carné
+        Enlace del QR del gafete PRAIND
         <input
           value={enlace}
           onChange={(e) => {
@@ -241,8 +241,8 @@ function CargaDeCarne({
       {previa && (
         <p style={{ color: coincide ? "var(--exito)" : "var(--advertencia)" }}>
           {coincide
-            ? `El carné es de ${previa.nombre_en_origen}.`
-            : `El carné es de «${previa.nombre_en_origen ?? "nombre desconocido"}», que no coincide con ${contratista.nombre}. Revisá que sea el carné correcto.`}
+            ? `El gafete PRAIND es de ${previa.nombre_en_origen}.`
+            : `El gafete PRAIND es de «${previa.nombre_en_origen ?? "nombre desconocido"}», que no coincide con ${contratista.nombre}. Revisá que sea el gafete PRAIND correcto.`}
         </p>
       )}
       {error && <p style={{ color: "var(--error)" }}>{error}</p>}
@@ -270,7 +270,7 @@ function CargaDeCarne({
           </button>
           {previa ? (
             <button type="button" className="boton boton-primario" onClick={guardar} disabled={ocupado}>
-              {ocupado ? "Guardando…" : coincide ? "Guardar carné" : "Guardar igual"}
+              {ocupado ? "Guardando…" : coincide ? "Guardar gafete PRAIND" : "Guardar igual"}
             </button>
           ) : (
             <button
@@ -279,7 +279,7 @@ function CargaDeCarne({
               onClick={buscar}
               disabled={ocupado || !enlace.trim()}
             >
-              {ocupado ? "Buscando…" : "Buscar carné"}
+              {ocupado ? "Buscando…" : "Buscar gafete PRAIND"}
             </button>
           )}
         </div>

@@ -177,7 +177,7 @@ class NuevoContratistaViewModel(
             val coincidencia = buscarEmpresaPorNombre(empresas, textoEmpresa)
             if (coincidencia != null) elegirEmpresa(coincidencia) else empresaSugeridaTexto = textoEmpresa
         }
-        mensaje = "Carnet PRAIND leído — revise los datos antes de guardar"
+        mensaje = "Gafete PRAIND leído — revise los datos antes de guardar"
     }
 
     /// Guarda y, si sale bien, llama a [onGuardado] con el contratista nuevo

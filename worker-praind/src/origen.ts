@@ -25,11 +25,11 @@ export interface CarneDescargado {
 }
 
 function enlaceInvalido(): ErrorHttp {
-  return new ErrorHttp(400, "enlace_invalido", "El enlace no es de un carné PRAIND.");
+  return new ErrorHttp(400, "enlace_invalido", "El enlace no es de un gafete PRAIND.");
 }
 
 function falloOrigen(detalle: string): ErrorHttp {
-  return new ErrorHttp(502, "origen_no_disponible", `No se pudo obtener el carné de la página del QR (${detalle}).`);
+  return new ErrorHttp(502, "origen_no_disponible", `No se pudo obtener el gafete PRAIND de la página del QR (${detalle}).`);
 }
 
 /** Valida y normaliza el enlace leído del QR. */
@@ -88,7 +88,7 @@ async function pedirPagina(deps: Dependencias, inicio: URL): Promise<{ respuesta
     }
     if (respuesta.status === 404) {
       await respuesta.body?.cancel();
-      throw new ErrorHttp(404, "carne_no_encontrado", "La página del QR no tiene ese carné.");
+      throw new ErrorHttp(404, "carne_no_encontrado", "La página del QR no tiene ese gafete PRAIND.");
     }
     if (!respuesta.ok) {
       await respuesta.body?.cancel();
@@ -156,7 +156,7 @@ export async function descargarCarne(deps: Dependencias, enlace: URL): Promise<C
     await leerConLimite(pagina.respuesta.body, MAXIMO_PAGINA, falloOrigen("la página es demasiado grande")),
   );
   const { nombre, imagen } = await leerPagina(html, pagina.url);
-  if (!imagen) throw falloOrigen("la página no trae la imagen del carné");
+  if (!imagen) throw falloOrigen("la página no trae la imagen del gafete PRAIND");
 
   const respuesta = await pedir(deps, imagen);
   if (!respuesta.ok) {
@@ -166,7 +166,7 @@ export async function descargarCarne(deps: Dependencias, enlace: URL): Promise<C
   const bytes = await leerConLimite(
     respuesta.body,
     MAXIMO_IMAGEN,
-    new ErrorHttp(413, "imagen_grande", "La imagen del carné pasa de 10 MB."),
+    new ErrorHttp(413, "imagen_grande", "La imagen del gafete PRAIND pasa de 10 MB."),
   );
   const tipo = tipoPorFirma(bytes);
   if (!tipo) throw falloOrigen("el archivo no es una imagen PNG ni JPEG");

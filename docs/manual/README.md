@@ -72,7 +72,7 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 - ✅ [Buscar un contratista y entender su estado](escritorio/buscar-contratista.md)
 - ✅ [Dar de alta o editar un contratista (datos, tipo, fecha de PRAIND, personal de ruta)](escritorio/contratista-alta-y-edicion.md)
-- ✅ [Ver el carné PRAIND de un contratista (y cargarlo, si el equipo tiene permiso)](escritorio/carne-praind.md)
+- ✅ [Ver el gafete PRAIND de un contratista (y cargarlo, si el equipo tiene permiso)](escritorio/carne-praind.md)
 - ✅ [Empresas de contratistas y empresas proveedoras](escritorio/empresas.md)
 
 ### Gafetes
@@ -165,7 +165,7 @@ escritorio.
 
 - ✅ [Registrar el ingreso de un contratista (escaneando o buscando)](movil/registrar-ingreso-contratista.md)
 - ✅ [Registrar la salida de un contratista (lista, nombre o gafetes)](movil/registrar-salida-contratista.md)
-- ✅ [Nuevo contratista (con el carnet PRAIND)](movil/nuevo-contratista.md)
+- ✅ [Nuevo contratista (con el gafete PRAIND)](movil/nuevo-contratista.md)
 
 ### Externos y KOF
 

@@ -46,7 +46,7 @@ internal fun DialogoCarnePraind(vista: VistaCarne, onCerrar: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Carné PRAIND · $nombre",
+                "Gafete PRAIND · $nombre",
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -62,13 +62,13 @@ internal fun DialogoCarnePraind(vista: VistaCarne, onCerrar: () -> Unit) {
                         if (imagen != null) {
                             Image(
                                 bitmap = imagen,
-                                contentDescription = "Carné PRAIND de $nombre",
+                                contentDescription = "Gafete PRAIND de $nombre",
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else {
                             FranjaEstado(
-                                "No se pudo mostrar la imagen del carné.",
+                                "No se pudo mostrar la imagen del gafete PRAIND.",
                                 TipoEstado.AVISO,
                                 modifier = Modifier.fillMaxWidth(),
                             )
