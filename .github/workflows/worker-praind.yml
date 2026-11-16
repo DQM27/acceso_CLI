@@ -1,0 +1,29 @@
+name: Verificación del Worker de carnés PRAIND
+
+on:
+  push:
+    paths: ["worker-praind/**", ".github/workflows/worker-praind.yml"]
+  pull_request:
+    paths: ["worker-praind/**", ".github/workflows/worker-praind.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker-praind
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: worker-praind/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test

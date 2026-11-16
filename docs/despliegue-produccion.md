@@ -632,7 +632,8 @@ Rama `feat/reglas-compartidas`. Contexto completo en
   - staging: `praind-brisas-staging` en `praind-staging.megabrisas.com`, bucket
     `lattis-praind-staging`. Desplegado el 2026-11-15.
   - producción: `npm run deploy` en `worker-praind/`, crea
-    `praind.megabrisas.com` sobre el bucket `lattis-praind`.
+    `praind.megabrisas.com` sobre el bucket `lattis-praind`. **Desplegado el
+    2026-11-15** (versión `3147d6df`), después de mergear #260.
 - **Orden:** mergear (aplica la migración), desplegar el Worker de
   producción, y recién después publicar el panel y las apps que lo usan.
 
