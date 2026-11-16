@@ -6,6 +6,7 @@ import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioContratista from "./FormularioContratista";
+import DetalleContratista from "./DetalleContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
 import type { ContratistaResumen, Empresa } from "../api";
 import { columnasContratistas } from "./Contratistas.logica";
@@ -18,6 +19,9 @@ export default function Contratistas() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
   );
+  // Doble clic abre los detalles con el carné PRAIND (ver es más frecuente
+  // que editar, decisión del dueño 2026-11-15); desde ahí, «Editar».
+  const [detalleAbierto, setDetalleAbierto] = useState<ContratistaResumen | null>(null);
 
   // useMemo -- mismo motivo que en Historial.tsx: si `columnas` se recrea en
   // cada render, AG Grid reaplica el orden/ancho literales encima del layout
@@ -107,10 +111,21 @@ export default function Contratistas() {
               </div>
             }
             onCeldaEditada={manejarEdicion}
-            onFilaDobleClic={setFormularioAbierto}
+            onFilaDobleClic={setDetalleAbierto}
           />
         </div>
       </div>
+
+      {detalleAbierto && (
+        <DetalleContratista
+          contratista={detalleAbierto}
+          onCerrar={() => setDetalleAbierto(null)}
+          onEditar={() => {
+            setFormularioAbierto(detalleAbierto);
+            setDetalleAbierto(null);
+          }}
+        />
+      )}
 
       {formularioAbierto && (
         <FormularioContratista

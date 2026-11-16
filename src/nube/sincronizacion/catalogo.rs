@@ -51,6 +51,10 @@ pub(super) struct FilaContratistaRemota {
     pub(super) tipo_ingreso: Option<String>,
     pub(super) fecha_vencimiento_praind: Option<String>,
     pub(super) es_personal_ruta: Option<bool>,
+    /// Ruta del carné PRAIND en R2 (`contratistas/<id>/<sha256>.<ext>`).
+    /// `default`: una nube sin la columna (anterior a `carnes_praind`).
+    #[serde(default)]
+    pub(super) praind_foto: Option<String>,
     pub(super) updated_at: String,
 }
 
@@ -295,8 +299,8 @@ pub(super) fn guardar_contratistas(
             "
             INSERT INTO contratistas (
                 cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind,
-                es_personal_ruta, tiene_acceso, uuid
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                es_personal_ruta, tiene_acceso, uuid, praind_foto
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT(cedula) DO UPDATE SET
                 nombre = excluded.nombre,
                 empresa_id = excluded.empresa_id,
@@ -304,7 +308,8 @@ pub(super) fn guardar_contratistas(
                 fecha_vencimiento_praind = excluded.fecha_vencimiento_praind,
                 es_personal_ruta = excluded.es_personal_ruta,
                 tiene_acceso = excluded.tiene_acceso,
-                uuid = COALESCE(contratistas.uuid, excluded.uuid)
+                uuid = COALESCE(contratistas.uuid, excluded.uuid),
+                praind_foto = excluded.praind_foto
             ",
             params![
                 cedula,
@@ -315,6 +320,7 @@ pub(super) fn guardar_contratistas(
                 es_personal_ruta,
                 contratista.activo,
                 contratista.id,
+                contratista.praind_foto,
             ],
         )?;
         recibidos += 1;
@@ -654,7 +660,7 @@ fn recibir_catalogo_global(
         contexto,
         &format!(
             "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
-             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,updated_at{filtro_incremental}",
+             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,praind_foto,updated_at{filtro_incremental}",
             contexto.base_url
         ),
         primeras

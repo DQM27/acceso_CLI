@@ -1,3 +1,4 @@
+pub mod carnes_praind;
 pub mod contratistas;
 pub mod desfase_reloj;
 pub mod empresas;

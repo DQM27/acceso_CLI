@@ -10,6 +10,7 @@ export * from "./autenticacion";
 export * from "./citas";
 export * from "./comun";
 export * from "./contratistas";
+export * from "./praind";
 export * from "./empresas";
 export * from "./exportacion";
 export * from "./gafetes";

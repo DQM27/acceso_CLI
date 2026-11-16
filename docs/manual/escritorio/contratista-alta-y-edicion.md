@@ -15,7 +15,8 @@ Cualquier usuario con sesión abierta en el escritorio.
 **Contratistas**, en el menú lateral.
 
 - Contratista nuevo: botón **+** (Nuevo contratista), junto al buscador.
-- Editar: **doble clic** en la fila de la persona.
+- Editar: **doble clic** en la fila de la persona (abre sus detalles) y
+  luego **Editar**.
 
 ## Pasos — contratista nuevo
 
@@ -37,10 +38,11 @@ El contratista nuevo queda **con acceso**: ya puede registrar su ingreso
 
 ## Pasos — editar
 
-1. Busque a la persona y haga **doble clic** en su fila. Se abre **Editar
-   contratista**.
-2. Cambie lo que haga falta.
-3. Pulse **Guardar**.
+1. Busque a la persona y haga **doble clic** en su fila. Se abre
+   **Detalles del contratista**, con su [carné PRAIND](carne-praind.md).
+2. Pulse **Editar**. Se abre **Editar contratista**.
+3. Cambie lo que haga falta.
+4. Pulse **Guardar**.
 
 El caso más común es **renovar el PRAIND**: cambie **Fecha de vencimiento
 PRAIND** por la fecha del carnet nuevo. Lo puede hacer el operador.
@@ -75,3 +77,4 @@ tiene acceso, en la tabla se ve **"Acceso denegado"** en la columna
 - [Buscar un contratista y entender su estado](buscar-contratista.md)
 - [PRAIND vencido, acceso denegado y otros bloqueos](praind-y-bloqueos-de-acceso.md)
 - [Empresas](empresas.md)
+- [Ver el carné PRAIND de un contratista](carne-praind.md)

@@ -52,10 +52,13 @@ El operador puede hacerlo él mismo cuando la persona presenta el carnet
 renovado.
 
 1. Vaya a **Contratistas**.
-2. Busque a la persona y haga **doble clic** en su fila.
+2. Busque a la persona, haga **doble clic** en su fila y pulse **Editar**.
 3. Cambie **Fecha de vencimiento PRAIND** con la fecha del carnet renovado.
 4. Pulse **Guardar**.
 5. Vuelva a **Nuevo ingreso** (Ctrl+N) y registre la entrada.
+
+Si el equipo tiene permiso, aproveche para cargar el carné nuevo (ver
+[Ver el carné PRAIND de un contratista](carne-praind.md)).
 
 ## Relacionado
 
