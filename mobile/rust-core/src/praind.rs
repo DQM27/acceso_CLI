@@ -45,6 +45,16 @@ fn rechazo(mensaje: String) -> NucleoError {
     NucleoError::Rechazado { mensaje }
 }
 
+fn nombre_contratista(conexion: &rusqlite::Connection, id: i64) -> Result<String, NucleoError> {
+    conexion
+        .query_row(
+            "SELECT nombre FROM contratistas WHERE id = ?1",
+            [id],
+            |fila| fila.get(0),
+        )
+        .map_err(|_| rechazo("El contratista no existe.".to_string()))
+}
+
 use praind::nombres_coinciden;
 
 impl Nucleo {
@@ -61,20 +71,6 @@ impl Nucleo {
                     }
                 }
             })
-    }
-
-    fn nombre_contratista(
-        &self,
-        conexion: &rusqlite::Connection,
-        id: i64,
-    ) -> Result<String, NucleoError> {
-        conexion
-            .query_row(
-                "SELECT nombre FROM contratistas WHERE id = ?1",
-                [id],
-                |fila| fila.get(0),
-            )
-            .map_err(|_| rechazo("El contratista no existe.".to_string()))
     }
 }
 
@@ -140,7 +136,7 @@ impl Nucleo {
     ) -> Result<CargaCarnePraind, NucleoError> {
         self.actor_autenticado()?;
         let conexion = self.conexion_secundaria()?;
-        let nombre = self.nombre_contratista(&conexion, contratista_id)?;
+        let nombre = nombre_contratista(&conexion, contratista_id)?;
         let carga = praind::cargar_carne_desde_qr(
             &conexion,
             contratista_id,
