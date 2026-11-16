@@ -1305,7 +1305,7 @@ textarea::placeholder {
    del otro. */
 .detalle-contratista {
   display: grid;
-  grid-template-columns: minmax(14rem, 1fr) minmax(12rem, 16rem);
+  grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 26rem);
   gap: 1.25rem;
   align-items: start;
 }
@@ -1324,7 +1324,7 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 12rem;
+  min-height: 20rem;
   padding: 0.5rem;
   border: 1px solid var(--borde);
   border-radius: var(--radio-chico);
@@ -1343,13 +1343,19 @@ textarea::placeholder {
 .detalle-contratista-imagen img {
   display: block;
   max-width: 100%;
-  max-height: 22rem;
+  max-height: 34rem;
   border-radius: var(--radio-chico);
+}
+.detalle-contratista-pista {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85em;
 }
 .detalle-contratista-ampliado {
   display: block;
-  max-width: min(80vw, 40rem);
-  max-height: 78vh;
+  max-width: 100%;
+  max-height: 80vh;
   margin: 0 auto;
 }
 .detalle-contratista-carga {

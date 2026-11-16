@@ -34,10 +34,13 @@ export default function Modal({
   titulo,
   onCerrar,
   children,
+  ancho = "32rem",
 }: {
   titulo: string;
   onCerrar: () => void;
   children: ReactNode;
+  /** Ancho de la tarjeta (sin pasar del de la ventana). */
+  ancho?: string;
 }) {
   // `onCerrar` puede cambiar en cada render de la pantalla: se lee el último
   // al terminar la salida.
@@ -119,7 +122,7 @@ export default function Modal({
         style={{
           background: "var(--elevado)",
           boxShadow: "var(--sombra-panel)",
-          width: "32rem",
+          width: ancho,
           maxWidth: "calc(100% - 2rem)",
           maxHeight: "calc(100% - 2rem)",
           overflowY: "auto",

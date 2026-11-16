@@ -91,7 +91,7 @@ export default function DetalleContratista({
   const estadoAcceso = textoEstadoAcceso(contratista);
 
   return (
-    <Modal titulo="Detalles del contratista" onCerrar={onCerrar}>
+    <Modal titulo="Detalles del contratista" onCerrar={onCerrar} ancho="56rem">
       <div className="detalle-contratista">
         <dl className="detalle-contratista-datos">
           <dt>Nombre</dt>
@@ -130,6 +130,7 @@ export default function DetalleContratista({
               title="Ver en grande"
             >
               <img src={vista.url} alt={`Carné PRAIND de ${contratista.nombre}`} />
+              <span className="detalle-contratista-pista">Clic para ampliar</span>
             </button>
           )}
         </div>
@@ -163,7 +164,7 @@ export default function DetalleContratista({
       )}
 
       {ampliado && vista.tipo === "imagen" && (
-        <Modal titulo={`Carné PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)}>
+        <Modal titulo={`Carné PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
           <img className="detalle-contratista-ampliado" src={vista.url} alt={`Carné PRAIND de ${contratista.nombre}`} />
         </Modal>
       )}
