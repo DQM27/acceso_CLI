@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, Plus } from "lucide-react";
 import type { CellStyle, ColDef } from "ag-grid-community";
@@ -7,6 +7,8 @@ import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useLista } from "../componentes/useLista";
 import FormularioContratista from "./FormularioContratista";
+import CarnePraind from "./CarnePraind";
+import { cambiarCargaDesdeEquipos, cargaDesdeEquiposPermitida } from "../api/praind";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { ContratistaConEstado } from "../api/contratistas";
 import { textoFechaDDMMYYYY, textoFechaHora } from "../tiempo";
@@ -33,6 +35,35 @@ export default function Contratistas() {
   const [modalAbierto, setModalAbierto] = useState(false);
   // Contratista que se está editando (modal de edición abierto), o null.
   const [editando, setEditando] = useState<ContratistaConEstado | null>(null);
+  // Contratista cuyo carné PRAIND se está viendo, o null.
+  const [carneDe, setCarneDe] = useState<ContratistaConEstado | null>(null);
+  // Interruptor de la nube: si los equipos también cargan carnés. `null`
+  // mientras no se sabe (no se muestra).
+  const [cargaEquipos, setCargaEquipos] = useState<boolean | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    cargaDesdeEquiposPermitida()
+      .then((valor) => {
+        if (vigente) setCargaEquipos(valor);
+      })
+      .catch(() => {
+        // Sin el ajuste no se ofrece el interruptor.
+      });
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  async function cambiarCargaEquipos(permitir: boolean) {
+    setCargaEquipos(permitir);
+    try {
+      await cambiarCargaDesdeEquipos(permitir);
+      toast.success(permitir ? "Los equipos ya pueden cargar carnés PRAIND." : "Sólo el panel carga carnés PRAIND.");
+    } catch (error) {
+      setCargaEquipos(!permitir);
+      toast.error(mensajeError(error));
+    }
+  }
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico.
@@ -73,6 +104,19 @@ export default function Contratistas() {
         cellRenderer: ({ data }: { data: ContratistaConEstado }) => (
           <button type="button" className="boton boton-celda-angosto" onClick={() => setEditando(data)}>
             Editar
+          </button>
+        ),
+      },
+      {
+        colId: "carne",
+        headerName: "",
+        flex: 0.7,
+        minWidth: 90,
+        filter: false,
+        sortable: false,
+        cellRenderer: ({ data }: { data: ContratistaConEstado }) => (
+          <button type="button" className="boton boton-celda-angosto" onClick={() => setCarneDe(data)}>
+            Carné
           </button>
         ),
       },
@@ -183,10 +227,25 @@ export default function Contratistas() {
             // filtros a la izquierda; buscador y «Tabla» a la derecha.
             mensajeVacio="No hay contratistas registrados. «Nuevo contratista» agrega el primero."
             controles={
-              <button type="button" className="boton boton-icono" onClick={() => setModalAbierto(true)}>
-                <Plus size={16} aria-hidden="true" />
-                Nuevo contratista
-              </button>
+              <>
+                <button type="button" className="boton boton-icono" onClick={() => setModalAbierto(true)}>
+                  <Plus size={16} aria-hidden="true" />
+                  Nuevo contratista
+                </button>
+                {cargaEquipos !== null && (
+                  <label
+                    className="flex items-center gap-2 text-(--texto)"
+                    title="Apagado: sólo el panel carga carnés PRAIND"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={cargaEquipos}
+                      onChange={(evento) => void cambiarCargaEquipos(evento.target.checked)}
+                    />
+                    Equipos cargan carnés
+                  </label>
+                )}
+              </>
             }
             accionesDerecha={
               <div className="campo min-w-40 max-w-72 flex-[1_1_16rem]">
@@ -212,6 +271,8 @@ export default function Contratistas() {
           onCerrar={() => setEditando(null)}
         />
       )}
+
+      {carneDe && <CarnePraind contratista={carneDe} onCerrar={() => setCarneDe(null)} />}
 
       {modalAbierto && (
         <FormularioContratista

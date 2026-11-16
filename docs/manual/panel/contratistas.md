@@ -57,6 +57,29 @@ y **Activo**.
 
 El cambio llega a todos los equipos en segundos.
 
+## Pasos — carné PRAIND
+
+1. Toque **Carné** en la fila (segunda columna). Se abre el carné de la
+   persona, o "Este contratista no tiene carné PRAIND cargado.". Tóquelo
+   para abrirlo en grande.
+2. Para cargarlo, toque **Cargar carné** (o **Reemplazar carné**):
+   - Pegue el enlace del QR del carné (empieza con `https://prd.pw/`) y
+     toque **Buscar carné**. Aparece de quién es: en verde si coincide con
+     el contratista (toque **Guardar carné**); en amarillo si **no**
+     coincide (revise antes de tocar **Guardar igual**).
+   - O toque **Elegir imagen…** y seleccione el carné (PNG o JPEG, hasta
+     10 MB).
+3. Para quitarlo, toque **Quitar** y confirme con **Sí, quitar**.
+
+Los equipos ven el carné nuevo después de su próxima sincronización.
+
+### Quién más puede cargar carnés
+
+La casilla **Equipos cargan carnés**, arriba de la tabla, decide si los
+equipos del puesto de control (escritorio y móvil) también pueden cargar o
+reemplazar carnés. Apagada (como viene), sólo el panel los carga. Ver un
+carné lo puede cualquier equipo vinculado.
+
 ## Mensajes que pueden aparecer
 
 | Mensaje | Qué significa | Qué hacer |

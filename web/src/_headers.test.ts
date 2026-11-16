@@ -37,6 +37,12 @@ describe("public/_headers", () => {
     expect(connectSrc).toContain("wss://xidaepyaljzkpbsxrqsm.supabase.co");
   });
 
+  it("deja hablar con el Worker de carnés PRAIND y mostrar sus imágenes como blob", () => {
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1] ?? "";
+    expect(linea.match(/connect-src ([^;]+)/)?.[1]).toContain("https://praind.megabrisas.com");
+    expect(linea.match(/img-src ([^;]+)/)?.[1]).toContain("blob:");
+  });
+
   it("bloquea que la app se embeba en un iframe ajeno (frame-ancestors + X-Frame-Options)", () => {
     expect(contenido).toContain("frame-ancestors 'none'");
     expect(contenido).toMatch(/X-Frame-Options:\s*DENY/);

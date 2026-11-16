@@ -95,6 +95,8 @@ async function preparar(page: Page) {
           activo: true,
         });
       }
+      // Interruptor de carga de carnés PRAIND (una sola fila; `maybeSingle`).
+      if (url.pathname === "/rest/v1/ajustes_praind") return responder({ carga_desde_equipos: false });
       if (url.pathname === "/rest/v1/panel_contratistas_estado")
         return responder([
           {
