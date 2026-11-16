@@ -64,6 +64,9 @@ pub struct ContratistaResumen {
     /// Indica si existe un movimiento sin salida para mostrar el estado
     /// actual antes de intentar preparar un nuevo ingreso.
     pub tiene_ingreso_activo: bool,
+    /// Tiene la foto de su PRAIND cargada en la nube (`praind_foto`, llega
+    /// con el catálogo). No dice si ya está guardada en este equipo.
+    pub tiene_foto_praind: bool,
     /// "ACCESO DENEGADO" / "PRAIND VENCIDO" listo para mostrar en la fila.
     /// Lo llena `AppCore::buscar_contratistas` con el reloj del núcleo; la
     /// consulta lo deja en `None`.
@@ -302,7 +305,8 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
                     SELECT 1
                     FROM ingresos_remotos AS rr
                     WHERE rr.contratista_cedula = c.cedula
-                )
+                ),
+                c.praind_foto IS NOT NULL
              {CONTRATISTAS_FROM} {where_sql}
              ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,
                       c.nombre COLLATE NOCASE, c.id
@@ -356,6 +360,7 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
         tiene_acceso: row.get::<_, i64>(8)? != 0,
         empresa_activa: row.get::<_, i64>(9)? != 0,
         tiene_ingreso_activo: row.get::<_, i64>(10)? != 0,
+        tiene_foto_praind: row.get::<_, i64>(11)? != 0,
         aviso_acceso: None,
         tipo_aviso_acceso: None,
         estado_acceso: None,

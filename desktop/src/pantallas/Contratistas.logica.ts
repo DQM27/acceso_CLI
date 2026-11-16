@@ -1,5 +1,6 @@
 import type { ColDef } from "ag-grid-community";
 import CeldaAdentro from "../componentes/CeldaAdentro";
+import CeldaFotoPraind from "../componentes/CeldaFotoPraind";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { textoTipoIngreso } from "../api";
 import type { ContratistaResumen, EstadoAccesoLista } from "../api";
@@ -106,6 +107,15 @@ export function columnasContratistas(): ColDef<ContratistaResumen>[] {
       // 2026-11-14).
       valueGetter: (p) => (p.data?.tiene_ingreso_activo ? "Sí" : ""),
       cellRenderer: CeldaAdentro,
+    },
+    {
+      field: "tiene_foto_praind",
+      headerName: "Foto PRAIND",
+      flex: 1.1,
+      minWidth: 130,
+      // Texto para filtrar y ordenar: "Sí" / "No".
+      valueGetter: (p) => (p.data ? (p.data.tiene_foto_praind ? "Sí" : "No") : ""),
+      cellRenderer: CeldaFotoPraind,
     },
     {
       field: "es_personal_ruta",
