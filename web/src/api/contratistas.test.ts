@@ -49,6 +49,7 @@ function filaCompleta(sobrescribir: Record<string, unknown> = {}) {
     estado_acceso: "PERMITIDO",
     adentro_sitio_nombre: null,
     adentro_desde: null,
+    tiene_foto_praind: false,
     ...sobrescribir,
   };
 }

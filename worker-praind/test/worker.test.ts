@@ -139,7 +139,7 @@ describe("POST /cargar-desde-qr", () => {
   const cuerpo = (contratista: string, extra: Record<string, unknown> = {}) =>
     JSON.stringify({ contratista_id: contratista, enlace: ENLACE, ...extra });
 
-  it("baja el carné, lo guarda y devuelve el nombre de la página", async () => {
+  it("baja el gafete PRAIND, lo guarda y devuelve el nombre de la página", async () => {
     const contratista = nuevoContratista();
     let argumentos: Record<string, unknown> = {};
     const s = simular({
@@ -173,7 +173,7 @@ describe("POST /cargar-desde-qr", () => {
     expect((await ENV.FOTOS.list({ prefix: `contratistas/${contratista}/` })).objects).toHaveLength(0);
   });
 
-  it("rechaza enlaces que no son de carnés sin salir a internet", async () => {
+  it("rechaza enlaces que no son de gafetes PRAIND sin salir a internet", async () => {
     const contratista = nuevoContratista();
     for (const enlace of [
       "http://prd.pw/abc",
@@ -251,7 +251,7 @@ describe("POST /cargar-desde-qr", () => {
 });
 
 describe("PUT /cargar", () => {
-  it("guarda la imagen y borra el carné anterior", async () => {
+  it("guarda la imagen y borra el gafete PRAIND anterior", async () => {
     const contratista = nuevoContratista();
     const anterior = await claveDe(contratista, PNG, "png");
     await ENV.FOTOS.put(anterior, PNG);
@@ -279,7 +279,7 @@ describe("PUT /cargar", () => {
 });
 
 describe("DELETE /foto", () => {
-  it("quita el carné y borra el objeto", async () => {
+  it("quita el gafete PRAIND y borra el objeto", async () => {
     const contratista = nuevoContratista();
     const clave = await claveDe(contratista, PNG, "png");
     await ENV.FOTOS.put(clave, PNG);
@@ -292,7 +292,7 @@ describe("DELETE /foto", () => {
   it("un equipo no puede quitar", async () => {
     const contratista = nuevoContratista();
     const s = simular({
-      [`${SUPABASE}/rest/v1/rpc/praind_quitar`]: rpcJson({ code: "42501", message: "Sólo el panel puede quitar carnés PRAIND." }, 403),
+      [`${SUPABASE}/rest/v1/rpc/praind_quitar`]: rpcJson({ code: "42501", message: "Sólo el panel puede quitar gafetes PRAIND." }, 403),
     });
     const r = await manejar(pedido("DELETE", `/foto/${contratista}`), ENV, s.deps);
     expect(r.status).toBe(403);

@@ -116,6 +116,7 @@ async function preparar(page: Page) {
             estado_acceso: "PRAIND_VENCIDO",
             adentro_sitio_nombre: sitio.nombre,
             adentro_desde: "2026-09-30T14:00:00Z",
+            tiene_foto_praind: true,
           },
         ]);
       if (url.pathname === "/rest/v1/panel_adentro_ahora")

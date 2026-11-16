@@ -81,7 +81,7 @@ export default function CarnePraind({
     setQuitando(true);
     try {
       await quitarCarne(contratista.id);
-      toast.success(`Se quitó el carné de ${contratista.nombre}.`);
+      toast.success(`Se quitó el gafete PRAIND de ${contratista.nombre}.`);
       setConfirmarQuitar(false);
       recargarCarne();
     } catch (error) {
@@ -92,22 +92,22 @@ export default function CarnePraind({
   }
 
   return (
-    <Modal titulo={`Carné PRAIND · ${contratista.nombre}`} onCerrar={onCerrar}>
+    <Modal titulo={`Gafete PRAIND · ${contratista.nombre}`} onCerrar={onCerrar}>
       <div className="flex flex-col gap-4">
         <div
           className="flex min-h-48 items-center justify-center rounded-(--radio-chico) border border-(--borde) bg-(--panel-suave) p-2 text-center"
           aria-live="polite"
         >
-          {vista.tipo === "cargando" && <p className="text-(--muted)">Cargando carné…</p>}
+          {vista.tipo === "cargando" && <p className="text-(--muted)">Cargando gafete PRAIND…</p>}
           {vista.tipo === "sin_carne" && (
-            <p className="text-(--muted)">Este contratista no tiene carné PRAIND cargado.</p>
+            <p className="text-(--muted)">Este contratista no tiene el gafete PRAIND cargado.</p>
           )}
           {vista.tipo === "error" && <p className="text-(--error)">{vista.mensaje}</p>}
           {vista.tipo === "imagen" && (
             <a href={vista.url} target="_blank" rel="noreferrer" title="Abrir en grande">
               <img
                 src={vista.url}
-                alt={`Carné PRAIND de ${contratista.nombre}`}
+                alt={`Gafete PRAIND de ${contratista.nombre}`}
                 className="block max-h-[60vh] max-w-full rounded-(--radio-chico)"
               />
             </a>
@@ -120,13 +120,13 @@ export default function CarnePraind({
             onCancelar={() => setCargando(false)}
             onCargado={() => {
               setCargando(false);
-              toast.success(`Carné de ${contratista.nombre} guardado.`);
+              toast.success(`Gafete PRAIND de ${contratista.nombre} guardado.`);
               recargarCarne();
             }}
           />
         ) : confirmarQuitar ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <span className="mr-auto">¿Quitar el carné de {contratista.nombre}? Los equipos dejan de verlo.</span>
+            <span className="mr-auto">¿Quitar el gafete PRAIND de {contratista.nombre}? Los equipos dejan de verlo.</span>
             <button type="button" className="boton" onClick={() => setConfirmarQuitar(false)} disabled={quitando}>
               Cancelar
             </button>
@@ -144,7 +144,7 @@ export default function CarnePraind({
             )}
             <button type="button" className="boton boton-primario boton-icono" onClick={() => setCargando(true)}>
               <QrCode size={16} aria-hidden="true" />
-              {vista.tipo === "imagen" ? "Reemplazar carné" : "Cargar carné"}
+              {vista.tipo === "imagen" ? "Reemplazar gafete PRAIND" : "Cargar gafete PRAIND"}
             </button>
           </div>
         )}
@@ -185,7 +185,7 @@ function CargaDeCarne({
   return (
     <div className="flex flex-col gap-3 border-t border-(--borde) pt-4">
       <label className="campo">
-        Enlace del QR del carné
+        Enlace del QR del gafete PRAIND
         <input
           value={enlace}
           onChange={(e) => {
@@ -201,8 +201,8 @@ function CargaDeCarne({
       {previa && (
         <p style={{ color: coincide ? "var(--exito)" : "var(--advertencia)" }}>
           {coincide
-            ? `El carné es de ${previa.nombre_en_origen}.`
-            : `El carné es de «${previa.nombre_en_origen ?? "nombre desconocido"}», que no coincide con ${contratista.nombre}. Revisá que sea el carné correcto.`}
+            ? `El gafete PRAIND es de ${previa.nombre_en_origen}.`
+            : `El gafete PRAIND es de «${previa.nombre_en_origen ?? "nombre desconocido"}», que no coincide con ${contratista.nombre}. Revisá que sea el gafete PRAIND correcto.`}
         </p>
       )}
       {error && <p className="text-(--error)">{error}</p>}
@@ -246,7 +246,7 @@ function CargaDeCarne({
                 })
               }
             >
-              {ocupado ? "Guardando…" : coincide ? "Guardar carné" : "Guardar igual"}
+              {ocupado ? "Guardando…" : coincide ? "Guardar gafete PRAIND" : "Guardar igual"}
             </button>
           ) : (
             <button
@@ -259,7 +259,7 @@ function CargaDeCarne({
                 })
               }
             >
-              {ocupado ? "Buscando…" : "Buscar carné"}
+              {ocupado ? "Buscando…" : "Buscar gafete PRAIND"}
             </button>
           )}
         </div>

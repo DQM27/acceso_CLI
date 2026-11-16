@@ -37,7 +37,7 @@ async function pedir(ruta: string, init: RequestInit = {}): Promise<Response> {
       headers: { ...init.headers, Authorization: `Bearer ${await token()}` },
     });
   } catch {
-    throw new Error("No se pudo conectar con el servicio de carnés. Revisá la conexión.");
+    throw new Error("No se pudo conectar con el servicio de gafetes PRAIND. Revisá la conexión.");
   }
   if (!respuesta.ok) {
     let detalle: string | undefined;
@@ -46,7 +46,7 @@ async function pedir(ruta: string, init: RequestInit = {}): Promise<Response> {
     } catch {
       // Sin cuerpo JSON: queda el texto genérico.
     }
-    throw new Error(detalle ?? `El servicio de carnés respondió ${respuesta.status}.`);
+    throw new Error(detalle ?? `El servicio de gafetes PRAIND respondió ${respuesta.status}.`);
   }
   return respuesta;
 }

@@ -49,7 +49,7 @@ export function comoBytes(respuesta: unknown): Uint8Array<ArrayBuffer> {
     return Uint8Array.from(new Uint8Array(respuesta.buffer, respuesta.byteOffset, respuesta.byteLength));
   }
   if (Array.isArray(respuesta)) return Uint8Array.from(respuesta as number[]);
-  throw new Error("El carné llegó en un formato inesperado.");
+  throw new Error("El gafete PRAIND llegó en un formato inesperado.");
 }
 
 export function cargarCarnePraindDesdeQr(

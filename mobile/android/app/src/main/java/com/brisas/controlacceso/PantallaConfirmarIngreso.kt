@@ -300,7 +300,7 @@ internal fun HojaIngreso(
                 }
                 if (tieneCarne) {
                     BotonDiscretoBrisas(onClick = onVerCarne) {
-                        Text("Ver carné")
+                        Text("Ver gafete PRAIND")
                     }
                 }
             }

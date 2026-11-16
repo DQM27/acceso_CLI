@@ -126,7 +126,7 @@ internal fun ResultadosIngreso(
             FilaCrear(texto, onClick = { onNuevoContratista(texto) }, etiqueta = "Registrar nuevo contratista")
             EstadoVacio(
                 "No está registrado",
-                "Regístrelo con su carnet PRAIND y enseguida se le da el ingreso.",
+                "Regístrelo con su gafete PRAIND y enseguida se le da el ingreso.",
                 IconosLucide.BuscarPersona,
             )
         }

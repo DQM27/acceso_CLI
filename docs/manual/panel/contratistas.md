@@ -57,28 +57,28 @@ y **Activo**.
 
 El cambio llega a todos los equipos en segundos.
 
-## Pasos — carné PRAIND
+## Pasos — gafete PRAIND
 
-1. Toque **Carné** en la fila (segunda columna). Se abre el carné de la
-   persona, o "Este contratista no tiene carné PRAIND cargado.". Tóquelo
+1. Toque **Gafete PRAIND** en la fila (segunda columna). Se abre el gafete PRAIND de la
+   persona, o "Este contratista no tiene el gafete PRAIND cargado.". Tóquelo
    para abrirlo en grande.
-2. Para cargarlo, toque **Cargar carné** (o **Reemplazar carné**):
-   - Pegue el enlace del QR del carné (empieza con `https://prd.pw/`) y
-     toque **Buscar carné**. Aparece de quién es: en verde si coincide con
-     el contratista (toque **Guardar carné**); en amarillo si **no**
+2. Para cargarlo, toque **Cargar gafete PRAIND** (o **Reemplazar gafete PRAIND**):
+   - Pegue el enlace del QR del gafete PRAIND (empieza con `https://prd.pw/`) y
+     toque **Buscar gafete PRAIND**. Aparece de quién es: en verde si coincide con
+     el contratista (toque **Guardar gafete PRAIND**); en amarillo si **no**
      coincide (revise antes de tocar **Guardar igual**).
-   - O toque **Elegir imagen…** y seleccione el carné (PNG o JPEG, hasta
+   - O toque **Elegir imagen…** y seleccione el gafete PRAIND (PNG o JPEG, hasta
      10 MB).
 3. Para quitarlo, toque **Quitar** y confirme con **Sí, quitar**.
 
-Los equipos ven el carné nuevo después de su próxima sincronización.
+Los equipos ven el gafete PRAIND nuevo después de su próxima sincronización.
 
-### Quién más puede cargar carnés
+### Quién más puede cargar gafetes PRAIND
 
-La casilla **Equipos cargan carnés**, arriba de la tabla, decide si los
+La casilla **Equipos cargan gafetes PRAIND**, arriba de la tabla, decide si los
 equipos del puesto de control (escritorio y móvil) también pueden cargar o
-reemplazar carnés. Apagada (como viene), sólo el panel los carga. Ver un
-carné lo puede cualquier equipo vinculado.
+reemplazar gafetes PRAIND. Apagada (como viene), sólo el panel los carga. Ver un
+gafete PRAIND lo puede cualquier equipo vinculado.
 
 ## Mensajes que pueden aparecer
 
@@ -86,8 +86,8 @@ carné lo puede cualquier equipo vinculado.
 |---|---|---|
 | "Elija la empresa" | Falta la empresa. | Elíjala o créela. |
 | "Ya existe un contratista con esa cédula" | Ya está registrado. | Búsquelo y edítelo. |
-| "Fecha PRAIND requerida" | El tipo pide fecha de PRAIND. | Escriba la fecha del carnet, o márquelo con el acceso denegado. |
-| "El PRAIND está vencido — ingrese una fecha vigente" | La fecha ya pasó. | Escriba la de un carnet vigente. |
+| "Fecha PRAIND requerida" | El tipo pide fecha de PRAIND. | Escriba la fecha del gafete PRAIND, o márquelo con el acceso denegado. |
+| "El PRAIND está vencido — ingrese una fecha vigente" | La fecha ya pasó. | Escriba la de un gafete PRAIND vigente. |
 | "Hay más de N contratistas -- se muestran solo los primeros…" | El catálogo es muy grande. | Use el buscador para encontrar a la persona. |
 
 ## Relacionado

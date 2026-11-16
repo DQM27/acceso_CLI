@@ -94,7 +94,7 @@ impl std::fmt::Display for ErrorPraind {
             Self::Rechazo { mensaje, .. } => write!(f, "{mensaje}"),
             Self::Inesperado(detalle) => write!(
                 f,
-                "Respuesta inesperada del servicio de carnés ({detalle})."
+                "Respuesta inesperada del servicio de gafetes PRAIND ({detalle})."
             ),
         }
     }
@@ -127,8 +127,8 @@ fn rechazo(respuesta: reqwest::blocking::Response) -> ErrorPraind {
         .unwrap_or_else(|| match estado {
             401 => "La sesión del equipo venció. Intentá de nuevo.".to_string(),
             403 => "Este equipo no tiene permiso para esta acción.".to_string(),
-            404 => "El carné no existe.".to_string(),
-            _ => format!("El servicio de carnés respondió {estado}."),
+            404 => "El gafete PRAIND no existe.".to_string(),
+            _ => format!("El servicio de gafetes PRAIND respondió {estado}."),
         });
     ErrorPraind::Rechazo { estado, mensaje }
 }
@@ -227,8 +227,8 @@ pub fn cargar_archivo(
 // instante y sin internet); si no, se baja y queda guardado. Nada se baja por
 // adelantado. `token` sólo se llama si hace falta la nube.
 
-pub const SIN_CARNE: &str = "Este contratista no tiene carné PRAIND cargado.";
-pub const SIN_INTERNET_PRIMERA_VEZ: &str = "Para ver este carné por primera vez, conectate a internet. \
+pub const SIN_CARNE: &str = "Este contratista no tiene el gafete PRAIND cargado.";
+pub const SIN_INTERNET_PRIMERA_VEZ: &str = "Para ver este gafete PRAIND por primera vez, conectate a internet. \
      Después de verlo una vez queda guardado en este equipo.";
 const SIN_SINCRONIZAR: &str =
     "Este contratista todavía no llegó a la nube. Esperá a que sincronice y volvé a intentar.";

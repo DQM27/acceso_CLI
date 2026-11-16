@@ -72,7 +72,7 @@ class CarnePraindViewModelTest {
 
     @Test
     fun sinInternetMuestraElAvisoDelNucleo() = runTest(dispatcher) {
-        val aviso = "Para ver este carné por primera vez, conectate a internet."
+        val aviso = "Para ver este gafete PRAIND por primera vez, conectate a internet."
         val vm = CarnePraindViewModel(FuenteFalsa(error = aviso), dispatcher)
         vm.abrir(1L, "ANA PEREZ")
         advanceUntilIdle()
