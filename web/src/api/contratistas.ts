@@ -59,6 +59,8 @@ export interface ContratistaConEstado extends Contratista {
   estado_acceso: EstadoAcceso;
   adentro_sitio_nombre: string | null;
   adentro_desde: string | null;
+  /** Tiene la foto de su gafete PRAIND cargada. */
+  tiene_foto_praind: boolean;
 }
 
 export interface ResultadoContratistas {
@@ -100,6 +102,7 @@ const filaContratistaConEstadoEsquema = filaContratistaEsquema.extend({
   ]),
   adentro_sitio_nombre: z.string().nullable(),
   adentro_desde: z.string().nullable(),
+  tiene_foto_praind: z.boolean(),
 });
 
 // Válvula de seguridad, no paginación real -- muy por encima de cualquier
@@ -116,7 +119,7 @@ export async function listarContratistas(): Promise<ResultadoContratistas> {
       "id, identificacion, nombre, empresa_id, empresa_nombre, tipo_ingreso, " +
         "fecha_vencimiento_praind, es_personal_ruta, activo, empresa_activa, " +
         "requiere_praind, dias_para_vencer, estado_praind, estado_acceso, " +
-        "adentro_sitio_nombre, adentro_desde",
+        "adentro_sitio_nombre, adentro_desde, tiene_foto_praind",
       { count: "exact" },
     )
     .order("nombre")

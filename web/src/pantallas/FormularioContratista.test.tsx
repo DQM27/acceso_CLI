@@ -48,6 +48,7 @@ function guardado(cambios: Partial<ContratistaConEstado> = {}): ContratistaConEs
     estado_acceso: "PERMITIDO",
     adentro_sitio_nombre: null,
     adentro_desde: null,
+    tiene_foto_praind: false,
     ...cambios,
   };
 }

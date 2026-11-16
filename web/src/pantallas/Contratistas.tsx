@@ -179,6 +179,27 @@ export default function Contratistas() {
             : "",
       },
       {
+        // Si tiene la foto de su gafete PRAIND cargada (igual que en el
+        // escritorio). Texto "Sí"/"No" para filtrar y ordenar; en la celda,
+        // un punto verde o gris.
+        field: "tiene_foto_praind",
+        headerName: "Foto PRAIND",
+        flex: 1.1,
+        minWidth: 130,
+        valueGetter: (p) => (p.data ? (p.data.tiene_foto_praind ? "Sí" : "No") : ""),
+        cellRenderer: ({ value }: { value: string }) =>
+          value ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="inline-block size-2 rounded-full"
+                style={{ background: value === "Sí" ? "var(--exito)" : "var(--muted)" }}
+              />
+              {value}
+            </span>
+          ) : null,
+      },
+      {
         // Sólo lectura en la grilla: se cambia con "Editar".
         field: "es_personal_ruta",
         headerName: "Personal de ruta",
