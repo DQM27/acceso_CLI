@@ -64,8 +64,9 @@ const guardado = (extra) => ({
   ...extra,
 });
 const empresas = [{ id: "e1", nombre: "EXPENIC ING S.A.", activa: true }];
-const plan = (c, contratistas) =>
-  armarPlan({ personas: [{ carne: carne(c), otros: [] }] }, empresas, contratistas, "2026-11-16").acciones[0];
+const plan = (c, contratistas, vencidosHasta = null) =>
+  armarPlan({ personas: [{ carne: carne(c), otros: [] }] }, empresas, contratistas, "2026-11-16", vencidosHasta)
+    .acciones[0];
 
 test("existente: corre la fecha si el carné vence después y carga la foto", () => {
   const a = plan({}, [guardado()]);
@@ -93,5 +94,21 @@ test("nombre mal escrito: queda el del carné; si sólo le falta un apellido, qu
 
 test("nuevo: se crea si el PRAIND está vigente; vencido no se puede registrar", () => {
   assert.equal(plan({}, []).tipo, "crear");
+  assert.equal(plan({}, []).fecha, "2028-01-01");
   assert.equal(plan({ vencimiento: "2026-01-01" }, []).tipo, "omitir");
+});
+
+test("con prórroga, el nuevo con carné vencido se registra hasta esa fecha", () => {
+  const a = plan({ vencimiento: "2026-01-01" }, [], "2026-12-31");
+  assert.equal(a.tipo, "crear");
+  assert.equal(a.fecha, "2026-12-31");
+  // Una prórroga que ya pasó no sirve: la regla lo rechazaría igual.
+  assert.equal(plan({ vencimiento: "2026-01-01" }, [], "2026-11-01").tipo, "omitir");
+});
+
+test("con prórroga, el existente sólo la recibe si su fecha está vacía o vencida", () => {
+  const vencido = { vencimiento: "2026-01-01" };
+  assert.equal(plan(vencido, [guardado({ fecha_vencimiento_praind: null })], "2026-12-31").fecha, "2026-12-31");
+  assert.equal(plan(vencido, [guardado({ fecha_vencimiento_praind: "2026-05-01" })], "2026-12-31").fecha, "2026-12-31");
+  assert.equal(plan(vencido, [guardado({ fecha_vencimiento_praind: "2027-01-01" })], "2026-12-31").fecha, "2027-01-01");
 });

@@ -14,7 +14,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stdin, stdout } from "node:process";
 import readline from "node:readline/promises";
@@ -32,7 +32,8 @@ function argumentos(lista) {
     const a = lista[i];
     if (a === "--aplicar") salida.aplicar = true;
     else if (a === "--sin-ocr") salida.sinOcr = true;
-    else if (a.startsWith("--")) salida[a.slice(2)] = lista[++i];
+    else if (a === "--pedir-codigo") salida.pedirCodigo = true;
+    else if (a.startsWith("--")) salida[a.slice(2).replace(/-(\w)/g, (_, l) => l.toUpperCase())] = lista[++i];
   }
   if (!salida.carpeta) {
     console.error("Uso: node importar.mjs --carpeta <dir> [--correo <admin>] [--aplicar] [--sin-ocr]");
@@ -40,6 +41,13 @@ function argumentos(lista) {
   }
   salida.carpeta = path.resolve(salida.carpeta);
   salida.salida = path.resolve(salida.salida ?? path.join(path.dirname(salida.carpeta), "importacion-praind"));
+  // A quien el carné ya se le venció se le da hasta esta fecha (pedido del
+  // usuario 2026-11-16): queda registrado con su foto y se vence igual.
+  salida.vencidosHasta ??= `${hoyCostaRica().slice(0, 4)}-12-31`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(salida.vencidosHasta)) {
+    console.error("--vencidos-hasta va como AAAA-MM-DD");
+    process.exit(2);
+  }
   return salida;
 }
 
@@ -248,20 +256,44 @@ class Nube {
     this.sesion = null;
   }
 
-  async entrar(correo) {
-    const rl = readline.createInterface({ input: stdin, output: stdout });
+  /** Entra con un código por correo. Sin terminal interactiva: primero
+   * `--pedir-codigo` (manda el correo y termina) y después `--codigo`. La
+   * sesión queda en `archivoSesion` para no pedir otro código en cada
+   * corrida; se borra al terminar de aplicar. */
+  async entrar({ correo, codigo, pedirCodigo }, archivoSesion) {
+    if (!correo && !codigo && existsSync(archivoSesion)) {
+      this.sesion = JSON.parse(readFileSync(archivoSesion, "utf8"));
+      this.archivoSesion = archivoSesion;
+      this.sesion.vence = 0; // se refresca en el primer pedido
+      return;
+    }
+    const rl = codigo || pedirCodigo ? null : readline.createInterface({ input: stdin, output: stdout });
     try {
-      correo ??= (await rl.question("Correo del administrador del panel: ")).trim();
-      await this.auth("/otp", { email: correo, create_user: false });
-      const codigo = (await rl.question(`Te mandé un código a ${correo}. Código: `)).trim();
-      this.guardarSesion(await this.auth("/verify", { type: "email", email: correo, token: codigo }));
+      correo ??= (await rl?.question("Correo del administrador del panel: "))?.trim();
+      if (!correo) throw new Error("Falta --correo.");
+      if (!codigo) {
+        await this.auth("/otp", { email: correo, create_user: false });
+        if (pedirCodigo) {
+          console.log(`Código enviado a ${correo}. Volvé a correr con --correo ${correo} --codigo <código>.`);
+          return false;
+        }
+        codigo = (await rl.question(`Te mandé un código a ${correo}. Código: `)).trim();
+      }
+      this.archivoSesion = archivoSesion;
+      this.guardarSesion(await this.auth("/verify", { type: "email", email: correo, token: String(codigo).trim() }));
+      return true;
     } finally {
-      rl.close();
+      rl?.close();
     }
   }
 
   guardarSesion(s) {
     this.sesion = { token: s.access_token, refresco: s.refresh_token, vence: Date.now() + (s.expires_in - 120) * 1000 };
+    if (this.archivoSesion) writeFileSync(this.archivoSesion, JSON.stringify(this.sesion), { mode: 0o600 });
+  }
+
+  olvidarSesion() {
+    if (this.archivoSesion && existsSync(this.archivoSesion)) rmSync(this.archivoSesion);
   }
 
   async auth(ruta, cuerpo) {
@@ -339,7 +371,10 @@ class Nube {
 
 // ------------------------------------------------------------------- plan
 
-export function armarPlan({ personas }, empresas, contratistas, hoy) {
+/** `vencidosHasta`: la fecha que se le da a quien trae el carné vencido
+ * (`null`: no se registra a los nuevos ni se toca la fecha de los que están). */
+export function armarPlan({ personas }, empresas, contratistas, hoy, vencidosHasta = null) {
+  const prorroga = vencidosHasta && vencidosHasta >= hoy ? vencidosHasta : null;
   // Empresas: cada nombre del carné se asocia a una existente (misma clave,
   // o una empieza con la otra y no hay dudas) o se crea con la forma más
   // usada en los carnés.
@@ -383,8 +418,13 @@ export function armarPlan({ personas }, empresas, contratistas, hoy) {
     const accion = { persona, empresa, como, cambios: [], vencido };
 
     if (!actual) {
-      accion.tipo = vencido ? "omitir" : "crear";
-      if (vencido) accion.motivo = `PRAIND vencido el ${carne.vencimiento}: la nube no deja registrar a alguien nuevo con el PRAIND vencido`;
+      if (vencido && !prorroga) {
+        accion.tipo = "omitir";
+        accion.motivo = `PRAIND vencido el ${carne.vencimiento}: la nube no deja registrar a alguien nuevo con el PRAIND vencido`;
+      } else {
+        accion.tipo = "crear";
+        accion.fecha = vencido ? prorroga : carne.vencimiento;
+      }
       acciones.push(accion);
       continue;
     }
@@ -409,10 +449,18 @@ export function armarPlan({ personas }, empresas, contratistas, hoy) {
       }
     }
 
-    accion.fecha = actual.fecha_vencimiento_praind;
-    if (!vencido && (!actual.fecha_vencimiento_praind || carne.vencimiento > actual.fecha_vencimiento_praind)) {
-      accion.fecha = carne.vencimiento;
-      accion.cambios.push(`vence PRAIND: ${actual.fecha_vencimiento_praind ?? "—"} → ${carne.vencimiento}`);
+    // La fecha sólo se corre hacia adelante. Con el carné vencido, la
+    // prórroga sólo reemplaza una fecha vacía o ya vencida: si la guardada
+    // está vigente, alguien la cargó de un carné más nuevo que este.
+    const guardada = actual.fecha_vencimiento_praind;
+    accion.fecha = guardada;
+    const nueva = vencido ? prorroga : carne.vencimiento;
+    const corre = vencido ? nueva && (!guardada || guardada < hoy) : !guardada || nueva > guardada;
+    if (corre) {
+      accion.fecha = nueva;
+      accion.cambios.push(
+        `vence PRAIND: ${guardada ?? "—"} → ${nueva}${vencido ? ` (el carné venció el ${carne.vencimiento})` : ""}`,
+      );
     }
 
     accion.subeFoto = !actual.praind_foto?.includes(carne.sha);
@@ -446,7 +494,8 @@ function informe(plan, lectura, hoy, aplicado) {
   }
   const fila = (a) => {
     const c = a.persona.carne;
-    return `- ${c.nombre.toUpperCase()} · ${c.cedula} · ${c.empresa} · vence ${c.vencimiento}${a.vencido ? " (VENCIDO)" : ""}`;
+    const fecha = a.vencido && a.fecha ? `${a.fecha} (el carné venció el ${c.vencimiento})` : c.vencimiento;
+    return `- ${c.nombre.toUpperCase()} · ${c.cedula} · ${c.empresa} · vence ${fecha}`;
   };
   l.push("", "## Nuevos", "", ...de("crear").map(fila));
   l.push("", "## Se actualizan", "");
@@ -501,7 +550,7 @@ async function aplicar(nube, plan, hoy, rutaResultado) {
           nombre: c.nombre,
           empresa_id: a.empresa.id,
           tipo_ingreso: "PRAIND",
-          fecha_vencimiento_praind: c.vencimiento,
+          fecha_vencimiento_praind: a.fecha,
           con_acceso: true,
           es_personal_ruta: false,
         });
@@ -549,7 +598,8 @@ async function main() {
   console.log(`${lectura.personas.length} personas en ${lectura.totalArchivos} archivos (${lectura.descartados.length} descartados).\n`);
 
   const nube = new Nube(config);
-  await nube.entrar(opciones.correo);
+  const archivoSesion = path.join(opciones.salida, ".sesion.json");
+  if ((await nube.entrar(opciones, archivoSesion)) === false) return;
   const permisos = await nube.rpc("praind_permisos", {});
   if (!permisos?.es_admin) throw new Error("Esa cuenta no es administradora del panel.");
 
@@ -562,7 +612,7 @@ async function main() {
   ]);
   console.log(`En la nube: ${empresas.length} empresas, ${contratistas.length} contratistas.`);
 
-  const plan = armarPlan(lectura, empresas, contratistas, hoy);
+  const plan = armarPlan(lectura, empresas, contratistas, hoy, opciones.vencidosHasta);
   const rutaInforme = path.join(opciones.salida, opciones.aplicar ? "informe-aplicado.md" : "informe-simulacion.md");
   writeFileSync(rutaInforme, informe(plan, lectura, hoy, false));
   console.log(`Informe: ${rutaInforme}`);
@@ -573,6 +623,7 @@ async function main() {
   }
   const resultado = await aplicar(nube, plan, hoy, path.join(opciones.salida, "resultado.json"));
   const fallas = resultado.filter((r) => !r.ok);
+  if (!fallas.length) nube.olvidarSesion();
   writeFileSync(rutaInforme, informe(plan, lectura, hoy, true));
   console.log(`\nListo: ${resultado.length - fallas.length} bien, ${fallas.length} con error (ver resultado.json).`);
   console.log("Se puede volver a correr: lo que ya quedó bien no se repite.");

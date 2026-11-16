@@ -22,8 +22,11 @@ puede correr las veces que haga falta: lo que ya quedó bien no se repite.
    - Cambia la empresa si la del carné es otra.
    - Carga el carné, o reemplaza el anterior si es distinto.
 6. **Contratista nuevo:** se registra con tipo PRAIND y acceso, y se le carga
-   el carné. Con el PRAIND vencido **no se puede** registrar (es una regla de
-   las apps). Queda en el informe para cuando traiga uno vigente.
+   el carné.
+7. **Carné vencido:** la persona queda registrada con su foto y con
+   vencimiento al **31 de diciembre** del año en curso. Así se vence igual,
+   pero queda el dato. Se cambia con `--vencidos-hasta AAAA-MM-DD`. A uno
+   que ya está, esa fecha sólo le reemplaza una vacía o ya vencida.
 
 La imagen se sube **tal cual**, sin recomprimir. El WebP se convierte a PNG,
 que no pierde calidad, porque el Worker sólo acepta PNG o JPEG.
@@ -46,6 +49,11 @@ node scripts/importar-carnes-praind/importar.mjs --carpeta "C:\ruta\a\los\carnes
 ```
 
 Pide el correo de un administrador del panel y manda un código a ese correo.
+Sin terminal interactiva se hace en dos pasos: primero `--correo <correo>
+--pedir-codigo`, que manda el código, y después `--correo <correo> --codigo
+<código>`. La sesión queda en `importacion-praind/.sesion.json`, así no hay
+que pedir otro código en cada corrida, y se borra cuando la importación
+termina sin errores.
 
 Los informes quedan en una carpeta `importacion-praind`, al lado de la de los
 carnés (se cambia con `--salida`):
