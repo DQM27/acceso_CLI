@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Pencil, QrCode, Upload } from "lucide-react";
 import Modal from "../componentes/Modal";
 import {
@@ -163,11 +164,17 @@ export default function DetalleContratista({
         </div>
       )}
 
-      {ampliado && vista.tipo === "imagen" && (
-        <Modal titulo={`Gafete PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
-          <img className="detalle-contratista-ampliado" src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
-        </Modal>
-      )}
+      {/* En un portal al <body>: adentro del modal de detalles, la animación
+          de entrada (transform) hacía que esta ventana se midiera contra ese
+          modal y no contra la pantalla, y quedaba chica y con scroll. */}
+      {ampliado &&
+        vista.tipo === "imagen" &&
+        createPortal(
+          <Modal titulo={`Gafete PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
+            <img className="detalle-contratista-ampliado" src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
+          </Modal>,
+          document.body,
+        )}
     </Modal>
   );
 }
