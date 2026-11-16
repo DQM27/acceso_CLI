@@ -43,6 +43,7 @@ pub use busqueda_activos::{
 };
 
 mod otra_via;
+mod praind;
 pub use otra_via::{SalidaPorOtraVia, UbicacionSalida, ViaIngreso};
 
 mod manual;

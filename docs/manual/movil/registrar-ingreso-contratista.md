@@ -59,7 +59,15 @@ la derecha, y un renglón chico que dice qué hacer:
 
 ## El formulario de ingreso
 
-Arriba se ve el nombre y "cédula · empresa". Luego:
+Arriba se ve el nombre y "cédula · empresa". Si la persona tiene su carné
+PRAIND cargado, a la derecha aparece **Ver carné**: lo muestra a pantalla
+completa para comparar la foto con quien está en la portería (**Cerrar**
+vuelve al formulario). La primera vez que se ve un carné en este teléfono
+hace falta internet; después queda guardado y se ve aunque no haya señal.
+Si no hay internet y nunca se vio, aparece **"Para ver este carné por
+primera vez, conectate a internet…"**.
+
+Luego:
 
 1. **Medio de ingreso**: **Caminando** o **Vehículo**.
 2. Con **Vehículo**: **Placa del vehículo**. Puede escribirla o tocar el
