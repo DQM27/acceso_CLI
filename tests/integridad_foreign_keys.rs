@@ -8,7 +8,10 @@ fn base() -> Connection {
         .execute_batch(
             "INSERT INTO empresas VALUES (1, 'Empresa', 1, 'uuid-empresa-1');
          INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1, 'uuid-usuario-1', NULL, 0);
-         INSERT INTO contratistas VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1, 'uuid-contratista-1');",
+         INSERT INTO contratistas
+             (id, cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind,
+              es_personal_ruta, tiene_acceso, uuid)
+         VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1, 'uuid-contratista-1');",
         )
         .unwrap();
     connection
