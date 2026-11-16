@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,9 @@ fun PantallaActivos(
     RegistrarPantalla("activos")
     val viewModel: ActivosViewModel =
         viewModel(factory = ActivosViewModel.factory(nucleo))
+    val carneViewModel: CarnePraindViewModel = viewModel(factory = CarnePraindViewModel.factory(nucleo))
+    val carneDisponible by carneViewModel.disponible.collectAsState()
+    val vistaCarne by carneViewModel.vista.collectAsState()
     var escanerAbierto by remember { mutableStateOf(false) }
     // El buscador de abajo (la píldora de búsqueda).
     var buscando by remember { mutableStateOf(false) }
@@ -92,6 +96,8 @@ fun PantallaActivos(
         if (formulario != null) hojaIngreso = formulario.preparacion
     }
     val camposIngreso = rememberCamposIngreso(hojaIngreso?.contratistaId)
+    // Si el contratista de la hoja tiene carné PRAIND (consulta local, sin red).
+    LaunchedEffect(hojaIngreso?.contratistaId) { carneViewModel.consultar(hojaIngreso?.contratistaId) }
     var escanerPlacaAbierto by remember { mutableStateOf(false) }
 
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
@@ -288,8 +294,11 @@ fun PantallaActivos(
                     onCancelar = { viewModel.cancelarSeleccionIngreso() },
                     onEscanearPlaca = { escanerPlacaAbierto = true },
                     onCerrada = { hojaIngreso = null },
+                    tieneCarne = carneDisponible,
+                    onVerCarne = { carneViewModel.abrir(preparacion.contratistaId, preparacion.nombre) },
                 )
             }
+            DialogoCarnePraind(vista = vistaCarne, onCerrar = carneViewModel::cerrar)
 
             }
         }

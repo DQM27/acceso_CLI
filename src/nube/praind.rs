@@ -221,9 +221,242 @@ pub fn cargar_archivo(
         .map_err(|error| ErrorPraind::Inesperado(error.to_string()))
 }
 
+// ---- Lo que comparten escritorio y móvil ----
+//
+// Ver un carné: si ya se abrió en este equipo sale de la base local (al
+// instante y sin internet); si no, se baja y queda guardado. Nada se baja por
+// adelantado. `token` sólo se llama si hace falta la nube.
+
+pub const SIN_CARNE: &str = "Este contratista no tiene carné PRAIND cargado.";
+pub const SIN_INTERNET_PRIMERA_VEZ: &str = "Para ver este carné por primera vez, conectate a internet. \
+     Después de verlo una vez queda guardado en este equipo.";
+const SIN_SINCRONIZAR: &str =
+    "Este contratista todavía no llegó a la nube. Esperá a que sincronice y volvé a intentar.";
+
+fn ahora() -> String {
+    crate::tiempo::serializar_utc(chrono::Utc::now())
+}
+
+/// Si el nombre de la página del QR corresponde al contratista: todas las
+/// palabras del nombre más corto están en el otro (puede sobrar un segundo
+/// nombre o apellido), con al menos dos en común, sin tildes ni mayúsculas.
+/// Mismo criterio que el escritorio y el panel (`nombresCoinciden` en TS).
+pub fn nombres_coinciden(en_origen: Option<&str>, contratista: &str) -> bool {
+    fn palabras(nombre: &str) -> Vec<String> {
+        crate::texto::plegar_diacriticos(nombre)
+            .to_uppercase()
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|p| !p.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+    let Some(en_origen) = en_origen else {
+        return false;
+    };
+    let a = palabras(en_origen);
+    let b = palabras(contratista);
+    let (corto, largo) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    let comunes = corto.iter().filter(|p| largo.contains(p)).count();
+    comunes == corto.len() && comunes >= 2
+}
+
+fn carne_de(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+) -> Result<crate::database::queries::carnes_praind::CarneDeContratista, String> {
+    crate::database::queries::carnes_praind::carne_de_contratista(connection, contratista_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "El contratista no existe.".to_string())
+}
+
+/// Estado del carné de un contratista según la base local.
+pub fn estado_carne(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+) -> Result<crate::database::queries::carnes_praind::CarneDeContratista, String> {
+    carne_de(connection, contratista_id)
+}
+
+/// Bytes y tipo del carné: de la base local si ya se abrió; si no, de la
+/// nube (y queda guardado).
+pub fn ver_carne(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<CarneDescargado, String> {
+    use crate::database::queries::carnes_praind;
+
+    let clave = carne_de(connection, contratista_id)?
+        .clave
+        .ok_or_else(|| SIN_CARNE.to_string())?;
+    if let Some(guardado) = carnes_praind::abrir_guardado(connection, &clave, &ahora())
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(CarneDescargado {
+            tipo_mime: guardado.tipo_mime,
+            bytes: guardado.bytes,
+        });
+    }
+    let descargado = token()
+        .and_then(|token| descargar(&token, &clave))
+        .map_err(|error| {
+            if error.es_sin_conexion() {
+                SIN_INTERNET_PRIMERA_VEZ.to_string()
+            } else {
+                error.to_string()
+            }
+        })?;
+    // Si no se pudo guardar, igual se muestra: la próxima vez se vuelve a bajar.
+    let _ = carnes_praind::guardar(
+        connection,
+        &clave,
+        &descargado.tipo_mime,
+        &descargado.bytes,
+        &ahora(),
+    );
+    Ok(descargado)
+}
+
+fn anotar_clave(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    clave: &str,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "UPDATE contratistas SET praind_foto = ?2 WHERE id = ?1",
+            rusqlite::params![contratista_id, clave],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+/// Carga el carné desde el enlace del QR. Con `solo_previsualizar` no guarda
+/// nada: devuelve el nombre de la página para compararlo antes. Al guardar,
+/// la ruta nueva queda anotada sin esperar a la sincronización.
+pub fn cargar_carne_desde_qr(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    enlace: &str,
+    solo_previsualizar: bool,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<CargaPraind, String> {
+    let uuid = carne_de(connection, contratista_id)?
+        .uuid
+        .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
+    let carga = token()
+        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), solo_previsualizar))
+        .map_err(|error| error.to_string())?;
+    if let Some(clave) = carga.clave.as_deref() {
+        anotar_clave(connection, contratista_id, clave)?;
+    }
+    Ok(carga)
+}
+
+/// Carga la imagen del carné. Queda guardada en el equipo para verla sin
+/// volver a bajarla.
+pub fn cargar_carne_archivo(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    bytes: Vec<u8>,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<CargaPraind, String> {
+    let uuid = carne_de(connection, contratista_id)?
+        .uuid
+        .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
+    let carga = token()
+        .and_then(|token| cargar_archivo(&token, &uuid, bytes.clone()))
+        .map_err(|error| error.to_string())?;
+    if let Some(clave) = carga.clave.as_deref() {
+        anotar_clave(connection, contratista_id, clave)?;
+        let _ = crate::database::queries::carnes_praind::guardar(
+            connection,
+            clave,
+            &carga.tipo_mime,
+            &bytes,
+            &ahora(),
+        );
+    }
+    Ok(carga)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn base_con_contratista(praind_foto: Option<&str>, uuid: Option<&str>) -> rusqlite::Connection {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        crate::database::schema::initialize_database(&connection).unwrap();
+        connection
+            .execute_batch("INSERT INTO empresas (id, nombre, activo) VALUES (1, 'E', 1);")
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO contratistas (id, cedula, nombre, empresa_id, tipo_ingreso, tiene_acceso, uuid, praind_foto)
+                 VALUES (1, '111111111', 'ANA', 1, 'PRAIND', 1, ?1, ?2)",
+                rusqlite::params![uuid, praind_foto],
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn compara_nombres_como_escritorio_y_panel() {
+        assert!(nombres_coinciden(
+            Some("Mindy  Murillo Guzmán"),
+            "MINDY MURILLO GUZMAN"
+        ));
+        assert!(nombres_coinciden(
+            Some("Ana María Pérez Soto"),
+            "ANA PEREZ SOTO"
+        ));
+        assert!(!nombres_coinciden(
+            Some("Ana Pérez Soto"),
+            "LUIS PEREZ SOTO"
+        ));
+        assert!(!nombres_coinciden(Some("Ana"), "ANA PEREZ SOTO"));
+        assert!(!nombres_coinciden(None, "ANA PEREZ"));
+    }
+
+    #[test]
+    fn ver_carne_sin_carne_no_va_a_la_nube() {
+        let connection = base_con_contratista(None, Some("u1"));
+        let error = ver_carne(&connection, 1, || panic!("no debía pedir token")).unwrap_err();
+        assert_eq!(error, SIN_CARNE);
+    }
+
+    #[test]
+    fn ver_carne_guardado_sale_de_la_base_sin_internet() {
+        let clave = "contratistas/u1/abc.png";
+        let connection = base_con_contratista(Some(clave), Some("u1"));
+        crate::database::queries::carnes_praind::guardar(
+            &connection,
+            clave,
+            "image/png",
+            &[7, 8],
+            "2026-11-15T00:00:00Z",
+        )
+        .unwrap();
+        let carne = ver_carne(&connection, 1, || panic!("no debía pedir token")).unwrap();
+        assert_eq!(carne.bytes, vec![7, 8]);
+    }
+
+    #[test]
+    fn ver_carne_no_guardado_y_sin_internet_lo_dice() {
+        let connection = base_con_contratista(Some("contratistas/u1/abc.png"), Some("u1"));
+        let error = ver_carne(&connection, 1, || Err(ErrorPraind::SinConexion)).unwrap_err();
+        assert_eq!(error, SIN_INTERNET_PRIMERA_VEZ);
+    }
+
+    #[test]
+    fn cargar_sin_sincronizar_lo_dice_sin_ir_a_la_nube() {
+        let connection = base_con_contratista(None, None);
+        let error = cargar_carne_desde_qr(&connection, 1, "https://prd.pw/x", true, || {
+            panic!("no debía pedir token")
+        })
+        .unwrap_err();
+        assert_eq!(error, SIN_SINCRONIZAR);
+    }
 
     #[test]
     fn la_direccion_sigue_al_proyecto_activo() {

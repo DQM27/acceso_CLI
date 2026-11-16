@@ -132,6 +132,10 @@ internal fun HojaIngreso(
     onCancelar: () -> Unit,
     onEscanearPlaca: () -> Unit,
     onCerrada: () -> Unit,
+    // Carné PRAIND (fase 6 de docs/features-futuras/plan-fotos-praind.md):
+    // el botón sólo aparece si el contratista tiene carné cargado.
+    tieneCarne: Boolean = false,
+    onVerCarne: () -> Unit = {},
 ) {
     RegistrarPantalla("confirmar_ingreso")
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -293,6 +297,11 @@ internal fun HojaIngreso(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp),
                     )
+                }
+                if (tieneCarne) {
+                    BotonDiscretoBrisas(onClick = onVerCarne) {
+                        Text("Ver carné")
+                    }
                 }
             }
 

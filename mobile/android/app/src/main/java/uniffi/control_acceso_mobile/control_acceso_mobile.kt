@@ -915,6 +915,14 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_carne_praind_desde_qr(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_carne_praind(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_permisos_carne_praind(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_ver_carne_praind(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor(
@@ -1151,6 +1159,14 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_por_otra_via(`ptr`: Long,`salida`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_salida_por_otra_via(`ptr`: Long,`cedula`: RustBuffer.ByValue,`propia`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_carne_praind_desde_qr(`ptr`: Long,`contratistaId`: Long,`enlace`: RustBuffer.ByValue,`soloPrevisualizar`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_carne_praind(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_permisos_carne_praind(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_ver_carne_praind(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1756,6 +1772,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_salida_por_otra_via() and 0xFFFF) != 45673) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_carne_praind_desde_qr() and 0xFFFF) != 61636) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_estado_carne_praind() and 0xFFFF) != 3569) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_permisos_carne_praind() and 0xFFFF) != 18769) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_ver_carne_praind() and 0xFFFF) != 3532) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 6459) {
@@ -4202,6 +4230,29 @@ public interface NucleoInterface {
     fun `salidaPorOtraVia`(`cedula`: kotlin.String, `propia`: ViaIngreso): SalidaPorOtraVia?
     
     /**
+     * Carga el carné con el enlace leído del QR. Con `solo_previsualizar`
+     * no guarda nada: devuelve de quién es para confirmarlo antes.
+     */
+    fun `cargarCarnePraindDesdeQr`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String, `soloPrevisualizar`: kotlin.Boolean): CargaCarnePraind
+    
+    /**
+     * Si el contratista tiene carné y si ya está en el teléfono. Sin red.
+     */
+    fun `estadoCarnePraind`(`contratistaId`: kotlin.Long): EstadoCarnePraind
+    
+    /**
+     * Si la nube deja cargar carnés desde este teléfono (lo decide el panel).
+     */
+    fun `permisosCarnePraind`(): PermisosCarnePraind
+    
+    /**
+     * El carné: del teléfono si ya se vio; si no, de la nube (y queda
+     * guardado). Sin internet y sin haberlo visto antes, avisa que hace
+     * falta conexión.
+     */
+    fun `verCarnePraind`(`contratistaId`: kotlin.Long): CarnePraind
+    
+    /**
      * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
      * está adentro en este sitio (este equipo o el otro dispositivo), como
      * proveedor o por otra vía (contratista, por correo), `None` si puede
@@ -5658,6 +5709,81 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Carga el carné con el enlace leído del QR. Con `solo_previsualizar`
+     * no guarda nada: devuelve de quién es para confirmarlo antes.
+     */
+    @Throws(NucleoException::class)override fun `cargarCarnePraindDesdeQr`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String, `soloPrevisualizar`: kotlin.Boolean): CargaCarnePraind {
+            return FfiConverterTypeCargaCarnePraind.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cargar_carne_praind_desde_qr(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterString.lower(`enlace`),
+        FfiConverterBoolean.lower(`soloPrevisualizar`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Si el contratista tiene carné y si ya está en el teléfono. Sin red.
+     */
+    @Throws(NucleoException::class)override fun `estadoCarnePraind`(`contratistaId`: kotlin.Long): EstadoCarnePraind {
+            return FfiConverterTypeEstadoCarnePraind.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_estado_carne_praind(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Si la nube deja cargar carnés desde este teléfono (lo decide el panel).
+     */override fun `permisosCarnePraind`(): PermisosCarnePraind {
+            return FfiConverterTypePermisosCarnePraind.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_permisos_carne_praind(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * El carné: del teléfono si ya se vio; si no, de la nube (y queda
+     * guardado). Sin internet y sin haberlo visto antes, avisa que hace
+     * falta conexión.
+     */
+    @Throws(NucleoException::class)override fun `verCarnePraind`(`contratistaId`: kotlin.Long): CarnePraind {
+            return FfiConverterTypeCarnePraind.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_ver_carne_praind(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
      * está adentro en este sitio (este equipo o el otro dispositivo), como
      * proveedor o por otra vía (contratista, por correo), `None` si puede
@@ -6828,6 +6954,102 @@ public object FfiConverterTypeAvisoPush: FfiConverterRustBuffer<AvisoPush> {
 
 
 
+/**
+ * Resultado de cargar (o previsualizar) un carné por el QR.
+ */
+data class CargaCarnePraind (
+    /**
+     * `None` en la previsualización (no se guardó nada).
+     */
+    var `clave`: kotlin.String?
+    , 
+    /**
+     * Nombre de la persona según la página del QR.
+     */
+    var `nombreEnOrigen`: kotlin.String?
+    , 
+    /**
+     * Si ese nombre coincide con el del contratista (regla compartida).
+     */
+    var `nombreCoincide`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCargaCarnePraind: FfiConverterRustBuffer<CargaCarnePraind> {
+    override fun read(buf: ByteBuffer): CargaCarnePraind {
+        return CargaCarnePraind(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CargaCarnePraind) = (
+            FfiConverterOptionalString.allocationSize(value.`clave`) +
+            FfiConverterOptionalString.allocationSize(value.`nombreEnOrigen`) +
+            FfiConverterBoolean.allocationSize(value.`nombreCoincide`)
+    )
+
+    override fun write(value: CargaCarnePraind, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`clave`, buf)
+            FfiConverterOptionalString.write(value.`nombreEnOrigen`, buf)
+            FfiConverterBoolean.write(value.`nombreCoincide`, buf)
+    }
+}
+
+
+
+/**
+ * El carné listo para mostrar.
+ */
+data class CarnePraind (
+    var `tipoMime`: kotlin.String
+    , 
+    var `bytes`: kotlin.ByteArray
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCarnePraind: FfiConverterRustBuffer<CarnePraind> {
+    override fun read(buf: ByteBuffer): CarnePraind {
+        return CarnePraind(
+            FfiConverterString.read(buf),
+            FfiConverterByteArray.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CarnePraind) = (
+            FfiConverterString.allocationSize(value.`tipoMime`) +
+            FfiConverterByteArray.allocationSize(value.`bytes`)
+    )
+
+    override fun write(value: CarnePraind, buf: ByteBuffer) {
+            FfiConverterString.write(value.`tipoMime`, buf)
+            FfiConverterByteArray.write(value.`bytes`, buf)
+    }
+}
+
+
+
 data class CarnetKofDetectado (
     var `nombre`: kotlin.String?
     , 
@@ -7721,6 +7943,53 @@ public object FfiConverterTypeEstadoBandeja: FfiConverterRustBuffer<EstadoBandej
             FfiConverterUInt.write(value.`noLeidos`, buf)
             FfiConverterOptionalString.write(value.`contador`, buf)
             FfiConverterOptionalTypeAvisoBandeja.write(value.`emergenciaSinLeer`, buf)
+    }
+}
+
+
+
+/**
+ * Estado del carné de un contratista en este teléfono.
+ */
+data class EstadoCarnePraind (
+    /**
+     * Tiene carné cargado (si no, no se ofrece "Ver carné").
+     */
+    var `tieneCarne`: kotlin.Boolean
+    , 
+    /**
+     * Ya está guardado en el teléfono: se ve al instante y sin internet.
+     */
+    var `guardado`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstadoCarnePraind: FfiConverterRustBuffer<EstadoCarnePraind> {
+    override fun read(buf: ByteBuffer): EstadoCarnePraind {
+        return EstadoCarnePraind(
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EstadoCarnePraind) = (
+            FfiConverterBoolean.allocationSize(value.`tieneCarne`) +
+            FfiConverterBoolean.allocationSize(value.`guardado`)
+    )
+
+    override fun write(value: EstadoCarnePraind, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`tieneCarne`, buf)
+            FfiConverterBoolean.write(value.`guardado`, buf)
     }
 }
 
@@ -8827,6 +9096,47 @@ public object FfiConverterTypePalabraOcr: FfiConverterRustBuffer<PalabraOcr> {
             FfiConverterFloat.write(value.`derecha`, buf)
             FfiConverterFloat.write(value.`abajo`, buf)
             FfiConverterFloat.write(value.`confianza`, buf)
+    }
+}
+
+
+
+/**
+ * Lo que el teléfono puede hacer con los carnés, según la nube.
+ */
+data class PermisosCarnePraind (
+    var `puedeCargar`: kotlin.Boolean
+    , 
+    var `sinConexion`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePermisosCarnePraind: FfiConverterRustBuffer<PermisosCarnePraind> {
+    override fun read(buf: ByteBuffer): PermisosCarnePraind {
+        return PermisosCarnePraind(
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PermisosCarnePraind) = (
+            FfiConverterBoolean.allocationSize(value.`puedeCargar`) +
+            FfiConverterBoolean.allocationSize(value.`sinConexion`)
+    )
+
+    override fun write(value: PermisosCarnePraind, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`puedeCargar`, buf)
+            FfiConverterBoolean.write(value.`sinConexion`, buf)
     }
 }
 
