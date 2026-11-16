@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 63;
+pub const SCHEMA_VERSION: i64 = 64;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -473,6 +473,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 62 {
         aplicar_migracion_63(connection)?;
         *version = 63;
+    }
+
+    if *version == 63 {
+        aplicar_migracion_64(connection)?;
+        *version = 64;
     }
 
     Ok(())
@@ -1089,6 +1094,16 @@ fn aplicar_migracion_63(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_63)?;
     transaction.execute_batch("PRAGMA user_version = 63")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Carnés PRAIND: `contratistas.praind_foto` y los carnés ya abiertos en
+/// este equipo (`carnes_praind_guardados`).
+fn aplicar_migracion_64(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_64)?;
+    transaction.execute_batch("PRAGMA user_version = 64")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1774,3 +1789,4 @@ const MIGRACION_60: &str = include_str!("migraciones/migracion_60.sql");
 const MIGRACION_61: &str = include_str!("migraciones/migracion_61.sql");
 const MIGRACION_62: &str = include_str!("migraciones/migracion_62.sql");
 const MIGRACION_63: &str = include_str!("migraciones/migracion_63.sql");
+const MIGRACION_64: &str = include_str!("migraciones/migracion_64.sql");

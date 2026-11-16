@@ -426,6 +426,8 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE movimientos_visita_remotos;
              -- MIGRACION_63 (orden de telemetría del equipo) también.
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
@@ -573,6 +575,8 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE movimientos_visita_remotos;
              -- MIGRACION_63 (orden de telemetría del equipo) también.
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
@@ -725,6 +729,8 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE movimientos_visita_remotos;
              -- MIGRACION_63 (orden de telemetría del equipo) también.
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
@@ -1149,6 +1155,10 @@ fn base_version_34_con_gafete_perdido() -> Connection {
         )
         .unwrap();
     connection.execute_batch(&ddl_de("contratistas")).unwrap();
+    // Mismo motivo que `usuarios` arriba: MIGRACION_64 agrega `praind_foto`.
+    connection
+        .execute_batch("ALTER TABLE contratistas DROP COLUMN praind_foto;")
+        .unwrap();
     // `registro_ingresos` no lo toca ninguna migración entre la 21 y la 49
     // (la próxima que la recrea) -- tomar la forma ACTUAL de la referencia
     // es equivalente a reconstruir la de v34 a mano, mismo criterio que
@@ -1952,6 +1962,8 @@ fn migracion_60_separa_los_conflictos_de_los_errores_en_la_cola() {
             "ALTER TABLE cola_salida DROP COLUMN motivo_fallo;
              ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              PRAGMA user_version = 59;",
         )
         .unwrap();
@@ -2039,6 +2051,8 @@ fn migracion_61_recupera_empresas_de_proveedor_y_descarta_sus_ingresos() {
         .execute_batch(
             "ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              PRAGMA user_version = 60;",
         )
         .unwrap();
@@ -2118,6 +2132,8 @@ fn migracion_62_agrega_la_marca_de_empresa_fusionada() {
         .execute_batch(
             "ALTER TABLE empresas_proveedor DROP COLUMN fusionada_en;
              DROP TABLE config_telemetria;
+             DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
              PRAGMA user_version = 61;
              INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES ('FOODIE FACTORY', 1, 'uuid-foodie');",
         )
@@ -2178,4 +2194,52 @@ fn config_telemetria_solo_admite_una_fila_y_valores_validos() {
     assert!(insertar(1, "d1", 1, Some("2026-10-22 12:00")).is_err());
     assert!(insertar(1, "d1", 1, Some("2026-10-22T12:00:00.123456Z")).is_err());
     assert!(insertar(1, "d1", 1, Some("2026-10-22T12:00:00Z")).is_ok());
+}
+
+/// Un equipo en la versión 63 recibe la ruta del carné PRAIND y la tabla de
+/// carnés guardados, y vuelve a bajar el catálogo entero una vez (los
+/// contratistas que ya tenían carné no llegarían por la sincronización
+/// incremental).
+#[test]
+fn migracion_64_agrega_los_carnes_praind_y_rebaja_el_catalogo() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch(
+            "DROP TABLE carnes_praind_guardados;
+             ALTER TABLE contratistas DROP COLUMN praind_foto;
+             UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = '2026-11-01T00:00:00Z' WHERE id = 1;
+             PRAGMA user_version = 63;",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let marca: Option<String> = connection
+        .query_row(
+            "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |fila| fila.get(0),
+        )
+        .unwrap();
+    assert_eq!(marca, None);
+    let columna: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('contratistas') WHERE name = 'praind_foto'",
+            [],
+            |fila| fila.get(0),
+        )
+        .unwrap();
+    assert_eq!(columna, 1);
+    // Sólo PNG o JPEG.
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO carnes_praind_guardados (clave, tipo_mime, bytes, abierto_en)
+             VALUES ('contratistas/u/x.gif', 'image/gif', x'00', '2026-11-15T00:00:00Z')",
+                [],
+            )
+            .is_err()
+    );
 }

@@ -16,6 +16,7 @@ pub mod en_vivo;
 pub mod firmante;
 pub mod mensajes_conflictos;
 pub mod orquestacion;
+pub mod praind;
 pub mod reloj_preciso;
 pub mod retencion;
 pub mod sesion_unidad;

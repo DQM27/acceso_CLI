@@ -4158,12 +4158,20 @@ fn recibe_catalogo_del_sitio_y_lo_guarda_local() {
             "identificacion":"1-1111","empresa_id":"uuid-empresa-remota",
             "empresa_nombre":"Empresa Remota","activo":true,"tipo_ingreso":"SWAT",
             "fecha_vencimiento_praind":null,"es_personal_ruta":false,
+            "praind_foto":"contratistas/uuid-contratista-remoto/abc.png",
             "updated_at":"2026-01-01T00:00:00Z"}],
            "usuarios":[],"gafetes":[],"rutas":[],"empresas_proveedor":[]}"#,
     )]);
 
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
+    let praind_foto: Option<String> = connection
+        .query_row("SELECT praind_foto FROM contratistas", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        praind_foto.as_deref(),
+        Some("contratistas/uuid-contratista-remoto/abc.png")
+    );
     assert_eq!(
         resumen,
         ResumenCatalogo {

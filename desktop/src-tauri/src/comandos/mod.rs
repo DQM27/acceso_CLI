@@ -52,5 +52,6 @@ pub mod gafetes_provisionales;
 pub mod historial;
 pub mod ingresos;
 pub mod nube;
+pub mod praind;
 pub mod proveedores;
 pub mod rutas;

@@ -1299,3 +1299,65 @@ textarea::placeholder {
   text-align: center;
   pointer-events: none;
 }
+
+/* Detalles del contratista con su carné PRAIND (DetalleContratista.tsx):
+   datos a la izquierda, carné a la derecha; en ventana angosta, uno abajo
+   del otro. */
+.detalle-contratista {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(12rem, 16rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .detalle-contratista { grid-template-columns: 1fr; }
+}
+.detalle-contratista-datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+.detalle-contratista-datos dt { color: var(--muted); }
+.detalle-contratista-datos dd { margin: 0; color: var(--texto); overflow-wrap: anywhere; }
+.detalle-contratista-carne {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--panel-suave);
+  text-align: center;
+}
+.detalle-contratista-carne .texto-tenue { color: var(--muted); margin: 0; }
+.detalle-contratista-imagen {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  border-radius: var(--radio-chico);
+}
+.detalle-contratista-imagen:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.detalle-contratista-imagen img {
+  display: block;
+  max-width: 100%;
+  max-height: 22rem;
+  border-radius: var(--radio-chico);
+}
+.detalle-contratista-ampliado {
+  display: block;
+  max-width: min(80vw, 40rem);
+  max-height: 78vh;
+  margin: 0 auto;
+}
+.detalle-contratista-carga {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--borde);
+}
+.detalle-contratista-carga p { margin: 0; }

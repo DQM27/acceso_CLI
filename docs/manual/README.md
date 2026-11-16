@@ -72,6 +72,7 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 - ✅ [Buscar un contratista y entender su estado](escritorio/buscar-contratista.md)
 - ✅ [Dar de alta o editar un contratista (datos, tipo, fecha de PRAIND, personal de ruta)](escritorio/contratista-alta-y-edicion.md)
+- ✅ [Ver el carné PRAIND de un contratista (y cargarlo, si el equipo tiene permiso)](escritorio/carne-praind.md)
 - ✅ [Empresas de contratistas y empresas proveedoras](escritorio/empresas.md)
 
 ### Gafetes
