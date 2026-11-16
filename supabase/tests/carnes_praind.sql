@@ -12,6 +12,8 @@
 --   8.  Un equipo retirado no ve ni carga.
 --   9.  El administrador quita el carné.
 --   10. `anon` no ejecuta ninguna función.
+--   11. El catálogo de los equipos (`catalogo_del_sitio`) trae `praind_foto`
+--       (migración catalogo_del_sitio_con_carne).
 begin;
 
 insert into public.sitios (id, nombre) values (gen_random_uuid(), 'Diagnóstico PRAIND');
@@ -127,10 +129,16 @@ begin
   perform public.praind_cambiar_carga_desde_equipos(true);
 end $$;
 
--- 5. Equipo con el interruptor encendido.
+-- 5. Equipo con el interruptor encendido (antes, 11: el catálogo trae el carné).
 select set_config('request.jwt.claims', (select claims from diag_sesiones where nombre = 'equipo'), true);
 do $$
 begin
+  if not exists (
+    select 1 from jsonb_array_elements(public.catalogo_del_sitio(null, null, 1000) -> 'contratistas') c
+     where c ->> 'id' = current_setting('diag.c') and c ->> 'praind_foto' = current_setting('diag.clave1')
+  ) then
+    raise exception '11: el catálogo del equipo no trae praind_foto';
+  end if;
   if not (public.praind_permisos() ->> 'puede_cargar')::boolean then
     raise exception '5a: el equipo no carga con el interruptor encendido';
   end if;

@@ -614,6 +614,28 @@ Rama `feat/reglas-compartidas`. Contexto completo en
   móvil. Una app vieja nunca ofrece reconectar, así que convivir no tiene
   riesgo.
 
+### 2.15 Carnés PRAIND (`carnes_praind`, 2026-11-15)
+
+- **Qué hace:** `contratistas.praind_foto`, la bitácora `fotos_praind`, el
+  interruptor `ajustes_praind.carga_desde_equipos` y las RPC `praind_*`. Ver
+  `docs/features-futuras/plan-fotos-praind.md`.
+- **Segunda migración:** `20261115130000_catalogo_del_sitio_con_carne.sql`
+  suma `praind_foto` a `catalogo_del_sitio` (la primera página del catálogo
+  de los equipos llega por esa función, con columnas explícitas).
+- **Probadas:** primero con su batería (`supabase/tests/carnes_praind.sql`)
+  dentro de una transacción revertida; después **aplicadas en staging** (en el
+  historial como `carnes_praind` y `catalogo_del_sitio_con_carne`) para probar
+  el Worker de staging.
+- **Compatibilidad:** no rompe apps viejas: el catálogo pide columnas
+  explícitas, y un trigger conserva `praind_foto` si un equipo sube la fila.
+- **Worker** `praind-brisas` (carpeta `worker-praind/`, despliegue manual):
+  - staging: `praind-brisas-staging` en `praind-staging.megabrisas.com`, bucket
+    `lattis-praind-staging`. Desplegado el 2026-11-15.
+  - producción: `npm run deploy` en `worker-praind/`, crea
+    `praind.megabrisas.com` sobre el bucket `lattis-praind`.
+- **Orden:** mergear (aplica la migración), desplegar el Worker de
+  producción, y recién después publicar el panel y las apps que lo usan.
+
 ## 3. Cambios de la base local de los equipos (SQLite)
 
 No se aplican a mano: cada equipo migra su base sola al abrir la app nueva.
