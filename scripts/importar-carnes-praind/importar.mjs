@@ -144,6 +144,15 @@ export function claveEmpresa(nombre) {
     .join(" ");
 }
 
+/** Cuántas palabras de `corta` (todas de 3 letras o más, "DYG") están en
+ * `larga`; 0 si falta alguna. */
+export function empresaContenida(corta, larga) {
+  const pc = corta.split(" ").filter(Boolean);
+  const pl = new Set(larga.split(" "));
+  if (!pc.length || pc.some((p) => p.length < 3 || !pl.has(p))) return 0;
+  return pc.length;
+}
+
 const fechaIso = (dma) => {
   const m = dma?.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : null;
@@ -390,11 +399,17 @@ export function armarPlan({ personas }, empresas, contratistas, hoy, vencidosHas
   for (const [k, m] of variantes) {
     const nombre = [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
     let encontrada = existentes.filter((e) => e.clave === k);
-    if (encontrada.length !== 1) {
-      const parecidas = existentes.filter(
-        (e) => e.clave && (e.clave.startsWith(`${k} `) || k.startsWith(`${e.clave} `)),
-      );
-      if (!encontrada.length && parecidas.length === 1) encontrada = parecidas;
+    if (!encontrada.length) {
+      // En la nube muchas están con el nombre corto ("ALDAMA" para
+      // "Multiservicios De Aldama De San Rafael"): vale si todas las
+      // palabras de una están en la otra. Gana la que más coincide.
+      const parecidas = existentes
+        .map((e) => ({ e, n: empresaContenida(e.clave, k) || empresaContenida(k, e.clave) }))
+        .filter((x) => x.n > 0)
+        .sort((a, b) => b.n - a.n);
+      if (parecidas.length && (parecidas.length === 1 || parecidas[0].n > parecidas[1].n)) {
+        encontrada = [parecidas[0].e];
+      }
     }
     const activa = encontrada.find((e) => e.activa) ?? encontrada[0];
     empresaDe.set(k, activa ? { id: activa.id, nombre: activa.nombre, nueva: false, delCarne: nombre } : { nombre, nueva: true, delCarne: nombre });
@@ -441,8 +456,9 @@ export function armarPlan({ personas }, empresas, contratistas, hoy, vencidosHas
     accion.empresaId = actual.empresa_id;
     if (actual.empresa_id !== empresa.id) {
       const actualClave = claveEmpresa(actual.empresa_nombre ?? "");
-      const mismaPrimera = actualClave && actualClave.split(" ")[0] === claveEmpresa(carne.empresa).split(" ")[0];
-      if (!mismaPrimera) {
+      const delCarne = claveEmpresa(carne.empresa);
+      const misma = actualClave && (empresaContenida(actualClave, delCarne) || empresaContenida(delCarne, actualClave));
+      if (!misma) {
         accion.empresaId = empresa.id ?? null; // null: se crea antes
         accion.cambiaEmpresa = true;
         accion.cambios.push(`empresa: ${actual.empresa_nombre ?? "—"} → ${empresa.nombre}${empresa.nueva ? " (nueva)" : ""}`);
@@ -615,6 +631,21 @@ async function main() {
   const plan = armarPlan(lectura, empresas, contratistas, hoy, opciones.vencidosHasta);
   const rutaInforme = path.join(opciones.salida, opciones.aplicar ? "informe-aplicado.md" : "informe-simulacion.md");
   writeFileSync(rutaInforme, informe(plan, lectura, hoy, false));
+  writeFileSync(
+    path.join(opciones.salida, "plan.json"),
+    JSON.stringify(
+      plan.acciones.map((a) => ({
+        tipo: a.tipo,
+        archivo: a.persona.carne.archivo,
+        cedula: a.persona.carne.cedula,
+        nombreCarne: a.persona.carne.nombre,
+        nombreGuardado: a.actual?.nombre ?? null,
+        cambios: a.cambios,
+      })),
+      null,
+      1,
+    ),
+  );
   console.log(`Informe: ${rutaInforme}`);
 
   if (!opciones.aplicar) {

@@ -34,6 +34,20 @@ test("las empresas se comparan sin forma jurídica, tildes ni mayúsculas", () =
   assert.equal(claveEmpresa("Integracom de Centroamérica S A"), "integracom centroamerica");
 });
 
+test("la empresa guardada con el nombre corto es la misma del carné", () => {
+  const plan = armarPlan(
+    { personas: [{ carne: carne({ empresa: "Multiservicios De Aldama De San Rafael" }), otros: [] }] },
+    [
+      { id: "a", nombre: "ALDAMA", activa: true },
+      { id: "x", nombre: "EXPENIC", activa: true },
+    ],
+    [guardado({ empresa_id: "a", empresa_nombre: "ALDAMA" })],
+    "2026-11-16",
+  );
+  assert.equal(plan.empresaDe.get(claveEmpresa("Multiservicios De Aldama De San Rafael")).id, "a");
+  assert.ok(!plan.acciones[0].cambiaEmpresa);
+});
+
 test("misma persona: le falta un apellido o tiene un error de tipeo", () => {
   assert.ok(mismaPersona("CESAR AUGUSTO MOLINA MARTINEZ", "Cesar Augusto Molina Marftinez"));
   assert.ok(mismaPersona("ANA MARIA SOLANO", "Ana María Solano Vargas"));
