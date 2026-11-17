@@ -308,7 +308,7 @@ export default function GestionGafeteModal({
             }}
           >
             <label className="campo" style={{ flex: 1 }}>
-              Encargado de ruta
+              Personal KOF
               <input
                 list="encargados-perdido-datalist"
                 value={encargadoTexto}

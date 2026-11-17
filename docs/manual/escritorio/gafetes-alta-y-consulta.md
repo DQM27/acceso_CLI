@@ -14,7 +14,7 @@ distintos.
 | Contratista | Contratistas (Ctrl+N) |
 | Proveedor | Proveedores (Alt+P) |
 | Visita | Visitas por correo (Alt+C) |
-| Provisional KOF | Encargados de KOF (Alt+K) |
+| Provisional KOF | Personal KOF (Alt+K) |
 
 Un gafete sólo se puede entregar si existe en el catálogo de su tipo.
 

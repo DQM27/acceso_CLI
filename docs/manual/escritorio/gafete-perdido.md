@@ -44,7 +44,7 @@ muestra **Reportado por** con su usuario.
 3. **Responsable conocido**:
    - **Contratista**: escriba la cédula o el nombre y elija a la persona de
      la lista.
-   - **Provisional KOF**: escriba el nombre o código del encargado y pulse
+   - **Provisional KOF**: escriba el nombre o código de la persona y pulse
      **Elegir**.
    - **Visita**: escriba la cédula del visitante y pulse **Buscar**.
 

@@ -98,7 +98,7 @@ private fun VistaCamaraCarnetKof(
                                 when {
                                     resultado != null -> {
                                         estado = EstadoEscaneo.CONFIRMADO
-                                        ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
+                                        ultimoMensaje = "${resultado.nombre} confirmado"
                                         if (camara.detectada.compareAndSet(false, true)) {
                                             camara.metricas.registrarConfirmacion()
                                             vibrarConfirmacion(contexto)

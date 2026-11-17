@@ -25,7 +25,7 @@ describe("columnas de cada clase del historial", () => {
     expect(etiquetas("proveedores")).toContain("Placa");
     expect(etiquetas("correo")).toContain("Motivo");
     expect(etiquetas("kof")).not.toContain("Placa");
-    expect(etiquetas("kof")).toEqual(expect.arrayContaining(["Código empleado", "Encargado", "Entrega", "Devolución", "Entregó", "Recibió"]));
+    expect(etiquetas("kof")).toEqual(expect.arrayContaining(["Código empleado", "Personal KOF", "Entrega", "Devolución", "Entregó", "Recibió"]));
   });
 
   it("la grilla y la exportación usan los mismos colId (se exporta lo visible)", () => {

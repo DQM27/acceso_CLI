@@ -55,7 +55,7 @@ export default function FormularioEncargadoRuta({
   }
 
   return (
-    <Modal titulo={encargado ? "Editar encargado" : "Nuevo encargado"} onCerrar={onCerrar}>
+    <Modal titulo={encargado ? "Editar Personal KOF" : "Nuevo Personal KOF"} onCerrar={onCerrar}>
       <form
         onSubmit={handleSubmit(alGuardar)}
         style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}

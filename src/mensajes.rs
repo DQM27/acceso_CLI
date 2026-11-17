@@ -436,7 +436,7 @@ pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
         }
         EncargadoRutaServiceError::Database(error) => {
             log::error!("encargado de ruta: {error}");
-            "No se pudo guardar el encargado".into()
+            "No se pudo guardar el Personal KOF".into()
         }
     }
 }
@@ -503,10 +503,10 @@ pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> Strin
 
     match error {
         NumeroInvalido => "El número de gafete debe ser mayor a cero".into(),
-        EncargadoNoEncontrado => "El encargado no existe en el catálogo".into(),
-        EncargadoInactivo => "El encargado está dado de baja en el catálogo".into(),
+        EncargadoNoEncontrado => "Personal KOF no encontrado".into(),
+        EncargadoInactivo => "Personal KOF dado de baja en el catálogo".into(),
         EncargadoYaTienePrestamoActivo => {
-            "Este encargado ya tiene un gafete provisional prestado".into()
+            "Esta persona ya tiene un gafete provisional prestado".into()
         }
         GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
         GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
@@ -1078,7 +1078,7 @@ mod tests {
         );
         assert_eq!(
             mensaje_encargado_ruta(encargado),
-            "No se pudo guardar el encargado"
+            "No se pudo guardar el Personal KOF"
         );
     }
 

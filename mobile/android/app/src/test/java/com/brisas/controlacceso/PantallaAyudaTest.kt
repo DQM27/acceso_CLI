@@ -23,7 +23,7 @@ class PantallaAyudaTest {
 
     @Test
     fun `un resultado lleva a la seccion y la pantalla encuentra ese titulo`() {
-        val resultado = buscarEnManual("Este encargado ya tiene un gafete provisional prestado").first()
+        val resultado = buscarEnManual("Esta persona ya tiene un gafete provisional prestado").first()
         val tema = temaManual(resultado.ruta) ?: error("no existe ${resultado.ruta}")
 
         val indice = indiceDeAncla(tema.bloques, resultado.ancla)

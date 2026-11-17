@@ -118,7 +118,7 @@ export default function EntregarGafeteProvisionalModal({
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <div ref={campoRef}>
           <label className="campo">
-            Buscar encargado
+            Buscar Personal KOF
             <input
               ref={buscadorRef}
               value={filtro}

@@ -71,7 +71,7 @@ pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<Encar
     state
         .core()
         .listar_encargados_ruta()
-        .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
+        .map_err(|_| "No se pudo cargar la lista de Personal KOF".to_string())
 }
 
 /// Para un selector de wizard (entrega de gafete provisional, salida de
@@ -85,7 +85,7 @@ pub fn listar_encargados_ruta_seleccionables(
     state
         .core()
         .listar_encargados_ruta_seleccionables()
-        .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
+        .map_err(|_| "No se pudo cargar la lista de Personal KOF".to_string())
 }
 
 #[tauri::command(async)]

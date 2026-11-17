@@ -62,7 +62,7 @@ export const ETIQUETAS_CLASE: Record<ClaseOtra, Etiquetas> = {
     titulo: "Historial de gafetes KOF",
     archivo: "historial-kof",
     identificacion: "Código empleado",
-    nombre: "Encargado",
+    nombre: "Personal KOF",
     detalle: null,
     placa: null,
     fechaEntrada: "Fecha entrega",

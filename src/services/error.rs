@@ -400,11 +400,11 @@ pub enum RutaCatalogoServiceError {
 pub enum GafeteProvisionalServiceError {
     #[error("El número de gafete debe ser mayor a cero")]
     NumeroInvalido,
-    #[error("El encargado no existe en el catálogo")]
+    #[error("Personal KOF no encontrado")]
     EncargadoNoEncontrado,
-    #[error("El encargado está dado de baja en el catálogo")]
+    #[error("Personal KOF dado de baja en el catálogo")]
     EncargadoInactivo,
-    #[error("Este encargado ya tiene un gafete provisional prestado")]
+    #[error("Esta persona ya tiene un gafete provisional prestado")]
     EncargadoYaTienePrestamoActivo,
     #[error("Ese número de gafete ya está prestado a otra persona")]
     GafeteYaPrestado,

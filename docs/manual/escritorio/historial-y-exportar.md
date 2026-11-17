@@ -38,7 +38,7 @@ Salida, Dio ingreso y Dio salida.
 **Visitas por correo**: igual que proveedores, con **Motivo** en lugar de
 Empresa.
 
-**Provisionales KOF**: Encargado, Código empleado, Gafete, Fecha, Entrega,
+**Provisionales KOF**: Personal KOF, Código empleado, Gafete, Fecha, Entrega,
 Devolución, Entregó y Recibió.
 
 ## Pasos — elegir el período

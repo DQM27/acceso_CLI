@@ -21,7 +21,7 @@ describe("Ayuda", () => {
   it("busca un mensaje pegado y abre el proceso en su sección", () => {
     render(<Ayuda senalBuscar={0} />);
     fireEvent.change(screen.getByLabelText("Buscar en la ayuda"), {
-      target: { value: "Este encargado ya tiene un gafete provisional prestado" },
+      target: { value: "Esta persona ya tiene un gafete provisional prestado" },
     });
     const resultado = screen.getAllByRole("button", { name: /Entregar un gafete provisional KOF/ })[0];
     fireEvent.click(resultado);

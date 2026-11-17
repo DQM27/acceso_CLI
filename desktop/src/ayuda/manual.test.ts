@@ -273,7 +273,7 @@ describe("el manual de docs/manual", () => {
   it("los mensajes de pantalla se encuentran pegándolos tal cual", () => {
     const [primero] = buscarEnManual(
       procesos.filter((p) => p.app === "escritorio"),
-      "Este encargado ya tiene un gafete provisional prestado",
+      "Esta persona ya tiene un gafete provisional prestado",
     );
     expect(primero.proceso.ruta).toBe("escritorio/entregar-gafete-kof.md");
     expect(primero.seccion).toBe("Mensajes que pueden aparecer");
