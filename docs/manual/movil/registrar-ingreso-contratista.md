@@ -65,7 +65,7 @@ completa para comparar la foto con quien está en la portería (**Cerrar**
 vuelve al formulario). La primera vez que se ve un gafete PRAIND en este teléfono
 hace falta internet; después queda guardado y se ve aunque no haya señal.
 Si no hay internet y nunca se vio, aparece **"Para ver este gafete PRAIND por
-primera vez, conectate a internet…"**.
+primera vez, conéctese a internet…"**.
 
 ### Cargar el gafete PRAIND con su QR
 

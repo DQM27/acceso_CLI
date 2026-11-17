@@ -20,7 +20,7 @@ import uniffi.control_acceso_mobile.EstadoCarnePraind
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PermisosCarnePraind
 
-/// Guardar el carné, bajarlo sólo si hace falta y el aviso de "conectate a
+/// Guardar el carné, bajarlo sólo si hace falta y el aviso de "conéctese a
 /// internet" se prueban en Rust (`control_acceso::nube::praind`). Acá sólo
 /// cómo el ViewModel mueve el estado.
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -189,7 +189,7 @@ class CarnePraindViewModelTest {
 
     @Test
     fun sinInternetMuestraElAvisoDelNucleo() = runTest(dispatcher) {
-        val aviso = "Para ver este gafete PRAIND por primera vez, conectate a internet."
+        val aviso = "Para ver este gafete PRAIND por primera vez, conéctese a internet."
         val vm = CarnePraindViewModel(FuenteFalsa(error = aviso), dispatcher)
         vm.abrir(1L, "ANA PEREZ")
         advanceUntilIdle()

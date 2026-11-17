@@ -49,7 +49,7 @@ sólo guarda los que alguien abrió.
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
 | "Este contratista no tiene el gafete PRAIND cargado." | Nadie cargó su gafete PRAIND todavía. | Si el equipo tiene permiso, cárguelo; si no, avise a un administrador. |
-| "Para ver este gafete PRAIND por primera vez, conectate a internet…" | El gafete PRAIND nunca se abrió en este equipo y ahora no hay internet. | Vuelva a abrirlo cuando haya conexión. Después queda guardado. |
+| "Para ver este gafete PRAIND por primera vez, conéctese a internet…" | El gafete PRAIND nunca se abrió en este equipo y ahora no hay internet. | Vuelva a abrirlo cuando haya conexión. Después queda guardado. |
 | "El enlace no es de un gafete PRAIND." | Lo pegado no es el enlace del QR del gafete PRAIND. | Escanee de nuevo el QR del gafete PRAIND. |
 | "Ese gafete PRAIND ya no existe en el sistema PRAIND: pudo haberse borrado…" | La página del QR ya no tiene el gafete PRAIND. | Pida el gafete PRAIND vigente a la persona. |
 | "El QR no lleva a ningún gafete PRAIND…" | El enlace del QR no abre ningún gafete PRAIND. | Igual que el anterior. Si pasa con todos los gafetes, el sistema PRAIND puede estar fuera de servicio: intente más tarde. |

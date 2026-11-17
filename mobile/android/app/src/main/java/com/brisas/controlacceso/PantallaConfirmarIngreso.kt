@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.Icon
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -304,20 +304,25 @@ internal fun HojaIngreso(
                     )
                     // Debajo del nombre y no a su derecha (pedido del usuario
                     // 2026-11-17): a la derecha le quitaba ancho y el nombre se
-                    // partía en varias líneas. Corrido a la izquierda lo que mide
-                    // su relleno, el texto queda alineado con el nombre.
+                    // partía en varias líneas. Texto tocable y no botón: el alto
+                    // mínimo de un botón dejaba una franja vacía hasta el
+                    // selector de abajo. El relleno vertical agranda la zona
+                    // que se toca sin separar más las líneas.
                     val accionCarne: Pair<String, () -> Unit>? = when {
                         tieneCarne -> "Ver gafete PRAIND" to onVerCarne
                         puedeCargarCarne -> "Cargar gafete PRAIND" to onCargarCarne
                         else -> null
                     }
                     accionCarne?.let { (texto, accion) ->
-                        BotonDiscretoBrisas(
-                            onClick = accion,
-                            modifier = Modifier.offset(x = -EspacioControlBrisas),
-                        ) {
-                            Text(texto)
-                        }
+                        Text(
+                            texto,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickable(role = Role.Button, onClick = accion)
+                                .padding(vertical = 6.dp),
+                        )
                     }
                 }
             }
