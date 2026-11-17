@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -301,14 +302,22 @@ internal fun HojaIngreso(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp),
                     )
-                }
-                if (tieneCarne) {
-                    BotonDiscretoBrisas(onClick = onVerCarne) {
-                        Text("Ver gafete PRAIND")
+                    // Debajo del nombre y no a su derecha (pedido del usuario
+                    // 2026-11-17): a la derecha le quitaba ancho y el nombre se
+                    // partía en varias líneas. Corrido a la izquierda lo que mide
+                    // su relleno, el texto queda alineado con el nombre.
+                    val accionCarne: Pair<String, () -> Unit>? = when {
+                        tieneCarne -> "Ver gafete PRAIND" to onVerCarne
+                        puedeCargarCarne -> "Cargar gafete PRAIND" to onCargarCarne
+                        else -> null
                     }
-                } else if (puedeCargarCarne) {
-                    BotonDiscretoBrisas(onClick = onCargarCarne) {
-                        Text("Cargar gafete PRAIND")
+                    accionCarne?.let { (texto, accion) ->
+                        BotonDiscretoBrisas(
+                            onClick = accion,
+                            modifier = Modifier.offset(x = -EspacioControlBrisas),
+                        ) {
+                            Text(texto)
+                        }
                     }
                 }
             }
