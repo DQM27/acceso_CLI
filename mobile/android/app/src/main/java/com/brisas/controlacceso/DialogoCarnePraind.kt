@@ -6,10 +6,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -25,9 +29,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /// El carné PRAIND a pantalla completa, para comparar la foto con la persona
-/// que está en la portería. "Cerrar" o el gesto de volver lo cierran.
+/// que está en la portería. "Cerrar" o el gesto de volver lo cierran. Con
+/// [onReemplazar] (la nube deja cargar desde este teléfono) aparece
+/// "Reemplazar", que abre la cámara para leer el QR del gafete nuevo.
 @Composable
-internal fun DialogoCarnePraind(vista: VistaCarne, onCerrar: () -> Unit) {
+internal fun DialogoCarnePraind(vista: VistaCarne, onCerrar: () -> Unit, onReemplazar: (() -> Unit)? = null) {
     val nombre = when (vista) {
         VistaCarne.Cerrada -> return
         is VistaCarne.Cargando -> vista.nombre
@@ -77,9 +83,99 @@ internal fun DialogoCarnePraind(vista: VistaCarne, onCerrar: () -> Unit) {
                     VistaCarne.Cerrada -> Unit
                 }
             }
+            if (onReemplazar != null) {
+                BotonDiscretoBrisas(onClick = onReemplazar, modifier = Modifier.fillMaxWidth()) {
+                    Text("Reemplazar gafete PRAIND")
+                }
+            }
             BotonBrisas(onClick = onCerrar, modifier = Modifier.fillMaxWidth()) {
                 Text("Cerrar")
             }
         }
+    }
+}
+
+/// Cargar el gafete PRAIND con el QR ya leído: primero dice de quién es el
+/// gafete que encontró la nube (en verde si coincide con el contratista, en
+/// ámbar si no) y recién al confirmar lo guarda. Mismo criterio que el
+/// escritorio y el panel.
+@Composable
+internal fun DialogoCargaCarnePraind(
+    carga: CargaCarne,
+    onGuardar: () -> Unit,
+    onEscanearOtraVez: () -> Unit,
+    onCancelar: () -> Unit,
+) {
+    val nombre = when (carga) {
+        CargaCarne.Inactiva -> return
+        is CargaCarne.Buscando -> carga.nombre
+        is CargaCarne.Previa -> carga.nombre
+        is CargaCarne.Error -> carga.nombre
+    }
+    val guardando = carga is CargaCarne.Previa && carga.guardando
+    RegistrarPantalla("cargar_carne_praind")
+    Dialog(onDismissRequest = { if (!guardando) onCancelar() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Cargar gafete PRAIND", style = MaterialTheme.typography.titleMedium)
+            Text(
+                nombre,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            when (carga) {
+                is CargaCarne.Buscando -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text("Buscando el gafete PRAIND…")
+                }
+                is CargaCarne.Previa -> FranjaEstado(
+                    textoPrevia(carga),
+                    if (carga.coincide) TipoEstado.EXITO else TipoEstado.AVISO,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                is CargaCarne.Error -> FranjaEstado(carga.mensaje, TipoEstado.ERROR, modifier = Modifier.fillMaxWidth())
+                CargaCarne.Inactiva -> Unit
+            }
+            if (carga is CargaCarne.Previa) {
+                BotonBrisas(onClick = onGuardar, enabled = !guardando, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        when {
+                            guardando -> "Guardando…"
+                            carga.coincide -> "Guardar"
+                            else -> "Guardar igual"
+                        },
+                    )
+                }
+            }
+            if (carga !is CargaCarne.Buscando) {
+                BotonDiscretoBrisas(onClick = onEscanearOtraVez, enabled = !guardando, modifier = Modifier.fillMaxWidth()) {
+                    Text("Escanear otra vez")
+                }
+            }
+            BotonDiscretoBrisas(onClick = onCancelar, enabled = !guardando, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancelar")
+            }
+        }
+    }
+}
+
+/// Lo que dice la previsualización: de quién es el gafete según su QR.
+internal fun textoPrevia(previa: CargaCarne.Previa): String {
+    val enOrigen = previa.nombreEnOrigen
+    return when {
+        previa.coincide && enOrigen != null -> "El gafete PRAIND es de $enOrigen."
+        previa.coincide -> "El gafete PRAIND coincide con ${previa.nombre}."
+        else ->
+            "El gafete PRAIND es de «${enOrigen ?: "nombre desconocido"}», que no coincide con " +
+                "${previa.nombre}. Revise que sea el gafete correcto."
     }
 }

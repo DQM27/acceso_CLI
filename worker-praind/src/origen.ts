@@ -32,6 +32,30 @@ function falloOrigen(detalle: string): ErrorHttp {
   return new ErrorHttp(502, "origen_no_disponible", `No se pudo obtener el gafete PRAIND de la página del QR (${detalle}).`);
 }
 
+// Un gafete PRAIND borrado en el sistema PRAIND deja el QR apuntando a una
+// página que ya no existe. Se avisa claro, y no como "el sitio falló", en
+// los casos en que eso se nota: página o imagen 404/410, o una página que
+// abre pero no trae ni el nombre ni la imagen (la de "no existe").
+export const MENSAJE_CARNE_NO_EXISTE =
+  "Ese gafete PRAIND ya no existe en el sistema PRAIND: pudo haberse borrado. Pida a la persona su gafete PRAIND actualizado.";
+
+function carneNoExiste(): ErrorHttp {
+  return new ErrorHttp(404, "carne_no_encontrado", MENSAJE_CARNE_NO_EXISTE);
+}
+
+// El acortador (`prd.pw`) responde con error de servidor a un código que
+// no conoce (comprobado el 2026-11-17: un código inventado da 502). Puede
+// ser un gafete borrado o el acortador caído: no se sabe cuál, y el texto
+// lo dice.
+export const MENSAJE_ENLACE_SIN_GAFETE =
+  "El QR no lleva a ningún gafete PRAIND: puede que se haya borrado en el sistema PRAIND. Si pasa con todos los gafetes, el sistema PRAIND puede estar fuera de servicio.";
+
+const ACORTADOR = "prd.pw";
+
+function esNoExiste(estado: number): boolean {
+  return estado === 404 || estado === 410;
+}
+
 /** Valida y normaliza el enlace leído del QR. */
 export function validarEnlace(enlace: unknown): URL {
   if (typeof enlace !== "string") throw enlaceInvalido();
@@ -86,9 +110,13 @@ async function pedirPagina(deps: Dependencias, inicio: URL): Promise<{ respuesta
       url = siguiente;
       continue;
     }
-    if (respuesta.status === 404) {
+    if (esNoExiste(respuesta.status)) {
       await respuesta.body?.cancel();
-      throw new ErrorHttp(404, "carne_no_encontrado", "La página del QR no tiene ese gafete PRAIND.");
+      throw carneNoExiste();
+    }
+    if (respuesta.status >= 500 && url.hostname.toLowerCase() === ACORTADOR) {
+      await respuesta.body?.cancel();
+      throw new ErrorHttp(404, "carne_no_encontrado", MENSAJE_ENLACE_SIN_GAFETE);
     }
     if (!respuesta.ok) {
       await respuesta.body?.cancel();
@@ -156,9 +184,16 @@ export async function descargarCarne(deps: Dependencias, enlace: URL): Promise<C
     await leerConLimite(pagina.respuesta.body, MAXIMO_PAGINA, falloOrigen("la página es demasiado grande")),
   );
   const { nombre, imagen } = await leerPagina(html, pagina.url);
+  // Sin nombre ni imagen es la página de "no existe"; con nombre pero sin
+  // imagen válida, algo cambió en el sitio.
+  if (!imagen && !nombre) throw carneNoExiste();
   if (!imagen) throw falloOrigen("la página no trae la imagen del gafete PRAIND");
 
   const respuesta = await pedir(deps, imagen);
+  if (esNoExiste(respuesta.status)) {
+    await respuesta.body?.cancel();
+    throw carneNoExiste();
+  }
   if (!respuesta.ok) {
     await respuesta.body?.cancel();
     throw falloOrigen(`la imagen respondió ${respuesta.status}`);

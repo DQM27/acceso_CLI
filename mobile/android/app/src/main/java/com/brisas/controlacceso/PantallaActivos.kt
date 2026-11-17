@@ -68,6 +68,14 @@ fun PantallaActivos(
     val carneViewModel: CarnePraindViewModel = viewModel(factory = CarnePraindViewModel.factory(nucleo))
     val carneDisponible by carneViewModel.disponible.collectAsState()
     val vistaCarne by carneViewModel.vista.collectAsState()
+    val puedeCargarCarne by carneViewModel.puedeCargar.collectAsState()
+    val cargaCarne by carneViewModel.carga.collectAsState()
+    val carneGuardado by carneViewModel.guardado.collectAsState()
+    LaunchedEffect(carneGuardado) {
+        val texto = carneGuardado ?: return@LaunchedEffect
+        viewModel.confirmacion.mostrar(texto)
+        carneViewModel.avisoGuardadoVisto()
+    }
     var escanerAbierto by remember { mutableStateOf(false) }
     // El buscador de abajo (la píldora de búsqueda).
     var buscando by remember { mutableStateOf(false) }
@@ -99,6 +107,8 @@ fun PantallaActivos(
     // Si el contratista de la hoja tiene carné PRAIND (consulta local, sin red).
     LaunchedEffect(hojaIngreso?.contratistaId) { carneViewModel.consultar(hojaIngreso?.contratistaId) }
     var escanerPlacaAbierto by remember { mutableStateOf(false) }
+    // Cámara para el QR del gafete PRAIND del contratista de la hoja.
+    var escanerCarneAbierto by remember { mutableStateOf(false) }
 
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
     // ingreso bloqueado, luego los escáneres, y si no la lista).
@@ -106,6 +116,7 @@ fun PantallaActivos(
         is SeleccionIngreso.Bloqueada -> PanelActivos.Bloqueado(actual)
         else -> when {
             escanerPlacaAbierto && formulario != null -> PanelActivos.EscanerPlaca
+            escanerCarneAbierto && formulario != null -> PanelActivos.EscanerQrCarne
             escanerAbierto -> PanelActivos.EscanerCedula
             else -> PanelActivos.Lista
         }
@@ -185,6 +196,27 @@ fun PantallaActivos(
                     mensajeInicial = "Apunte a la placa del vehículo",
                     mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
                 )
+            }
+            PanelActivos.EscanerQrCarne -> {
+                // El QR del gafete PRAIND que trae la persona: el enlace va a
+                // la nube, que dice de quién es antes de guardarlo. Al cerrar
+                // vuelve la hoja de ingreso.
+                EscanerConPermisoCamara(
+                    mensajePermiso = "Se necesita permiso de cámara para leer el QR del gafete PRAIND.",
+                    onCerrar = { escanerCarneAbierto = false },
+                ) {
+                    EscanerQr(
+                        textoGuia = "Apunte al código QR del gafete PRAIND",
+                        interpretar = EnlaceQrPraind::desdeQr,
+                        onLeido = { enlace ->
+                            formulario?.preparacion?.let {
+                                carneViewModel.previsualizar(it.contratistaId, it.nombre, enlace)
+                            }
+                            escanerCarneAbierto = false
+                        },
+                        onCerrar = { escanerCarneAbierto = false },
+                    )
+                }
             }
             PanelActivos.Lista -> Box(modifier = Modifier.fillMaxSize()) {
             val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
@@ -296,9 +328,31 @@ fun PantallaActivos(
                     onCerrada = { hojaIngreso = null },
                     tieneCarne = carneDisponible,
                     onVerCarne = { carneViewModel.abrir(preparacion.contratistaId, preparacion.nombre) },
+                    puedeCargarCarne = puedeCargarCarne,
+                    onCargarCarne = { escanerCarneAbierto = true },
                 )
             }
-            DialogoCarnePraind(vista = vistaCarne, onCerrar = carneViewModel::cerrar)
+            DialogoCarnePraind(
+                vista = vistaCarne,
+                onCerrar = carneViewModel::cerrar,
+                onReemplazar = if (puedeCargarCarne && hojaIngreso != null) {
+                    {
+                        carneViewModel.cerrar()
+                        escanerCarneAbierto = true
+                    }
+                } else {
+                    null
+                },
+            )
+            DialogoCargaCarnePraind(
+                carga = cargaCarne,
+                onGuardar = carneViewModel::guardar,
+                onEscanearOtraVez = {
+                    carneViewModel.cancelarCarga()
+                    escanerCarneAbierto = true
+                },
+                onCancelar = carneViewModel::cancelarCarga,
+            )
 
             }
         }
@@ -316,6 +370,9 @@ private sealed interface PanelActivos {
         override val conCamara get() = true
     }
     data object EscanerCedula : PanelActivos {
+        override val conCamara get() = true
+    }
+    data object EscanerQrCarne : PanelActivos {
         override val conCamara get() = true
     }
 }

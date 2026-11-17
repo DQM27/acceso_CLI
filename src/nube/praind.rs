@@ -89,7 +89,7 @@ impl std::fmt::Display for ErrorPraind {
         match self {
             Self::SinConexion => write!(
                 f,
-                "No hay conexión con la nube. Revisá la conexión a internet."
+                "No hay conexión con la nube. Revise la conexión a internet."
             ),
             Self::Rechazo { mensaje, .. } => write!(f, "{mensaje}"),
             Self::Inesperado(detalle) => write!(
@@ -228,10 +228,10 @@ pub fn cargar_archivo(
 // adelantado. `token` sólo se llama si hace falta la nube.
 
 pub const SIN_CARNE: &str = "Este contratista no tiene el gafete PRAIND cargado.";
-pub const SIN_INTERNET_PRIMERA_VEZ: &str = "Para ver este gafete PRAIND por primera vez, conectate a internet. \
+pub const SIN_INTERNET_PRIMERA_VEZ: &str = "Para ver este gafete PRAIND por primera vez, conéctese a internet. \
      Después de verlo una vez queda guardado en este equipo.";
 const SIN_SINCRONIZAR: &str =
-    "Este contratista todavía no llegó a la nube. Esperá a que sincronice y volvé a intentar.";
+    "Este contratista todavía no llegó a la nube. Espere a que sincronice y vuelva a intentar.";
 
 fn ahora() -> String {
     crate::tiempo::serializar_utc(chrono::Utc::now())

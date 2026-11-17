@@ -28,11 +28,26 @@ ignore = [
     # `downloadAndInstall()`, ver src/api/actualizaciones.ts): hace falta un
     # zip firmado con nuestra clave privada. El arreglo (`zip` 9) llega con
     # `tauri-plugin-updater` 2.14.1, que exige `tauri` >= 2.12 (hoy 2.11):
-    # quitar estas cuatro líneas al subir Tauri.
+    # quitar estas cuatro líneas (y las dos de abajo) al subir Tauri.
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
     "RUSTSEC-2026-0429",
+    # RUSTSEC-2026-0545 y -0548 (`zip` 4.6.1, 2026-11-17): EXCEPCIÓN
+    # TEMPORAL, con el mismo origen (`tauri-plugin-updater` 2.12) y el mismo
+    # arreglo (`zip` 9) que las cuatro de arriba. Hoy no son alcanzables:
+    #   - 0545 (entradas AES devueltas sin comprobar su código de
+    #     autenticación): el updater declara `zip` 4 con
+    #     `default-features = false` y sin la feature `aes-crypto`, así que
+    #     el código AES no se compila (en Cargo.lock, `zip` 4.6.1 no trae `aes`).
+    #   - 0548 (`ZipStreamReader` extrae con nombres del encabezado local):
+    #     el updater extrae con `ZipArchive`, nunca con `ZipStreamReader`.
+    # En cualquier caso, el zip sólo se abre después de verificar su firma
+    # minisign. Ya son seis avisos sobre el mismo crate: subir Tauri es
+    # PRIORITARIO (ver docs/pendientes.md, "Subir Tauri a >= 2.12") y al
+    # hacerlo se quitan las seis líneas de `zip`.
+    "RUSTSEC-2026-0545",
+    "RUSTSEC-2026-0548",
     # RUSTSEC-2026-0387 (`crypto-bigint` 0.5.5): ver la explicación en el
     # .cargo/audit.toml de la raíz. Llega por `p256` 0.13; pendiente pasar los
     # firmantes a `p256` 0.14 y quitarla cuando `jsonwebtoken` suba a 0.14.

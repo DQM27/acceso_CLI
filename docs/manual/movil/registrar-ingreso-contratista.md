@@ -65,7 +65,35 @@ completa para comparar la foto con quien está en la portería (**Cerrar**
 vuelve al formulario). La primera vez que se ve un gafete PRAIND en este teléfono
 hace falta internet; después queda guardado y se ve aunque no haya señal.
 Si no hay internet y nunca se vio, aparece **"Para ver este gafete PRAIND por
-primera vez, conectate a internet…"**.
+primera vez, conéctese a internet…"**.
+
+### Cargar el gafete PRAIND con su QR
+
+Si la persona **no tiene** el gafete PRAIND cargado y un administrador le dio
+permiso a este teléfono desde el panel, en lugar de **Ver gafete PRAIND**
+aparece **Cargar gafete PRAIND**. Hace falta internet.
+
+1. Toque **Cargar gafete PRAIND**. Se abre la cámara.
+2. Apunte al **código QR del gafete PRAIND** que trae la persona. Se lee solo,
+   sin escribir nada.
+3. Aparece de quién es el gafete PRAIND:
+   - En verde, si el nombre coincide con el del contratista: toque
+     **Guardar**.
+   - En amarillo, si **no** coincide: revise que sea el gafete PRAIND correcto
+     de esta persona antes de tocar **Guardar igual**.
+   - **Escanear otra vez** vuelve a la cámara; **Cancelar** no guarda nada.
+4. Al guardar aparece **"Gafete PRAIND de … guardado."** y el botón pasa a
+   **Ver gafete PRAIND**. El escritorio y el panel lo ven también.
+
+Para cambiar uno que ya está cargado: **Ver gafete PRAIND** → **Reemplazar
+gafete PRAIND**, y los mismos pasos.
+
+| Mensaje | Qué significa | Qué hacer |
+|---|---|---|
+| "Ese gafete PRAIND ya no existe en el sistema PRAIND: pudo haberse borrado…" | La página del QR ya no tiene el gafete PRAIND. | Pida a la persona su gafete PRAIND actualizado. |
+| "El QR no lleva a ningún gafete PRAIND…" | El enlace del QR no abre ningún gafete PRAIND. | Igual que el anterior. Si pasa con todos los gafetes, el sistema PRAIND puede estar fuera de servicio: intente más tarde. |
+| "El enlace no es de un gafete PRAIND." | El QR leído no es de un gafete PRAIND. | Apunte al QR del gafete PRAIND. |
+| No aparece **Cargar gafete PRAIND** | Este teléfono no tiene permiso, o no hay internet. | Que un administrador lo cargue desde el panel, o lo permita para este teléfono. |
 
 Luego:
 
