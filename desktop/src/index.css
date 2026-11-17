@@ -1316,7 +1316,9 @@ textarea::placeholder {
    del otro. */
 .detalle-contratista {
   display: grid;
-  grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 26rem);
+  /* La columna del carné, al ancho de la imagen a 28rem de alto (es
+     vertical, ~0,65 de ancho por alto): sin franjas vacías a los lados. */
+  grid-template-columns: minmax(16rem, 1fr) minmax(14rem, 18.5rem);
   gap: 1.25rem;
   align-items: start;
 }
@@ -1337,7 +1339,9 @@ textarea::placeholder {
    Sin pasar del alto de la ventana (título y márgenes: ~9rem; los botones
    van en la columna de los datos, no abajo). */
 .detalle-contratista {
-  --alto-carne: min(36rem, calc(100vh - 9rem));
+  /* 28rem (antes 36rem, pedido del usuario 2026-11-17): la ventana queda
+     compacta, sin hueco bajo los datos; para leerlo, clic y se amplía. */
+  --alto-carne: min(28rem, calc(100vh - 9rem));
 }
 /* Columna de los datos, del mismo alto que el carné: datos arriba y las
    acciones, o la carga del gafete PRAIND, pegadas abajo. */

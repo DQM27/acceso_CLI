@@ -92,7 +92,7 @@ export default function DetalleContratista({
   const estadoAcceso = textoEstadoAcceso(contratista);
 
   return (
-    <Modal titulo="Detalles del contratista" onCerrar={onCerrar} ancho="56rem">
+    <Modal titulo="Detalles del contratista" onCerrar={onCerrar} ancho="50rem">
       <div className="detalle-contratista">
         {/* Datos arriba; acciones (o la carga del gafete PRAIND) abajo, en el
             espacio libre de la columna: el modal no crece ni hace scroll. */}
