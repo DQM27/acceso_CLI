@@ -2243,3 +2243,119 @@ fn migracion_64_agrega_los_carnes_praind_y_rebaja_el_catalogo() {
             .is_err()
     );
 }
+
+/// Base al día que vuelve a la forma de `gafetes`/`gafetes_incidentes` de la
+/// versión 64 (con `DE_BAJA` y sin `detalle`), con un gafete de baja, uno
+/// perdido con su incidente y un incidente `RESUELTO` viejo.
+fn base_version_64_con_gafete_de_baja() -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             DROP TABLE gafetes_incidentes;
+             DROP TABLE gafetes;
+             CREATE TABLE gafetes (
+                 id INTEGER PRIMARY KEY,
+                 numero INTEGER NOT NULL,
+                 tipo TEXT NOT NULL,
+                 estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+                 contratista_portador_id INTEGER REFERENCES contratistas(id),
+                 visita_portador_id INTEGER REFERENCES cita_visitantes(id),
+                 encargado_portador_id INTEGER REFERENCES encargados_ruta(id),
+                 proveedor_portador_id INTEGER REFERENCES registro_ingresos_proveedor(id),
+                 uuid TEXT
+             ) STRICT;
+             CREATE TABLE gafetes_incidentes (
+                 id INTEGER PRIMARY KEY,
+                 gafete_id INTEGER NOT NULL REFERENCES gafetes(id),
+                 tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+                 fecha_hora TEXT NOT NULL,
+                 usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                 contratista_id INTEGER REFERENCES contratistas(id),
+                 visita_portador_id INTEGER REFERENCES cita_visitantes(id),
+                 encargado_portador_id INTEGER REFERENCES encargados_ruta(id),
+                 proveedor_portador_id INTEGER REFERENCES registro_ingresos_proveedor(id),
+                 motivo_resolucion TEXT
+             ) STRICT;
+             PRAGMA foreign_keys = ON;
+             INSERT INTO empresas (nombre) VALUES ('Acme');
+             INSERT INTO contratistas (cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso)
+             VALUES ('1', 'Juan', 1, 'PRAIND', 0, 1);
+             INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+             VALUES (1, '9', 'Root', 'hash', 'ROOT', 1);
+             INSERT INTO gafetes (id, numero, tipo, estado, uuid)
+             VALUES (1, 5, 'CONTRATISTA', 'DE_BAJA', 'uuid-baja');
+             INSERT INTO gafetes (id, numero, tipo, estado, contratista_portador_id, uuid)
+             VALUES (2, 6, 'CONTRATISTA', 'PERDIDO', 1, 'uuid-perdido');
+             INSERT INTO gafetes_incidentes (gafete_id, tipo, fecha_hora, usuario_id, contratista_id)
+             VALUES (2, 'PERDIDO', '2026-10-01T12:00:00Z', 1, 1);
+             INSERT INTO gafetes_incidentes (gafete_id, tipo, fecha_hora, usuario_id, motivo_resolucion)
+             VALUES (2, 'RESUELTO', '2026-10-02T12:00:00Z', 1, 'APARECIDO');
+             DELETE FROM cola_salida;
+             PRAGMA user_version = 64;",
+        )
+        .unwrap();
+    connection
+}
+
+#[test]
+fn migracion_65_pasa_las_bajas_a_perdido_y_conserva_el_historial() {
+    let connection = base_version_64_con_gafete_de_baja();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let estados: Vec<(i64, String, Option<i64>)> = connection
+        .prepare("SELECT numero, estado, contratista_portador_id FROM gafetes ORDER BY numero")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        estados,
+        vec![
+            (5, "PERDIDO".to_string(), None),
+            (6, "PERDIDO".to_string(), Some(1)),
+        ]
+    );
+    // La baja convertida viaja a la nube; lo que no cambió, no.
+    let encolados: Vec<String> = connection
+        .prepare("SELECT entidad_uuid FROM cola_salida WHERE entidad = 'gafete'")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(encolados, vec!["uuid-baja".to_string()]);
+    let incidentes: i64 = connection
+        .query_row("SELECT COUNT(*) FROM gafetes_incidentes", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(incidentes, 2);
+
+    // El estado DE_BAJA ya no entra, y un perdido sin responsable sí.
+    assert!(
+        connection
+            .execute("UPDATE gafetes SET estado = 'DE_BAJA' WHERE numero = 6", [])
+            .is_err()
+    );
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'PERDIDO')",
+            [],
+        )
+        .unwrap();
+    // Un disponible no puede tener responsable.
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id)
+                 VALUES (8, 'CONTRATISTA', 'DISPONIBLE', 1)",
+                [],
+            )
+            .is_err()
+    );
+}

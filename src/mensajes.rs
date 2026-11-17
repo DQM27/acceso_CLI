@@ -152,6 +152,10 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
         GafeteServiceError::EstadoInvalido => {
             "El gafete no está en un estado válido para esa operación".into()
         }
+        GafeteServiceError::DetalleRequerido => "Escriba el detalle del reporte".into(),
+        GafeteServiceError::DetalleMuyLargo => {
+            "El detalle es demasiado largo (máximo 1000 caracteres)".into()
+        }
         GafeteServiceError::GafeteConIngresoActivo => {
             "El gafete está asignado a un ingreso activo".into()
         }
@@ -266,7 +270,6 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
         GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
-        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }
@@ -317,7 +320,6 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
         GafeteOcupado => "El gafete ya está en uso".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
-        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }
@@ -501,7 +503,6 @@ pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> Strin
         GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
         GafeteNoRegistrado => "El número de gafete provisional no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
-        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }

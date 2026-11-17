@@ -46,7 +46,7 @@ salida](registrar-salida.md).
 | "El número de gafete es obligatorio" / "Ingrese un número de gafete válido" | Falta el gafete o no es válido. | Escriba el número del gafete de visita. |
 | "El gafete de visita ya está en uso" | Ese gafete lo tiene otra visita adentro. | Entregue otro gafete. |
 | "El gafete de visita no está registrado en el catálogo" | Ese número no existe como gafete de visita. | Revise el número. Si es un gafete nuevo, se agrega en **Gafetes**. |
-| "El gafete no está disponible" | El gafete está marcado como perdido o dado de baja. | Entregue otro gafete. |
+| "El gafete no está disponible" | El gafete está marcado como perdido. | Entregue otro gafete. |
 | "El gafete de visita N ya está en uso en otro dispositivo del sitio" | Se entregó en el otro equipo del sitio. | Entregue otro gafete. |
 | "Esta persona tiene el acceso denegado." | Un administrador le quitó el acceso a esta cédula. | No registre la entrada, aunque tenga el correo. Sólo un administrador puede devolverle el acceso. |
 | "Esta persona ya está adentro (como contratista, por ejemplo) — registre primero esa salida" | Figura adentro por otra vía. | Registre primero esa salida (Ctrl+S) y luego esta entrada. |

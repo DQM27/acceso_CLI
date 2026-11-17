@@ -545,13 +545,19 @@ pub enum GafeteServiceError {
     VisitaNoEncontrada,
     #[error("Encargado de ruta no encontrado")]
     EncargadoRutaNoEncontrado,
-    /// La transición pedida no aplica al estado actual (ej. dar de baja uno
-    /// ya perdido, o resolver uno que no está perdido).
+    /// La transición pedida no aplica al estado actual (ej. reportar perdido
+    /// uno que ya lo está, o registrar el pago de uno sin responsable).
     #[error("El gafete no está en un estado válido para esta operación")]
     EstadoInvalido,
-    /// Hay un ingreso activo con este gafete asignado — dar de baja o
-    /// marcar perdido dejaría el inventario contradiciendo un movimiento en
-    /// curso. Se revisa dentro de la misma transacción que la transición.
+    /// Un reporte sin responsable, o una recuperación, sin detalle: quien
+    /// reporta tiene que contar qué pasó.
+    #[error("Escriba el detalle del reporte")]
+    DetalleRequerido,
+    #[error("El detalle es demasiado largo")]
+    DetalleMuyLargo,
+    /// Hay un ingreso activo con este gafete asignado — reportarlo perdido
+    /// dejaría el inventario contradiciendo un movimiento en curso. Se
+    /// revisa dentro de la misma transacción que la transición.
     #[error("El gafete está asignado a un ingreso activo")]
     GafeteConIngresoActivo,
     #[error("La sesión actual no está autorizada para realizar esta operación")]

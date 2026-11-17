@@ -3953,6 +3953,32 @@ fn guardar_gafetes_marca_de_agua_avanza_al_mas_nuevo_cuando_nada_queda_pendiente
     );
 }
 
+/// Un perdido sin responsable (no se sabe quién lo tenía, o ya pagó) se
+/// guarda tal cual, y una baja vieja que llegue de la nube queda perdida:
+/// en ningún caso el gafete puede quedar asignable en este equipo.
+#[test]
+fn guardar_gafetes_perdido_sin_responsable_y_baja_vieja_quedan_perdidos() {
+    let (connection, _) = conexion_con_contratista();
+    let transaction = connection.unchecked_transaction().unwrap();
+    let gafetes = vec![
+        fila_gafete("g1", 1, "PERDIDO", None, "2026-01-01T00:00:00Z"),
+        fila_gafete("g2", 2, "DE_BAJA", None, "2026-01-02T00:00:00Z"),
+    ];
+
+    let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes).unwrap();
+
+    assert_eq!(recibidos, 2);
+    assert!(marca.is_some());
+    let estados: Vec<String> = transaction
+        .prepare("SELECT estado FROM gafetes WHERE numero IN (1, 2) ORDER BY numero")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(estados, vec!["PERDIDO", "PERDIDO"]);
+}
+
 #[test]
 fn guardar_gafetes_perdido_sin_deudor_resoluble_se_omite_y_no_avanza_la_marca() {
     let (connection, uuid_contratista) = conexion_con_contratista();

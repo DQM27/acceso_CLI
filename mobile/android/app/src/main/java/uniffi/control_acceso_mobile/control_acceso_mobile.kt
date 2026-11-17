@@ -12409,8 +12409,10 @@ enum class SituacionGafete {
      * Existe y está disponible: nadie lo tiene puesto.
      */
     LIBRE,
-    PERDIDO,
-    DE_BAJA;
+    /**
+     * Reportado perdido (no se puede asignar), con o sin responsable.
+     */
+    PERDIDO;
 
     
 

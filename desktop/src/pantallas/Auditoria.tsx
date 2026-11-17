@@ -189,14 +189,30 @@ export default function Auditoria() {
 }
 
 function textoEstadoAnterior(incidente: IncidenteGafete): string {
-  return incidente.tipo === "Perdido" ? "Disponible" : "Perdido";
+  switch (incidente.tipo) {
+    case "Perdido":
+      return "Disponible";
+    case "Pagado":
+      return `Perdido — responsable ${incidente.responsable_nombre ?? "—"}`;
+    case "Recuperado":
+    case "Resuelto":
+      return "Perdido";
+  }
 }
 
 function textoEstadoNuevo(incidente: IncidenteGafete): string {
-  if (incidente.tipo === "Perdido") {
-    const portador = incidente.contratista_nombre ?? incidente.visita_portador_nombre ?? "—";
-    return `Perdido — asignado a ${portador}`;
+  const conDetalle = (texto: string) =>
+    incidente.detalle ? `${texto} — ${incidente.detalle}` : texto;
+  switch (incidente.tipo) {
+    case "Perdido":
+      return conDetalle(
+        `Perdido — ${incidente.responsable_nombre ? `responsable ${incidente.responsable_nombre}` : "sin responsable"}`,
+      );
+    case "Pagado":
+      return conDetalle("Perdido — pagó, sin responsable");
+    case "Recuperado":
+      return conDetalle("Disponible — recuperado");
+    case "Resuelto":
+      return `Disponible — ${incidente.motivo_resolucion === "Pagado" ? "pagado" : "apareció"}`;
   }
-  const motivo = incidente.motivo_resolucion === "Pagado" ? "pagado" : "apareció";
-  return `Disponible — ${motivo}`;
 }

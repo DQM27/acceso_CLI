@@ -2,8 +2,9 @@
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EstadoGafete {
     Disponible,
+    /// No se puede asignar: el gafete no está físicamente (se perdió, no se
+    /// sabe dónde está o espera reimpresión). Puede tener responsable o no.
     Perdido,
-    DeBaja,
 }
 
 impl EstadoGafete {
@@ -13,29 +14,28 @@ impl EstadoGafete {
         match self {
             Self::Disponible => "DISPONIBLE",
             Self::Perdido => "PERDIDO",
-            Self::DeBaja => "DE_BAJA",
         }
     }
 
     /// Inverso de [`Self::as_str_sql`]. `None` si el texto no es ninguno de
-    /// los 3 valores conocidos.
+    /// los valores conocidos. `DE_BAJA` (estado retirado en `MIGRACION_65`)
+    /// se lee como `Perdido`: es lo que hace la migración con los locales y
+    /// lo que hace la nube con lo que manda una app sin actualizar.
     pub fn from_str_sql(texto: &str) -> Option<Self> {
         match texto {
             "DISPONIBLE" => Some(Self::Disponible),
-            "PERDIDO" => Some(Self::Perdido),
-            "DE_BAJA" => Some(Self::DeBaja),
+            "PERDIDO" | "DE_BAJA" => Some(Self::Perdido),
             _ => None,
         }
     }
 
     /// Reconoce el texto que un operador escribe en el buscador
-    /// (`estado:disponible|perdido|de_baja`) — alias flexibles, sin
-    /// distinguir mayúsculas, mismo criterio que `TipoIngreso::from_str_filtro`.
+    /// (`estado:disponible|perdido`) — alias flexibles, sin distinguir
+    /// mayúsculas, mismo criterio que `TipoIngreso::from_str_filtro`.
     pub fn from_str_filtro(texto: &str) -> Option<Self> {
         match texto.to_lowercase().as_str() {
             "disponible" | "disponibles" => Some(Self::Disponible),
             "perdido" | "perdidos" => Some(Self::Perdido),
-            "de_baja" | "debaja" | "de-baja" | "baja" => Some(Self::DeBaja),
             _ => None,
         }
     }
@@ -93,17 +93,16 @@ impl TipoGafete {
     }
 }
 
-/// A quién se le asignó un gafete la última vez -- para trazabilidad si se
-/// pierde, no para llevar cuentas de dinero (por eso no se llama
-/// "deudor"). Cada variante corresponde a una de las columnas FK reales de
-/// `gafetes` (`contratista_portador_id`/`visita_portador_id`/
-/// `encargado_portador_id`/`proveedor_portador_id`). `ProvisionalKof(i64)`
-/// apunta a un catálogo real (`encargados_ruta`, la persona KOF sí se
-/// repite); `Proveedor(i64)` en cambio apunta a un registro TRANSACCIONAL
-/// (`registro_ingresos_proveedor.id`, la visita puntual) y no a un catálogo
-/// de personas -- pedido explícito del usuario: el colaborador de un
-/// proveedor nunca se repite, así que no existe (ni debe existir) una tabla
-/// de personas para este caso.
+/// Quién responde por un gafete perdido -- para trazabilidad, no para
+/// llevar cuentas de dinero (por eso no se llama "deudor"). Cada variante
+/// corresponde a una de las columnas FK reales de `gafetes`
+/// (`contratista_portador_id`/`visita_portador_id`/`encargado_portador_id`/
+/// `proveedor_portador_id`). `ProvisionalKof(i64)` apunta a un catálogo real
+/// (`encargados_ruta`, la persona KOF sí se repite); `Proveedor(i64)` en
+/// cambio apunta a un registro TRANSACCIONAL (`registro_ingresos_proveedor.id`,
+/// la visita puntual) y no a un catálogo de personas -- pedido explícito del
+/// usuario: el colaborador de un proveedor nunca se repite, así que no existe
+/// (ni debe existir) una tabla de personas para este caso.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortadorGafete {
     Contratista(i64),
@@ -112,9 +111,9 @@ pub enum PortadorGafete {
     Proveedor(i64),
 }
 
-/// Motivo por el que se cierra un incidente de pérdida (`gafetes_incidentes`,
-/// registro `RESUELTO`). Sólo estado — sin monto ni nota, decisión explícita
-/// del usuario (`docs/plan-gafetes.md`).
+/// Motivo con que se cerraba un incidente antes de `MIGRACION_65` (filas
+/// `RESUELTO`). Sólo se lee, para mostrar el historial viejo: los reportes
+/// nuevos son `Pagado`/`Recuperado` (ver [`TipoIncidenteGafete`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MotivoResolucionGafete {
@@ -139,13 +138,19 @@ impl MotivoResolucionGafete {
     }
 }
 
-/// Tipo de fila de `gafetes_incidentes` — espejo de la columna `tipo`
-/// (`PERDIDO`/`RESUELTO`), usado por la lectura del historial
-/// (`database::queries::gafetes_incidentes::GafetesIncidentesQuery`).
+/// Tipo de reporte del historial (`gafetes_incidentes.tipo`). Cada reporte
+/// queda a nombre de quien lo hizo y no se edita ni se borra.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TipoIncidenteGafete {
+    /// Se reportó perdido, con o sin responsable.
     Perdido,
+    /// El responsable pagó: se le quita la marca, el gafete sigue perdido
+    /// hasta que se reimprima.
+    Pagado,
+    /// Apareció o se reimprimió: vuelve a estar disponible.
+    Recuperado,
+    /// Cierre anterior a `MIGRACION_65` (pagado o apareció en un solo paso).
     Resuelto,
 }
 
@@ -153,6 +158,8 @@ impl TipoIncidenteGafete {
     pub fn as_str_sql(self) -> &'static str {
         match self {
             Self::Perdido => "PERDIDO",
+            Self::Pagado => "PAGADO",
+            Self::Recuperado => "RECUPERADO",
             Self::Resuelto => "RESUELTO",
         }
     }
@@ -160,6 +167,8 @@ impl TipoIncidenteGafete {
     pub fn from_str_sql(texto: &str) -> Option<Self> {
         match texto {
             "PERDIDO" => Some(Self::Perdido),
+            "PAGADO" => Some(Self::Pagado),
+            "RECUPERADO" => Some(Self::Recuperado),
             "RESUELTO" => Some(Self::Resuelto),
             _ => None,
         }
@@ -175,11 +184,11 @@ pub struct Gafete {
     pub numero: i64,
     pub tipo: TipoGafete,
     pub estado: EstadoGafete,
-    /// A lo sumo una de las tres puede ser `Some`, y únicamente cuando
-    /// `estado == Perdido` -- los `CHECK`s del esquema imponen las mismas
-    /// reglas del lado de `SQLite` (tipo↔columna y estado↔portador), esto
-    /// sólo las refleja en Rust. Usar [`Gafete::portador`] en vez de leer
-    /// estos campos directamente.
+    /// A lo sumo una puede ser `Some`, y únicamente cuando `estado ==
+    /// Perdido` (un perdido puede no tener ninguna: responsable desconocido o
+    /// ya pagó) -- los `CHECK`s del esquema imponen las mismas reglas del
+    /// lado de `SQLite`, esto sólo las refleja en Rust. Usar
+    /// [`Gafete::portador`] en vez de leer estos campos directamente.
     pub contratista_portador_id: Option<i64>,
     pub visita_portador_id: Option<i64>,
     pub encargado_portador_id: Option<i64>,
@@ -187,10 +196,8 @@ pub struct Gafete {
 }
 
 impl Gafete {
-    /// A quién se le asignó este gafete la última vez, si a alguien --
-    /// `None` si está `Disponible`/`DeBaja`. Deriva de las cuatro columnas en
-    /// vez de guardarse aparte porque el `CHECK` del esquema ya garantiza
-    /// que a lo sumo una está seteada.
+    /// Quién responde por este gafete perdido, si alguien -- `None` si está
+    /// `Disponible`, si no se sabe quién lo tenía o si ya pagó.
     pub fn portador(&self) -> Option<PortadorGafete> {
         if let Some(id) = self.contratista_portador_id {
             return Some(PortadorGafete::Contratista(id));

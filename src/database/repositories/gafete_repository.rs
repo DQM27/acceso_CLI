@@ -114,15 +114,18 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         }
     }
 
-    fn dar_de_baja(&self, id: i64) -> Result<(), DatabaseError> {
-        self.connection.execute(
-            "UPDATE gafetes SET estado = 'DE_BAJA' WHERE id = ?1",
-            params![id],
-        )?;
-        encolar_actualizacion(self.connection, id)
-    }
-
-    fn marcar_perdido(&self, id: i64, portador: PortadorGafete) -> Result<(), DatabaseError> {
+    fn marcar_perdido(
+        &self,
+        id: i64,
+        portador: Option<PortadorGafete>,
+    ) -> Result<(), DatabaseError> {
+        let Some(portador) = portador else {
+            self.connection.execute(
+                "UPDATE gafetes SET estado = 'PERDIDO' WHERE id = ?1",
+                params![id],
+            )?;
+            return encolar_actualizacion(self.connection, id);
+        };
         match portador {
             PortadorGafete::Contratista(contratista_id) => self.connection.execute(
                 "UPDATE gafetes SET estado = 'PERDIDO', contratista_portador_id = ?1 WHERE id = ?2",
@@ -144,7 +147,17 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         encolar_actualizacion(self.connection, id)
     }
 
-    fn resolver(&self, id: i64) -> Result<(), DatabaseError> {
+    fn quitar_responsable(&self, id: i64) -> Result<(), DatabaseError> {
+        self.connection.execute(
+            "UPDATE gafetes SET
+                contratista_portador_id = NULL, visita_portador_id = NULL,
+                encargado_portador_id = NULL, proveedor_portador_id = NULL WHERE id = ?1",
+            params![id],
+        )?;
+        encolar_actualizacion(self.connection, id)
+    }
+
+    fn recuperar(&self, id: i64) -> Result<(), DatabaseError> {
         self.connection.execute(
             "UPDATE gafetes SET estado = 'DISPONIBLE',
                 contratista_portador_id = NULL, visita_portador_id = NULL,
@@ -197,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn marcar_perdido_y_resolver_limpian_al_portador() {
+    fn marcar_perdido_y_recuperar_limpian_al_portador() {
         let connection = conexion();
         connection
             .execute("INSERT INTO empresas (nombre) VALUES ('Acme')", params![])
@@ -212,7 +225,7 @@ mod tests {
         let repo = SqliteGafeteRepository::new(&connection);
         let id = repo.crear(1, TipoGafete::Contratista).unwrap();
 
-        repo.marcar_perdido(id, PortadorGafete::Contratista(1))
+        repo.marcar_perdido(id, Some(PortadorGafete::Contratista(1)))
             .unwrap();
         let perdido = repo.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(perdido.estado, EstadoGafete::Perdido);
@@ -220,12 +233,30 @@ mod tests {
         assert_eq!(perdido.portador(), Some(PortadorGafete::Contratista(1)));
         assert_eq!(repo.deuda_de_contratista(1).unwrap(), vec![1]);
 
-        repo.resolver(id).unwrap();
+        repo.recuperar(id).unwrap();
         let resuelto = repo.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(resuelto.estado, EstadoGafete::Disponible);
         assert_eq!(resuelto.contratista_portador_id, None);
         assert_eq!(resuelto.portador(), None);
         assert_eq!(repo.deuda_de_contratista(1).unwrap(), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn perdido_sin_responsable_y_pago_que_no_lo_libera() {
+        let connection = conexion();
+        let repo = SqliteGafeteRepository::new(&connection);
+        let id = repo.crear(2, TipoGafete::Contratista).unwrap();
+
+        repo.marcar_perdido(id, None).unwrap();
+        let perdido = repo.buscar_por_id(id).unwrap().unwrap();
+        assert_eq!(perdido.estado, EstadoGafete::Perdido);
+        assert_eq!(perdido.portador(), None);
+
+        repo.quitar_responsable(id).unwrap();
+        assert_eq!(
+            repo.buscar_por_id(id).unwrap().unwrap().estado,
+            EstadoGafete::Perdido
+        );
     }
 
     #[test]
@@ -283,7 +314,7 @@ mod tests {
         let repo = SqliteGafeteRepository::new(&connection);
         let id = repo.crear(9, TipoGafete::Visita).unwrap();
 
-        repo.marcar_perdido(id, PortadorGafete::Visita(cita_visitante_id))
+        repo.marcar_perdido(id, Some(PortadorGafete::Visita(cita_visitante_id)))
             .unwrap();
 
         let perdido = repo.buscar_por_id(id).unwrap().unwrap();

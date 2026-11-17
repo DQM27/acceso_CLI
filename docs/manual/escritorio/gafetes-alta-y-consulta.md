@@ -39,10 +39,13 @@ Columnas:
 |---|---|
 | Número | Número del gafete |
 | Tipo | Tipo del gafete |
-| Estado | **Disponible**, **Perdido** o **De baja** |
-| Asignado a | Quién lo debe, si está perdido |
-| Resolver | Botón, sólo en gafetes perdidos (ver [Gafete perdido](gafete-perdido.md)) |
-| Historial | Botón **Detalles**: los incidentes del gafete |
+| Estado | **Disponible** o **Perdido** (no se puede asignar) |
+| Responsable | Si está perdido: quién lo debe, o "Sin responsable" |
+| Acciones | **Reportar perdido** o **Pago / recuperar** (ver [Gafete perdido](gafete-perdido.md)) |
+| Historial | Botón **Detalles**: los reportes del gafete |
+
+Para comprobar que estén todos los gafetes en la mesa, use **Conteo** (ver
+[Conteo de gafetes](conteo-gafetes.md)).
 
 ## Pasos — agregar gafetes
 
@@ -58,10 +61,10 @@ Columnas:
 
 ## Ver el historial de un gafete
 
-En la fila del gafete, pulse **Detalles**. Se ve cada incidente: cuándo se
-marcó **perdido**, a quién se asignó, cuándo se **resolvió**, con qué
-motivo y qué operador lo hizo. Si nunca tuvo problemas, dice "Este gafete
-no tiene incidentes registrados."
+En la fila del gafete, pulse **Detalles**. Se ve cada reporte: cuándo se
+reportó **perdido**, cuándo se **registró el pago**, cuándo se
+**recuperó**, quién lo reportó, el responsable y el detalle que se
+escribió. Si nunca tuvo problemas, dice "Este gafete no tiene reportes."
 
 ## Mensajes que pueden aparecer
 
@@ -74,4 +77,5 @@ no tiene incidentes registrados."
 
 ## Relacionado
 
-- [Gafete perdido, pagado o aparecido](gafete-perdido.md)
+- [Gafete perdido, pagado o recuperado](gafete-perdido.md)
+- [Conteo de gafetes](conteo-gafetes.md)

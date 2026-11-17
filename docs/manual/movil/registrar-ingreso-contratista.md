@@ -110,7 +110,7 @@ Otros mensajes al registrar:
 | "El gafete ya está en uso" | Ese gafete lo tiene otra persona adentro. | Entregue otro gafete. |
 | "El gafete N ya está en uso en otro dispositivo del sitio" | Lo entregó la PC del puesto. | Entregue otro gafete. |
 | "El número de gafete no existe en el catálogo" | Ese número no está registrado. | Revise el número. |
-| "El gafete está marcado como perdido" / "El gafete está dado de baja" | Ese gafete no se puede usar. | Entregue otro gafete. |
+| "El gafete está marcado como perdido" | Ese gafete no se puede usar. | Entregue otro gafete. |
 | "La placa es obligatoria cuando el ingreso es en vehículo" | Falta la placa. | Escríbala o escanéela. |
 | "Revise la fecha y hora del equipo antes de continuar" | La hora del teléfono quedó antes del último registro. | Ver [Problemas frecuentes](problemas-frecuentes.md#revise-la-fecha-y-hora-del-equipo). |
 

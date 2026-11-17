@@ -1,9 +1,9 @@
-//! Puerto del catálogo de gafetes (`docs/plan-gafetes.md`). Un solo trait
-//! para lectura y escritura puntual (a diferencia de Empresas y
-//! Contratistas, que separan `*Query` de `*Repository`) porque el catálogo es
-//! chico y no hay una proyección cara que justifique separarlos --
-//! `GafetesQuery` (`queries/gafetes.rs`) sigue aparte sólo para la lista
-//! completa con datos del deudor, que sí es una proyección propia.
+//! Puerto del catálogo de gafetes. Un solo trait para lectura y escritura
+//! puntual (a diferencia de Empresas y Contratistas, que separan `*Query` de
+//! `*Repository`) porque el catálogo es chico y no hay una proyección cara
+//! que justifique separarlos -- `GafetesQuery` (`queries/gafetes.rs`) sigue
+//! aparte sólo para la lista completa con datos del responsable, que sí es
+//! una proyección propia.
 
 use crate::database::error::DatabaseError;
 use crate::models::gafete::{Gafete, PortadorGafete, TipoGafete};
@@ -19,11 +19,18 @@ pub trait GafeteRepository {
         tipo: TipoGafete,
     ) -> Result<Option<Gafete>, DatabaseError>;
 
-    fn dar_de_baja(&self, id: i64) -> Result<(), DatabaseError>;
+    /// Pasa a `Perdido`, con responsable o sin él.
+    fn marcar_perdido(
+        &self,
+        id: i64,
+        portador: Option<PortadorGafete>,
+    ) -> Result<(), DatabaseError>;
 
-    fn marcar_perdido(&self, id: i64, portador: PortadorGafete) -> Result<(), DatabaseError>;
+    /// Quita el responsable de un gafete perdido (pagó); sigue `Perdido`.
+    fn quitar_responsable(&self, id: i64) -> Result<(), DatabaseError>;
 
-    fn resolver(&self, id: i64) -> Result<(), DatabaseError>;
+    /// Vuelve a `Disponible`, sin responsable.
+    fn recuperar(&self, id: i64) -> Result<(), DatabaseError>;
 
     /// Números de los gafetes que un contratista debe actualmente
     /// (`estado = 'PERDIDO'` con `contratista_portador_id` apuntándolo). Un

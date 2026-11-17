@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { ListChecks, Plus } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
@@ -8,21 +8,26 @@ import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioGafete from "./FormularioGafete";
 import GestionGafeteModal from "./GestionGafeteModal";
 import HistorialGafeteModal from "./HistorialGafeteModal";
+import ConteoGafetesModal from "./ConteoGafetesModal";
 import { buscarGafetes, nombrePortador } from "../api";
 import type { FiltroGafetes, GafeteResumen, TipoGafeteEntrada } from "../api";
 
+const ETIQUETA_TIPO: Record<TipoGafeteEntrada, string> = {
+  contratista: "Contratista",
+  visita: "Visita",
+  provisional_kof: "Provisional KOF",
+  proveedor: "Proveedor",
+};
+
 /**
- * Catálogo de gafetes (`docs/plan-gafetes.md`) — sin restricción de rol a
- * propósito, mismo criterio que el núcleo: cualquier operador con sesión
- * gestiona alta/baja/perdido/resolver. Doble click en una fila abre las
- * acciones disponibles según su estado (mismo criterio que la TUI: B/P/R
- * sólo aplican según el estado actual, ver `src/tui/gafetes/state.rs`) — la
- * columna "Resolver" es el mismo modal, explícita a propósito para el
- * operador que no conozca el doble click (sólo visible en estado Perdido,
- * que es cuando resolver aplica). La columna "Historial" abre por separado
- * (`HistorialGafeteModal`) quién marcó perdido/resolvió cada incidente —
- * separado de la gestión para no mezclar "qué puedo hacer" con "qué le pasó
- * antes".
+ * Catálogo de gafetes — sin restricción de rol a propósito, mismo criterio
+ * que el núcleo: cualquier operador con sesión da de alta, reporta perdido,
+ * registra el pago, recupera y cuenta. Doble clic en una fila abre las
+ * acciones según su estado; la columna "Acciones" abre lo mismo, explícita
+ * para quien no conozca el doble clic. La columna "Historial" abre por
+ * separado (`HistorialGafeteModal`) cada reporte, quién lo hizo y qué
+ * escribió — separado de la gestión para no mezclar "qué puedo hacer" con
+ * "qué le pasó antes". "Conteo" abre el conteo físico del tipo elegido.
  */
 export default function Gafetes() {
   const [texto, setTexto] = useState("");
@@ -36,6 +41,7 @@ export default function Gafetes() {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [gestionAbierta, setGestionAbierta] = useState<GafeteResumen | null>(null);
   const [detalleAbierto, setDetalleAbierto] = useState<GafeteResumen | null>(null);
+  const [conteoAbierto, setConteoAbierto] = useState(false);
 
   const [conteo, alContar] = useConteoVisible();
 
@@ -54,28 +60,29 @@ export default function Gafetes() {
       { field: "tipo", headerName: "Tipo", flex: 1, minWidth: 110 },
       { field: "estado", headerName: "Estado", flex: 1.3, minWidth: 130 },
       {
-        headerName: "Asignado a",
+        headerName: "Responsable",
         flex: 1.6,
         minWidth: 170,
         cellStyle: { textAlign: "left" },
-        valueGetter: ({ data }) => (data ? nombrePortador(data) : null),
+        valueGetter: ({ data }) =>
+          data && data.estado === "Perdido" ? (nombrePortador(data) ?? "Sin responsable") : null,
       },
       {
-        headerName: "Resolver",
+        headerName: "Acciones",
         flex: 1.1,
         minWidth: 110,
         filter: false,
         sortable: false,
         cellRenderer: (p: ICellRendererParams<GafeteResumen>) => {
           const gafete = p.data;
-          return gafete && gafete.estado === "Perdido" ? (
+          return gafete ? (
             <button
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "var(--tam-xs)" }}
               onClick={() => setGestionAbierta(gafete)}
             >
-              Resolver
+              {gafete.estado === "Perdido" ? "Pago / recuperar" : "Reportar perdido"}
             </button>
           ) : null;
         },
@@ -160,6 +167,14 @@ export default function Gafetes() {
                   <Plus size={16} aria-hidden="true" />
                   Nuevo gafete
                 </button>
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  onClick={() => setConteoAbierto(true)}
+                >
+                  <ListChecks size={16} aria-hidden="true" />
+                  Conteo
+                </button>
                 <div className="campo" style={{ flex: "0 1 12rem" }}>
                   <select
                     aria-label="Tipo de gafete"
@@ -201,6 +216,17 @@ export default function Gafetes() {
 
       {detalleAbierto && (
         <HistorialGafeteModal gafete={detalleAbierto} onCerrar={() => setDetalleAbierto(null)} />
+      )}
+
+      {conteoAbierto && (
+        <ConteoGafetesModal
+          tipo={tipo}
+          etiquetaTipo={ETIQUETA_TIPO[tipo]}
+          onCerrar={() => {
+            setConteoAbierto(false);
+            recargar();
+          }}
+        />
       )}
     </div>
   );

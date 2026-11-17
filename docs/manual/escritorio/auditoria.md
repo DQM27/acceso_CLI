@@ -61,5 +61,5 @@ no aparecen aquí. Está previsto reunirlos todos más adelante.
 
 - [Dar de alta o editar un contratista](contratista-alta-y-edicion.md)
 - [Empresas de contratistas y empresas proveedoras](empresas.md)
-- [Gafete perdido, pagado o aparecido](gafete-perdido.md)
+- [Gafete perdido, pagado o recuperado](gafete-perdido.md)
 - [Historial de ingresos](historial-y-exportar.md)

@@ -78,7 +78,8 @@ Estado: ✅ redactado · ⬜ pendiente.
 ### Gafetes
 
 - ✅ [Dar de alta y consultar gafetes, e historial de un gafete](escritorio/gafetes-alta-y-consulta.md)
-- ✅ [Gafete perdido, pagado o aparecido, y "Este contratista debe el gafete…"](escritorio/gafete-perdido.md)
+- ✅ [Gafete perdido, pagado o recuperado, y "Este contratista debe el gafete…"](escritorio/gafete-perdido.md)
+- ✅ [Conteo de gafetes: comprobar que estén todos en la mesa](escritorio/conteo-gafetes.md)
 
 ### Consultas
 
@@ -125,7 +126,10 @@ Cuando se corrija una, se actualiza su proceso.
 4. **Empresas en el panel**: el panel web todavía no tiene sección
    **Empresas**, así que activar o desactivar una empresa hoy se hace por
    SQL en Supabase (decisión del dueño 2026-10-24, hasta que exista).
-5. **Gafetes**: **Dar de baja** se aplica sin confirmar y es definitivo.
+5. ~~**Gafetes**: **Dar de baja** se aplica sin confirmar y es definitivo.~~
+   Resuelto (2026-11-16): la baja ya no existe. Un gafete que no está se
+   reporta **perdido** (con o sin responsable, con detalle) y se recupera
+   cuando aparece o llega reimpreso.
 6. **Gafetes**: marcar perdido un gafete de **visita** busca la cédula entre
    las visitas agendadas en la web; con una visita **por correo** puede no
    encontrarla. Verificar.

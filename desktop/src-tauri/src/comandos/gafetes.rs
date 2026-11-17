@@ -1,13 +1,14 @@
 use control_acceso::database::queries::gafetes::GafeteResumen;
 use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
-use control_acceso::models::gafete::MotivoResolucionGafete;
+use control_acceso::domain::gafete::{LecturaConteo, ResultadoConteo};
+use control_acceso::models::gafete::PortadorGafete;
 
 use crate::dto::gafetes::{FiltroGafetesEntrada, TipoGafeteEntrada};
 use crate::estado::GuiState;
 
 /// Catálogo completo de gafetes, sin restricción de rol a propósito (mismo
-/// criterio que el núcleo — cualquier operador con sesión gestiona
-/// alta/baja/perdido/resolver, a diferencia de Empresas/Usuarios).
+/// criterio que el núcleo — cualquier operador con sesión gestiona alta,
+/// perdido, pago, recuperar y conteo, a diferencia de Empresas/Usuarios).
 #[tauri::command(async)]
 pub fn buscar_gafetes(
     filtro: FiltroGafetesEntrada,
@@ -80,63 +81,90 @@ pub fn crear_gafetes_rango(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command(async)]
-pub fn dar_de_baja_gafete(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
-    let sesion = state.sesion_activa()?;
-    state
-        .core()
-        .dar_de_baja_gafete(&sesion, id)
-        .map_err(control_acceso::mensajes::mensaje_gafete)
+/// A quién se le asignó el gafete perdido, si se sabe. Espejo de
+/// `PortadorGafete` sin proveedor (no tiene catálogo de personas).
+#[derive(serde::Deserialize, Clone, Copy)]
+#[serde(tag = "tipo", content = "id", rename_all = "snake_case")]
+pub enum ResponsableGafeteEntrada {
+    Contratista(i64),
+    Visita(i64),
+    ProvisionalKof(i64),
+}
+
+impl From<ResponsableGafeteEntrada> for PortadorGafete {
+    fn from(responsable: ResponsableGafeteEntrada) -> Self {
+        match responsable {
+            ResponsableGafeteEntrada::Contratista(id) => Self::Contratista(id),
+            ResponsableGafeteEntrada::Visita(id) => Self::Visita(id),
+            ResponsableGafeteEntrada::ProvisionalKof(id) => Self::ProvisionalKof(id),
+        }
+    }
 }
 
 #[tauri::command(async)]
-pub fn marcar_gafete_perdido_contratista(
+pub fn reportar_gafete_perdido(
     id: i64,
-    contratista_id: i64,
+    responsable: Option<ResponsableGafeteEntrada>,
+    detalle: Option<String>,
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .marcar_gafete_perdido_contratista(&sesion, id, contratista_id)
+        .reportar_gafete_perdido(&sesion, id, responsable.map(Into::into), detalle.as_deref())
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
 #[tauri::command(async)]
-pub fn marcar_gafete_perdido_visita(
+pub fn registrar_pago_gafete(
     id: i64,
-    cita_visitante_id: i64,
+    detalle: Option<String>,
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .marcar_gafete_perdido_visita(&sesion, id, cita_visitante_id)
+        .registrar_pago_gafete(&sesion, id, detalle.as_deref())
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
 #[tauri::command(async)]
-pub fn marcar_gafete_perdido_provisional_kof(
+pub fn recuperar_gafete(
     id: i64,
-    encargado_ruta_id: i64,
+    detalle: String,
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .marcar_gafete_perdido_provisional_kof(&sesion, id, encargado_ruta_id)
+        .recuperar_gafete(&sesion, id, &detalle)
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
+/// Conteo físico: qué es un número en el momento de escribirlo.
 #[tauri::command(async)]
-pub fn resolver_gafete(
-    id: i64,
-    motivo: MotivoResolucionGafete,
+pub fn leer_numero_conteo_gafetes(
+    tipo: TipoGafeteEntrada,
+    numero: i64,
     state: tauri::State<GuiState>,
-) -> Result<(), String> {
+) -> Result<LecturaConteo, String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .resolver_gafete(&sesion, id, motivo)
+        .leer_numero_conteo_gafetes(&sesion, tipo.into(), numero)
+        .map_err(control_acceso::mensajes::mensaje_gafete)
+}
+
+/// Conteo físico: lo escrito contra lo que debería haber en la mesa.
+#[tauri::command(async)]
+pub fn comprobar_conteo_gafetes(
+    tipo: TipoGafeteEntrada,
+    numeros: Vec<i64>,
+    state: tauri::State<GuiState>,
+) -> Result<ResultadoConteo, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .comprobar_conteo_gafetes(&sesion, tipo.into(), &numeros)
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }

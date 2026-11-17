@@ -4,13 +4,14 @@ import Modal from "../componentes/Modal";
 import { historialGafete } from "../api";
 import type { GafeteResumen, IncidenteGafete } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import { textoMotivo } from "./HistorialGafeteModal.logica";
+import { textoTipoIncidente } from "./GestionGafeteModal.logica";
 
 /**
- * Historial de incidentes de un gafete puntual — tabla simple (sin AG Grid,
+ * Historial de reportes de un gafete puntual — tabla simple (sin AG Grid,
  * la lista es chica: un puñado de filas por gafete) en su propio modal,
  * separado de `GestionGafeteModal` (que sólo maneja acciones) para no
- * mezclar "qué puedo hacer con este gafete" con "qué le pasó antes".
+ * mezclar "qué puedo hacer con este gafete" con "qué le pasó antes". Cada
+ * reporte muestra quién lo hizo y lo que escribió.
  */
 export default function HistorialGafeteModal({
   gafete,
@@ -42,7 +43,7 @@ export default function HistorialGafeteModal({
         {!error && cargando && <p style={{ margin: 0, color: "var(--muted)" }}>Cargando…</p>}
 
         {!error && !cargando && historial.length === 0 && (
-          <p style={{ margin: 0, color: "var(--muted)" }}>Este gafete no tiene incidentes registrados.</p>
+          <p style={{ margin: 0, color: "var(--muted)" }}>Este gafete no tiene reportes.</p>
         )}
 
         {!error && historial.length > 0 && (
@@ -51,10 +52,10 @@ export default function HistorialGafeteModal({
               <tr>
                 <Encabezado>Fecha</Encabezado>
                 <Encabezado>Hora</Encabezado>
-                <Encabezado>Evento</Encabezado>
-                <Encabezado>Operador</Encabezado>
-                <Encabezado>Asignado a</Encabezado>
-                <Encabezado>Motivo</Encabezado>
+                <Encabezado>Reporte</Encabezado>
+                <Encabezado>Reportó</Encabezado>
+                <Encabezado>Responsable</Encabezado>
+                <Encabezado>Detalle</Encabezado>
               </tr>
             </thead>
             <tbody>
@@ -62,10 +63,12 @@ export default function HistorialGafeteModal({
                 <tr key={incidente.id}>
                   <Celda>{textoFechaDDMMYYYY(fechaLocalYMD(incidente.fecha_hora))}</Celda>
                   <Celda>{textoHora(incidente.fecha_hora)}</Celda>
-                  <Celda>{incidente.tipo === "Perdido" ? "Marcado perdido" : "Resuelto"}</Celda>
+                  <Celda>{textoTipoIncidente(incidente)}</Celda>
                   <Celda>{incidente.usuario_nombre}</Celda>
-                  <Celda>{incidente.contratista_nombre ?? incidente.visita_portador_nombre ?? "—"}</Celda>
-                  <Celda>{textoMotivo(incidente.motivo_resolucion)}</Celda>
+                  <Celda>{incidente.responsable_nombre ?? "—"}</Celda>
+                  <Celda>
+                    <span style={{ whiteSpace: "pre-wrap" }}>{incidente.detalle ?? "—"}</span>
+                  </Celda>
                 </tr>
               ))}
             </tbody>

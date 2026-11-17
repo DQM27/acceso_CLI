@@ -48,11 +48,11 @@ fn tocar_gafete_de_prueba(connection: &rusqlite::Connection) {
         },
     );
     gafetes
-        .dar_de_baja(gafete_id)
-        .expect("tocar gafete (dar de baja)");
+        .marcar_perdido(gafete_id, None)
+        .expect("tocar gafete (perdido)");
     gafetes
-        .resolver(gafete_id)
-        .expect("tocar gafete (resolver)");
+        .recuperar(gafete_id)
+        .expect("tocar gafete (recuperar)");
 }
 
 fn main() {

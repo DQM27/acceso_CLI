@@ -67,7 +67,7 @@ Si escribe la cédula a mano, el aviso aparece debajo de la cédula y
 | "La empresa proveedora está dada de baja" | La empresa está desactivada. | No registre el ingreso. Avise a un administrador. |
 | "El gafete ya está asignado a otro ingreso de proveedor" | Ese gafete lo tiene otra persona. | Entregue otro gafete. |
 | "El gafete N ya está en uso en otro dispositivo del sitio" | Se entregó en la PC del puesto. | Entregue otro gafete. |
-| "El gafete no está registrado en el catálogo" / "El gafete no está disponible" | Ese gafete no existe o está perdido o dado de baja. | Entregue otro gafete. |
+| "El gafete no está registrado en el catálogo" / "El gafete no está disponible" | Ese gafete no existe o está perdido. | Entregue otro gafete. |
 | "Esta persona tiene el acceso denegado." | Un administrador le quitó el acceso. | No registre el ingreso. |
 | "Esta cédula ya tiene un ingreso de proveedor activo en (sitio)" | Figura adentro en otro sitio (sólo se sabe al registrar). | No registre el ingreso. Avise al otro sitio (por ejemplo, por WhatsApp) o a un administrador. |
 | "Revise la fecha y hora del equipo antes de continuar" | La hora del teléfono quedó antes del último registro. | Ver [Problemas frecuentes](problemas-frecuentes.md#revise-la-fecha-y-hora-del-equipo). |
