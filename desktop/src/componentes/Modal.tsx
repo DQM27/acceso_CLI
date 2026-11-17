@@ -132,7 +132,9 @@ export default function Modal({
           maxWidth: "calc(100% - 2rem)",
           maxHeight: "calc(100% - 2rem)",
           overflowY: "auto",
-          padding: "1.5rem",
+          // Sin encabezado, la X va en el margen: uno igual en los cuatro
+          // lados, con lugar para la X sin que toque el contenido.
+          padding: tituloEnContenido ? "2.25rem" : "1.5rem",
           position: tituloEnContenido ? "relative" : undefined,
         }}
       >

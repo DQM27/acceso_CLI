@@ -616,12 +616,16 @@ textarea::placeholder {
    al terminar (`DURACION_SALIDA_MODAL_MS`). Mientras sale ya no recibe
    clics. */
 /* X de un modal sin fila de encabezado (`tituloEnContenido`): en la
-   esquina, sobre el relleno de la tarjeta. */
+   esquina, dentro del margen de la tarjeta (2.25rem) y sin tocar el
+   contenido: 1.75rem de botón a 0.35rem del borde. */
 .modal-cerrar-esquina {
   position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
+  top: 0.35rem;
+  right: 0.35rem;
   z-index: 1;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
 }
 .modal-velo {
   animation: velo-entrar 180ms ease-out both;
@@ -1337,7 +1341,9 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 0.4rem 1rem;
-  margin: 0;
+  /* Centrados en el alto que queda entre el título y los botones (o la
+     carga del gafete PRAIND), que así quedan pegados abajo. */
+  margin: auto 0;
 }
 .detalle-contratista-datos dt { color: var(--muted); }
 .detalle-contratista-datos dd { margin: 0; color: var(--texto); overflow-wrap: anywhere; }
@@ -1379,7 +1385,6 @@ textarea::placeholder {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
-  margin-top: auto;
 }
 .detalle-contratista-carne {
   display: flex;
@@ -1423,7 +1428,6 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid var(--borde);
 }
