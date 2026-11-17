@@ -15,13 +15,13 @@ const COLOR_AVISO: Record<NivelAviso, string> = {
 
 /**
  * Conteo físico de gafetes (pedido del usuario, 2026-11-16): el operador va
- * tomando los gafetes de la mesa en el orden en que están, escribe cada
- * número y pulsa Enter; el campo se limpia y espera el siguiente. Al
- * escribirlo se le avisa si ya lo había puesto, si no existe, si figura
- * perdido o si lo tiene alguien que está adentro. "Comprobar" compara lo
- * anotado con lo que debería haber: los que faltan, los que están puestos en
- * alguien y los perdidos que aparecieron. Nada se guarda: lo que haya que
- * corregir se hace desde la lista de gafetes, con su reporte.
+ * tomando los gafetes en el orden en que están, escribe cada número y pulsa
+ * Enter; el campo se limpia y espera el siguiente. Al escribirlo se le avisa
+ * si ya lo había puesto, si no existe, si figura perdido o si figura
+ * asignado a alguien adentro (en esos dos, primero que revise la
+ * digitación). "Comprobar" compara lo anotado con lo que debería haber. Nada
+ * se guarda: lo que haya que corregir se hace desde la lista de gafetes, con
+ * su reporte.
  */
 export default function ConteoGafetesModal({
   tipo,
@@ -98,8 +98,8 @@ export default function ConteoGafetesModal({
     <Modal titulo={`Conteo de gafetes · ${etiquetaTipo}`} onCerrar={onCerrar} ancho="40rem">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
         <p style={{ margin: 0, color: "var(--muted)" }}>
-          Tome los gafetes de la mesa uno por uno, en el orden en que estén: escriba el número,
-          pulse Enter y póngalo aparte. Al terminar, pulse «Comprobar».
+          Tome los gafetes uno por uno, en el orden en que estén: escriba el número, pulse Enter
+          y póngalo aparte. Al terminar, pulse «Comprobar».
         </p>
 
         <form
@@ -212,11 +212,11 @@ function Resultado({ resultado }: { resultado: ResultadoConteo }) {
     >
       <p style={{ margin: 0, fontWeight: 600, color: completo ? "var(--exito)" : "var(--error)" }}>
         {completo
-          ? `Están los ${resultado.esperados} que se esperaban en la mesa.`
-          : `Faltan ${resultado.faltantes.length} de ${resultado.esperados} que se esperaban en la mesa.`}
+          ? `Están los ${resultado.esperados} gafetes disponibles.`
+          : `Faltan ${resultado.faltantes.length} de los ${resultado.esperados} gafetes disponibles.`}
       </p>
       {!completo && (
-        <Seccion titulo="Deberían estar y no están" color="var(--error)">
+        <Seccion titulo="Faltan (no se contaron)" color="var(--error)">
           {lista(resultado.faltantes)}
           <Nota>
             Revise esos números exactos. Si no aparecen, repórtelos perdidos desde la lista de
@@ -225,24 +225,30 @@ function Resultado({ resultado }: { resultado: ResultadoConteo }) {
         </Seccion>
       )}
       {resultado.en_uso_contados.length > 0 && (
-        <Seccion titulo="Figuran adentro, pero están en la mesa" color="var(--advertencia)">
+        <Seccion titulo="Se contaron, pero figuran asignados a alguien adentro" color="var(--advertencia)">
           {resultado.en_uso_contados.map((g) => `${textoNumero(g.numero)} (${g.nombre})`).join(", ")}
-          <Nota>Falta registrar la salida de esas personas.</Nota>
+          <Nota>
+            Revise que el número esté bien digitado. Si lo está, falta registrar la salida de esa
+            persona.
+          </Nota>
         </Seccion>
       )}
       {resultado.perdidos_contados.length > 0 && (
-        <Seccion titulo="Figuran perdidos, pero están en la mesa" color="var(--advertencia)">
+        <Seccion titulo="Se contaron, pero figuran perdidos" color="var(--advertencia)">
           {lista(resultado.perdidos_contados)}
-          <Nota>Recupérelos desde la lista de gafetes para que se puedan volver a asignar.</Nota>
+          <Nota>
+            Revise que el número esté bien digitado. Si lo está, recupérelo desde la lista de
+            gafetes para que se pueda volver a asignar.
+          </Nota>
         </Seccion>
       )}
       {resultado.en_uso.length > 0 && (
-        <Seccion titulo="Asignados (no se esperan en la mesa)">
+        <Seccion titulo="Asignados a personas adentro (no se cuentan)">
           {resultado.en_uso.map((g) => `${textoNumero(g.numero)} (${g.nombre})`).join(", ")}
         </Seccion>
       )}
       {resultado.perdidos.length > 0 && (
-        <Seccion titulo="Perdidos (no se esperan en la mesa)">{lista(resultado.perdidos)}</Seccion>
+        <Seccion titulo="Perdidos (no se cuentan)">{lista(resultado.perdidos)}</Seccion>
       )}
       {resultado.no_existen.length > 0 && (
         <Seccion titulo="No existen en el catálogo" color="var(--error)">

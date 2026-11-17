@@ -93,7 +93,7 @@ pub enum LecturaConteo {
     Esperado,
     /// No existe en el catálogo de este tipo.
     NoExiste,
-    /// Figura perdido y sin embargo está en la mesa.
+    /// Figura perdido y sin embargo se tiene en la mano.
     Perdido,
     /// Figura puesto en alguien que está adentro: hay una salida sin registrar.
     EnUso { nombre: String },
@@ -127,22 +127,24 @@ pub struct GafeteEnUso {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ResultadoConteo {
-    /// Cuántos debería haber en la mesa: disponibles que nadie tiene puestos.
+    /// Cuántos se esperaba contar: disponibles que nadie tiene puestos.
     pub esperados: usize,
-    /// Esperados que sí se escribieron.
+    /// Esperados que sí se contaron.
     pub presentes: Vec<i64>,
-    /// Esperados que no se escribieron: deberían estar y no están.
+    /// Esperados que no se contaron: deberían estar y no están.
     pub faltantes: Vec<i64>,
-    /// Los tiene puestos alguien que está adentro (no se esperan en la mesa).
-    /// Si alguno se escribió igual, va también en `en_uso_contados`.
+    /// Los tiene puestos alguien que está adentro y no se contaron (lo
+    /// normal: no se esperan).
     pub en_uso: Vec<GafeteEnUso>,
-    /// Figuran puestos en alguien y sin embargo están en la mesa.
+    /// Figuran puestos en alguien y sin embargo se contaron: o se digitó mal
+    /// el número, o falta registrar una salida.
     pub en_uso_contados: Vec<GafeteEnUso>,
-    /// Escritos que no existen en el catálogo de este tipo.
+    /// Contados que no existen en el catálogo de este tipo.
     pub no_existen: Vec<i64>,
-    /// Figuran perdidos y sin embargo están en la mesa.
+    /// Figuran perdidos y sin embargo se contaron: o se digitó mal el
+    /// número, o apareció y hay que recuperarlo.
     pub perdidos_contados: Vec<i64>,
-    /// Perdidos que no se escribieron (lo normal: no están).
+    /// Perdidos que no se contaron (lo normal: no están).
     pub perdidos: Vec<i64>,
 }
 
@@ -170,9 +172,10 @@ pub fn comprobar_conteo(catalogo: &[GafeteParaConteo], numeros: &[i64]) -> Resul
                     nombre: nombre.clone(),
                 };
                 if contado {
-                    resultado.en_uso_contados.push(en_uso.clone());
+                    resultado.en_uso_contados.push(en_uso);
+                } else {
+                    resultado.en_uso.push(en_uso);
                 }
-                resultado.en_uso.push(en_uso);
             }
             (EstadoGafete::Disponible, None) => {
                 resultado.esperados += 1;
@@ -222,18 +225,13 @@ mod tests {
         assert_eq!(resultado.esperados, 3);
         assert_eq!(resultado.presentes, vec![1, 3]);
         assert_eq!(resultado.faltantes, vec![2]);
+        // Cada número sale en un solo lugar: el 7 se contó, el 4 no.
         assert_eq!(
             resultado.en_uso,
-            vec![
-                GafeteEnUso {
-                    numero: 4,
-                    nombre: "Juan Pérez".to_string()
-                },
-                GafeteEnUso {
-                    numero: 7,
-                    nombre: "Ana Mora".to_string()
-                },
-            ]
+            vec![GafeteEnUso {
+                numero: 4,
+                nombre: "Juan Pérez".to_string()
+            }]
         );
         assert_eq!(
             resultado.en_uso_contados,

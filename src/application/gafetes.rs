@@ -254,8 +254,7 @@ impl AppCore {
         Ok(leer_numero_conteo(&catalogo, numero))
     }
 
-    /// Botón "Comprobar" del conteo: lo escrito contra lo que debería haber
-    /// en la mesa.
+    /// Botón "Comprobar" del conteo: lo contado contra lo que debería haber.
     pub fn comprobar_conteo_gafetes(
         &self,
         actor: &UsuarioSesion,

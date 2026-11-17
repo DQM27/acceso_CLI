@@ -1,6 +1,6 @@
 import type { LecturaConteo } from "../api";
 
-/** Número de gafete como se ve en la mesa: dos dígitos mínimo. */
+/** Número de gafete como se ve impreso: dos dígitos mínimo. */
 export function textoNumero(numero: number): string {
   return String(numero).padStart(2, "0");
 }
@@ -40,8 +40,8 @@ export function avisoPrevio(texto: string, anotados: number[]): AvisoNumero | nu
 }
 
 /** Aviso según lo que dice el catálogo del número. Un número que no existe
- * no se anota; uno perdido o puesto en alguien sí (está en la mesa), con el
- * aviso de lo que hay que corregir. */
+ * no se anota; uno perdido o asignado a alguien sí (se tiene en la mano), con
+ * lo que hay que revisar: primero, que se haya digitado bien. */
 export function avisoLectura(numero: number, lectura: LecturaConteo): AvisoNumero {
   const n = textoNumero(numero);
   switch (lectura.tipo) {
@@ -52,13 +52,13 @@ export function avisoLectura(numero: number, lectura: LecturaConteo): AvisoNumer
     case "perdido":
       return {
         nivel: "atencion",
-        texto: `El ${n} figura perdido. Quedó anotado: si está en la mesa, recupérelo.`,
+        texto: `El ${n} figura perdido. Quedó anotado: revise que esté bien digitado; si lo es, recupérelo.`,
         anotar: true,
       };
     case "en_uso":
       return {
         nivel: "atencion",
-        texto: `El ${n} lo tiene ${lectura.nombre} (adentro). Quedó anotado: falta registrar su salida.`,
+        texto: `El ${n} figura asignado a ${lectura.nombre} (adentro). Quedó anotado: revise que esté bien digitado; si lo es, falta registrar su salida.`,
         anotar: true,
       };
   }

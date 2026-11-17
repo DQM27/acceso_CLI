@@ -35,7 +35,7 @@ describe("avisoPrevio", () => {
 });
 
 describe("avisoLectura", () => {
-  it("anota lo que está en la mesa y rechaza lo que no existe", () => {
+  it("anota lo que se tiene en la mano y rechaza lo que no existe", () => {
     expect(avisoLectura(3, { tipo: "esperado" })).toMatchObject({ nivel: "bien", anotar: true });
     expect(avisoLectura(99, { tipo: "no_existe" })).toEqual({
       nivel: "error",
@@ -48,5 +48,8 @@ describe("avisoLectura", () => {
       anotar: true,
     });
     expect(avisoLectura(4, { tipo: "en_uso", nombre: "Juan Pérez" }).texto).toContain("Juan Pérez");
+    // Lo primero que se pide revisar es la digitación.
+    expect(avisoLectura(4, { tipo: "en_uso", nombre: "Juan Pérez" }).texto).toContain("bien digitado");
+    expect(avisoLectura(5, { tipo: "perdido" }).texto).toContain("bien digitado");
   });
 });

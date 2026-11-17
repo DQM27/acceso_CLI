@@ -1,3 +1,4 @@
+import { solicitarSincronizacionNube } from "../eventosNube";
 import { invoke } from "./invocar";
 
 // Espejo de comandos/gafetes.rs y dto/gafetes.rs.
@@ -119,18 +120,25 @@ export function historialGafete(id: number): Promise<IncidenteGafete[]> {
   return invoke("historial_gafete", { id });
 }
 
-export function crearGafete(numero: number, tipo: TipoGafeteEntrada): Promise<number> {
-  return invoke("crear_gafete", { numero, tipo });
+// Cada cambio del catálogo pide subir enseguida (`solicitarSincronizacionNube`),
+// igual que contratistas o ingresos: sin esto, el otro equipo del sitio no se
+// enteraba hasta la sincronización periódica o el botón "Sincronizar".
+
+export async function crearGafete(numero: number, tipo: TipoGafeteEntrada): Promise<number> {
+  const id = await invoke<number>("crear_gafete", { numero, tipo });
+  solicitarSincronizacionNube();
+  return id;
 }
 
-export function crearGafetesRango(
+export async function crearGafetesRango(
   desde: number,
   hasta: number,
   tipo: TipoGafeteEntrada,
 ): Promise<number[]> {
-  return invoke("crear_gafetes_rango", { desde, hasta, tipo });
+  const ids = await invoke<number[]>("crear_gafetes_rango", { desde, hasta, tipo });
+  solicitarSincronizacionNube();
+  return ids;
 }
-
 
 /** A quién se le asignó el gafete perdido, si se sabe. Espejo de
  * `ResponsableGafeteEntrada` (comandos/gafetes.rs). */
@@ -140,22 +148,25 @@ export type ResponsableGafete =
   | { tipo: "provisional_kof"; id: number };
 
 /** Sin `responsable`, el `detalle` es obligatorio. */
-export function reportarGafetePerdido(
+export async function reportarGafetePerdido(
   id: number,
   responsable: ResponsableGafete | null,
   detalle: string | null,
 ): Promise<void> {
-  return invoke("reportar_gafete_perdido", { id, responsable, detalle });
+  await invoke("reportar_gafete_perdido", { id, responsable, detalle });
+  solicitarSincronizacionNube();
 }
 
 /** El responsable pagó: se le quita la marca; el gafete sigue perdido. */
-export function registrarPagoGafete(id: number, detalle: string | null): Promise<void> {
-  return invoke("registrar_pago_gafete", { id, detalle });
+export async function registrarPagoGafete(id: number, detalle: string | null): Promise<void> {
+  await invoke("registrar_pago_gafete", { id, detalle });
+  solicitarSincronizacionNube();
 }
 
 /** Apareció o se reimprimió: vuelve a estar disponible. */
-export function recuperarGafete(id: number, detalle: string): Promise<void> {
-  return invoke("recuperar_gafete", { id, detalle });
+export async function recuperarGafete(id: number, detalle: string): Promise<void> {
+  await invoke("recuperar_gafete", { id, detalle });
+  solicitarSincronizacionNube();
 }
 
 /** Qué es un número escrito en el conteo físico. Espejo de
