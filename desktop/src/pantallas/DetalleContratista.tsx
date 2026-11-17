@@ -269,14 +269,7 @@ function CargaDeCarne({
         }}
       />
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "0.5rem",
-          flexWrap: "wrap",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
         <button type="button" className="boton boton-icono" onClick={() => archivo.current?.click()} disabled={ocupado}>
           <Upload size={16} aria-hidden="true" />
           Elegir imagen…
@@ -287,7 +280,7 @@ function CargaDeCarne({
           </button>
           {previa ? (
             <button type="button" className="boton boton-primario" onClick={guardar} disabled={ocupado}>
-              {ocupado ? "Guardando…" : coincide ? "Guardar gafete PRAIND" : "Guardar igual"}
+              {ocupado ? "Guardando…" : coincide ? "Guardar PRAIND" : "Guardar igual"}
             </button>
           ) : (
             <button
@@ -296,7 +289,7 @@ function CargaDeCarne({
               onClick={buscar}
               disabled={ocupado || !enlace.trim()}
             >
-              {ocupado ? "Buscando…" : "Buscar gafete PRAIND"}
+              {ocupado ? "Buscando…" : "Buscar PRAIND"}
             </button>
           )}
         </div>

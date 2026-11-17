@@ -38,9 +38,9 @@ sólo guarda los que alguien abrió.
    campo para el enlace.
 2. Escanee el QR del gafete PRAIND con el lector y pegue el enlace en **Enlace del
    QR del gafete PRAIND** (empieza con `https://prd.pw/`).
-3. Pulse **Buscar gafete PRAIND**. Aparece de quién es el gafete PRAIND:
+3. Pulse **Buscar PRAIND**. Aparece de quién es el gafete PRAIND:
    - En verde, si el nombre coincide con el del contratista: pulse
-     **Guardar gafete PRAIND**.
+     **Guardar PRAIND**.
    - En amarillo, si **no** coincide: revise que sea el gafete PRAIND correcto de
      esta persona antes de pulsar **Guardar igual**.
 4. Si tiene el gafete PRAIND como imagen (PNG o JPEG), también puede pulsar
