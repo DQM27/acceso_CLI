@@ -537,13 +537,11 @@ pub enum GafeteServiceError {
     GafeteNoEncontrado,
     #[error("El rango de números no es válido")]
     RangoInvalido,
-    #[error("Marcar un gafete perdido requiere indicar el contratista deudor")]
-    ContratistaDeudorRequerido,
     #[error("Contratista no encontrado")]
     ContratistaNoEncontrado,
     #[error("Visitante no encontrado")]
     VisitaNoEncontrada,
-    #[error("Encargado de ruta no encontrado")]
+    #[error("Personal KOF no encontrado")]
     EncargadoRutaNoEncontrado,
     /// La transición pedida no aplica al estado actual (ej. reportar perdido
     /// uno que ya lo está, o registrar el pago de uno sin responsable).

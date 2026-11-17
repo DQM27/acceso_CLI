@@ -37,7 +37,7 @@ Arriba se ve cuántos van contados, cuántos faltan y una barra de avance.
    se pone verde.
 2. Al escribir cada número, debajo del campo aparece un aviso:
    - **"07 anotado."**: todo bien.
-   - **"El 07 ya lo había colocado."**: ese número ya estaba anotado; no se
+   - **"El 07 ya está anotado."**: ese número ya estaba anotado; no se
      cuenta dos veces.
    - **"El 99 no existe en el catálogo."**: no se anota. Revise el número.
    - **"El 05 figura perdido…"**: se anota igual (ficha ámbar). Revise que

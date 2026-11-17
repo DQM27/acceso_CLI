@@ -141,16 +141,13 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
     match error {
         GafeteServiceError::NumeroInvalido => "El número de gafete debe ser mayor a cero".into(),
         GafeteServiceError::NumeroDuplicado => "Ya existe un gafete con ese número".into(),
-        GafeteServiceError::GafeteNoEncontrado => "El gafete ya no existe".into(),
+        GafeteServiceError::GafeteNoEncontrado => "Gafete no encontrado".into(),
         GafeteServiceError::RangoInvalido => "El rango de números no es válido".into(),
-        GafeteServiceError::ContratistaDeudorRequerido => {
-            "Debe indicar el contratista deudor".into()
-        }
-        GafeteServiceError::ContratistaNoEncontrado => "El contratista ya no existe".into(),
-        GafeteServiceError::VisitaNoEncontrada => "El visitante ya no existe".into(),
-        GafeteServiceError::EncargadoRutaNoEncontrado => "El encargado de ruta ya no existe".into(),
+        GafeteServiceError::ContratistaNoEncontrado => "Contratista no encontrado".into(),
+        GafeteServiceError::VisitaNoEncontrada => "Visitante no encontrado".into(),
+        GafeteServiceError::EncargadoRutaNoEncontrado => "Personal KOF no encontrado".into(),
         GafeteServiceError::EstadoInvalido => {
-            "El gafete no está en un estado válido para esa operación".into()
+            "El gafete cambió de estado: cierre y vuelva a abrirlo".into()
         }
         GafeteServiceError::DetalleRequerido => "Escriba el detalle del reporte".into(),
         GafeteServiceError::DetalleMuyLargo => {
@@ -267,9 +264,9 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
         }
         PlacaRequerida => "Escriba la placa del vehículo".into(),
         PlacaInvalida => "La placa no es válida: use hasta 20 letras y números".into(),
-        GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
-        GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
-        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteOcupado => GAFETE_OCUPADO.into(),
+        GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => GAFETE_PERDIDO.into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }
@@ -290,6 +287,17 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
 /// (el mismo interruptor de siempre, ver
 /// `database::queries::contratistas::cedula_con_acceso_negado`).
 pub const MENSAJE_ACCESO_NEGADO: &str = "Esta persona tiene el acceso denegado.";
+
+/// Lo que se dice al asignar un gafete, igual para todos los tipos: cada
+/// tipo tiene su propio error, pero el operador lee lo mismo.
+const GAFETE_OCUPADO: &str = "Gafete asignado a otra persona";
+const GAFETE_NO_REGISTRADO: &str = "Ese gafete no existe en el catálogo";
+const GAFETE_PERDIDO: &str = "Gafete perdido: no se puede asignar";
+
+#[cfg(feature = "nube")]
+fn gafete_en_otro_equipo(numero: i64) -> String {
+    format!("Gafete {numero} asignado en el otro equipo")
+}
 
 /// Una persona no puede estar adentro por dos vías a la vez (contratista,
 /// proveedor, por correo): el mismo texto para las tres.
@@ -317,9 +325,9 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
         AdentroPorOtraVia(via) => mensaje_adentro_por_otra_via(via),
         PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
         PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
-        GafeteOcupado => "El gafete ya está en uso".into(),
-        GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
-        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteOcupado => GAFETE_OCUPADO.into(),
+        GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => GAFETE_PERDIDO.into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }
@@ -501,8 +509,8 @@ pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> Strin
             "Este encargado ya tiene un gafete provisional prestado".into()
         }
         GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
-        GafeteNoRegistrado => "El número de gafete provisional no existe en el catálogo".into(),
-        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => GAFETE_PERDIDO.into(),
         GafeteNoDisponible(EstadoGafete::Disponible) => {
             unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
         }
@@ -553,9 +561,9 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
         EmpresaInactiva => "La empresa proveedora está dada de baja".into(),
         IngresoActivo => "Esta cédula ya tiene un ingreso de proveedor activo".into(),
-        GafeteOcupado => "El gafete ya está asignado a otro ingreso de proveedor".into(),
-        GafeteNoRegistrado => "El gafete no está registrado en el catálogo".into(),
-        GafeteNoDisponible(_) => "El gafete no está disponible".into(),
+        GafeteOcupado => GAFETE_OCUPADO.into(),
+        GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
+        GafeteNoDisponible(_) => GAFETE_PERDIDO.into(),
         RegistroNoActivo => "El ingreso de proveedor no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
@@ -585,9 +593,9 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
         AdentroPorOtraVia(via) => mensaje_adentro_por_otra_via(via),
         MotivoVacio => "Indique el motivo de la visita".into(),
         IngresoActivo => "Esta persona ya tiene un ingreso por correo activo".into(),
-        GafeteOcupado => "El gafete de visita ya está en uso".into(),
-        GafeteNoRegistrado => "El gafete de visita no está registrado en el catálogo".into(),
-        GafeteNoDisponible(_) => "El gafete no está disponible".into(),
+        GafeteOcupado => GAFETE_OCUPADO.into(),
+        GafeteNoRegistrado => GAFETE_NO_REGISTRADO.into(),
+        GafeteNoDisponible(_) => GAFETE_PERDIDO.into(),
         RegistroNoActivo => "El ingreso por correo no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
@@ -609,7 +617,7 @@ pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoEr
         IngresoVerificadoError::Servicio(error) => mensaje_ingreso(error),
         IngresoVerificadoError::Bloqueado(bloqueo) => mensaje_bloqueo_ingreso(&bloqueo),
         IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
-            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+            gafete_en_otro_equipo(numero)
         }
     }
 }
@@ -626,7 +634,7 @@ pub fn mensaje_ingreso_proveedor_verificado(
             format!("Esta cédula ya tiene un ingreso de proveedor activo en {sitio}")
         }
         IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero } => {
-            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+            gafete_en_otro_equipo(numero)
         }
         IngresoProveedorVerificadoError::Nube(error) => mensaje_gestion_nube(error),
     }
@@ -644,7 +652,7 @@ pub fn mensaje_ingreso_correo_verificado(
             format!("Esta persona ya tiene un ingreso por correo activo en {sitio}")
         }
         IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero } => {
-            format!("El gafete de visita {numero} ya está en uso en otro dispositivo del sitio")
+            gafete_en_otro_equipo(numero)
         }
         IngresoCorreoVerificadoError::Nube(error) => mensaje_gestion_nube(error),
     }
@@ -662,7 +670,7 @@ pub fn mensaje_entrada_visita_verificada(
             format!("El visitante ya tiene una visita activa en {sitio}")
         }
         EntradaVisitaVerificadaError::GafeteOcupadoEnSitio { numero } => {
-            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+            gafete_en_otro_equipo(numero)
         }
         EntradaVisitaVerificadaError::Nube(error) => mensaje_gestion_nube(error),
     }
@@ -679,7 +687,7 @@ pub fn mensaje_entrega_gafete_provisional_verificada(
             mensaje_gafete_provisional(error)
         }
         EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero } => {
-            format!("El gafete {numero} ya está prestado en otro dispositivo del sitio")
+            format!("Gafete {numero} prestado en el otro equipo")
         }
         EntregaGafeteProvisionalVerificadaError::Nube(error) => mensaje_gestion_nube(error),
     }
@@ -1150,7 +1158,7 @@ mod tests {
         );
         assert_eq!(
             mensaje_ingreso_proveedor(IngresoProveedorServiceError::GafeteOcupado),
-            "El gafete ya está asignado a otro ingreso de proveedor"
+            "Gafete asignado a otra persona"
         );
         assert_eq!(
             mensaje_ingreso_proveedor(IngresoProveedorServiceError::OperadorNoAutorizado),

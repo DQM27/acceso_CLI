@@ -116,7 +116,7 @@ describe("avisoPrevio", () => {
     expect(avisoPrevio("abc", [])).toMatchObject({ nivel: "error", anotar: false });
     expect(avisoPrevio("7", [3, 7])).toEqual({
       nivel: "error",
-      texto: "El 07 ya lo había colocado.",
+      texto: "El 07 ya está anotado.",
       anotar: false,
     });
   });

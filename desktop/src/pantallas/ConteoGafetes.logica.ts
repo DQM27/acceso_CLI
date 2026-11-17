@@ -135,7 +135,7 @@ export function avisoPrevio(texto: string, anotados: number[]): AvisoNumero | nu
   if (anotados.includes(numero)) {
     return {
       nivel: "error",
-      texto: `El ${textoNumero(numero)} ya lo había colocado.`,
+      texto: `El ${textoNumero(numero)} ya está anotado.`,
       anotar: false,
     };
   }

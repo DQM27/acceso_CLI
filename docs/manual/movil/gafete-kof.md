@@ -43,8 +43,8 @@ el anterior, no se le puede entregar otro hasta registrar esa devolución.
 |---|---|---|
 | "Este encargado ya tiene un gafete provisional prestado" | Tiene uno sin devolver (aquí o en otro sitio). | Registre primero la devolución y luego entregue el nuevo. Si dice que lo devolvió en otro sitio, avise a un administrador. |
 | "Ese número de gafete ya está prestado a otra persona" | Ese gafete lo tiene otro encargado. | Entregue otro gafete. |
-| "El gafete N ya está prestado en otro dispositivo del sitio" | Se entregó en la PC del puesto. | Entregue otro gafete. |
-| "El número de gafete provisional no existe en el catálogo" | Ese número no existe como gafete KOF. | Revise el número. |
+| "Gafete N prestado en el otro equipo" | Se entregó en la PC del puesto. | Entregue otro gafete. |
+| "Ese gafete no existe en el catálogo" | Ese número no existe como gafete KOF. | Revise el número. |
 | "El encargado está dado de baja en el catálogo" | La persona ya no está activa. | No entregue el gafete. Avise a un administrador. |
 | "Sin resultados" al buscar | No está en el catálogo de encargados. | Avise a un administrador para que lo agregue. |
 
