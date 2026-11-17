@@ -1345,8 +1345,12 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  height: var(--alto-carne);
+  height: calc(var(--alto-carne) + 8px);
   overflow-y: auto;
+  /* El scroll recorta lo que sobresale: este relleno (compensado con el
+     margen) deja lugar al halo de foco de los campos y botones. */
+  padding: 4px;
+  margin: -4px;
 }
 @media (max-width: 720px) {
   .detalle-contratista-izquierda { height: auto; }
