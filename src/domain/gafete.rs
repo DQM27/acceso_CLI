@@ -98,6 +98,7 @@ pub fn validar_para_asignar(gafete: Option<&Gafete>) -> ValidacionAsignacion {
 /// Un gafete del catálogo tal como lo necesita el conteo físico: su número,
 /// su estado y, si alguien que está adentro lo tiene puesto, quién.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct GafeteParaConteo {
     pub numero: i64,
     pub estado: EstadoGafete,
@@ -198,6 +199,9 @@ pub enum Parecido {
     SeisNueve,
 }
 
+/// Hasta cuántos faltantes se sugiere un cruce por un solo dígito distinto.
+pub const MAXIMO_FALTANTES_PARA_UN_DIGITO: usize = 3;
+
 /// Qué tanto se parecen dos números de gafete, si se parecen. Más alto, más
 /// probable el error.
 pub fn parecido_entre(a: i64, b: i64) -> Option<Parecido> {
@@ -239,10 +243,16 @@ pub fn parecido_entre(a: i64, b: i64) -> Option<Parecido> {
 /// asignado sin faltante parecido no se empareja: su propia sección ya pide
 /// revisar la digitación.
 fn emparejar_cruces(en_uso_contados: &[GafeteEnUso], faltantes: &[i64]) -> Vec<PosibleCruce> {
+    // Con muchos faltantes, casi cualquier número difiere en un dígito de
+    // alguno: esa sugerencia sería casualidad. 6/9 e invertidos sí son
+    // errores típicos y se sugieren siempre.
+    let admite_un_digito = faltantes.len() <= MAXIMO_FALTANTES_PARA_UN_DIGITO;
     let mut candidatos: Vec<(Parecido, i64, &GafeteEnUso, i64)> = Vec::new();
     for contado in en_uso_contados {
         for &faltante in faltantes {
-            if let Some(parecido) = parecido_entre(contado.numero, faltante) {
+            let parecido = parecido_entre(contado.numero, faltante)
+                .filter(|parecido| admite_un_digito || *parecido != Parecido::UnDigito);
+            if let Some(parecido) = parecido {
                 candidatos.push((
                     parecido,
                     (contado.numero - faltante).abs(),
@@ -448,6 +458,24 @@ mod tests {
         assert_eq!(resultado.posibles_cruces[0].contado.numero, 12);
         assert_eq!(resultado.posibles_cruces[0].faltante, 21);
         assert_eq!(resultado.posibles_cruces[0].parecido, Parecido::Invertido);
+    }
+
+    /// El caso de la prueba en staging: con 22 faltantes, "10 pudo ser 12"
+    /// es casualidad; con pocos faltantes, sí vale la pena decirlo.
+    #[test]
+    fn un_digito_distinto_solo_se_sugiere_con_pocos_faltantes() {
+        let mut catalogo = vec![gafete(10, EstadoGafete::Disponible, Some("Aarón"))];
+        catalogo.extend((11..=30).map(|n| gafete(n, EstadoGafete::Disponible, None)));
+
+        let muchos = comprobar_conteo(&catalogo, &[10, 11]);
+        assert!(muchos.faltantes.len() > MAXIMO_FALTANTES_PARA_UN_DIGITO);
+        assert!(muchos.posibles_cruces.is_empty());
+
+        let contados: Vec<i64> = std::iter::once(10).chain(13..=30).collect();
+        let pocos = comprobar_conteo(&catalogo, &contados);
+        assert_eq!(pocos.faltantes, vec![11, 12]);
+        assert_eq!(pocos.posibles_cruces.len(), 1);
+        assert_eq!(pocos.posibles_cruces[0].parecido, Parecido::UnDigito);
     }
 
     #[test]

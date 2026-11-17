@@ -1,6 +1,6 @@
 use control_acceso::database::queries::gafetes::GafeteResumen;
 use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
-use control_acceso::domain::gafete::{LecturaConteo, ResultadoConteo};
+use control_acceso::domain::gafete::{GafeteParaConteo, LecturaConteo, ResultadoConteo};
 use control_acceso::models::gafete::PortadorGafete;
 
 use crate::dto::gafetes::{FiltroGafetesEntrada, TipoGafeteEntrada};
@@ -138,6 +138,20 @@ pub fn recuperar_gafete(
     state
         .core()
         .recuperar_gafete(&sesion, id, &detalle)
+        .map_err(control_acceso::mensajes::mensaje_gafete)
+}
+
+/// Conteo físico: todos los gafetes del tipo, con su estado y quién tiene
+/// puesto cada uno, para dibujar el tablero.
+#[tauri::command(async)]
+pub fn catalogo_conteo_gafetes(
+    tipo: TipoGafeteEntrada,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<GafeteParaConteo>, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .catalogo_para_conteo(&sesion, tipo.into())
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 

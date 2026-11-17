@@ -275,7 +275,7 @@ impl AppCore {
     /// El catálogo de un tipo con quién tiene puesto cada gafete: lo abierto
     /// en este equipo y, si la sesión puede usar la nube, lo abierto por el
     /// otro dispositivo del sitio (mismo criterio que `tenedores_del_gafete`).
-    fn catalogo_para_conteo(
+    pub fn catalogo_para_conteo(
         &self,
         actor: &UsuarioSesion,
         tipo: TipoGafete,

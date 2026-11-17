@@ -207,6 +207,19 @@ export interface PosibleCruce {
   parecido: ParecidoGafete;
 }
 
+/** Un gafete del catálogo para el tablero del conteo. Espejo de
+ * `domain::gafete::GafeteParaConteo`. */
+export interface GafeteParaConteo {
+  numero: number;
+  estado: EstadoGafete;
+  /** Quién lo tiene puesto ahora, si alguien que está adentro. */
+  en_uso_por: string | null;
+}
+
+export function catalogoConteoGafetes(tipo: TipoGafeteEntrada): Promise<GafeteParaConteo[]> {
+  return invoke("catalogo_conteo_gafetes", { tipo });
+}
+
 export function leerNumeroConteoGafetes(
   tipo: TipoGafeteEntrada,
   numero: number,

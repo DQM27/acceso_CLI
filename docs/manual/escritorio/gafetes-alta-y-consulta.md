@@ -44,7 +44,7 @@ Columnas:
 | Acciones | **Reportar perdido** o **Pago / recuperar** (ver [Gafete perdido](gafete-perdido.md)) |
 | Historial | Botón **Detalles**: los reportes del gafete |
 
-Para comprobar que estén todos los gafetes en la mesa, use **Conteo** (ver
+Para comprobar que estén todos los gafetes, cambie la vista a **Conteo** (ver
 [Conteo de gafetes](conteo-gafetes.md)).
 
 ## Pasos — agregar gafetes

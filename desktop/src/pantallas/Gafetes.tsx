@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ListChecks, Plus } from "lucide-react";
+import { List, ListChecks, Plus } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
@@ -8,16 +8,19 @@ import { textoConteo, useConteoVisible } from "../componentes/conteoTabla";
 import FormularioGafete from "./FormularioGafete";
 import GestionGafeteModal from "./GestionGafeteModal";
 import HistorialGafeteModal from "./HistorialGafeteModal";
-import ConteoGafetesModal from "./ConteoGafetesModal";
+import ConteoGafetes from "./ConteoGafetes";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { buscarGafetes, nombrePortador } from "../api";
 import type { FiltroGafetes, GafeteResumen, TipoGafeteEntrada } from "../api";
 
-const ETIQUETA_TIPO: Record<TipoGafeteEntrada, string> = {
-  contratista: "Contratista",
-  visita: "Visita",
-  provisional_kof: "Provisional KOF",
-  proveedor: "Proveedor",
-};
+type VistaGafetes = "lista" | "conteo";
+
+/** Lista del catálogo o conteo físico del tipo elegido. */
+const OPCIONES_VISTA: OpcionSegmentada<VistaGafetes>[] = [
+  { valor: "lista", Icono: List, titulo: "Lista de gafetes" },
+  { valor: "conteo", Icono: ListChecks, titulo: "Conteo de gafetes" },
+];
 
 /**
  * Catálogo de gafetes — sin restricción de rol a propósito, mismo criterio
@@ -27,7 +30,8 @@ const ETIQUETA_TIPO: Record<TipoGafeteEntrada, string> = {
  * para quien no conozca el doble clic. La columna "Historial" abre por
  * separado (`HistorialGafeteModal`) cada reporte, quién lo hizo y qué
  * escribió — separado de la gestión para no mezclar "qué puedo hacer" con
- * "qué le pasó antes". "Conteo" abre el conteo físico del tipo elegido.
+ * "qué le pasó antes". La vista "Conteo" es el conteo físico del tipo
+ * elegido (`ConteoGafetes`), en la misma pantalla y sin ventana encima.
  */
 export default function Gafetes() {
   const [texto, setTexto] = useState("");
@@ -41,7 +45,7 @@ export default function Gafetes() {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [gestionAbierta, setGestionAbierta] = useState<GafeteResumen | null>(null);
   const [detalleAbierto, setDetalleAbierto] = useState<GafeteResumen | null>(null);
-  const [conteoAbierto, setConteoAbierto] = useState(false);
+  const [vista, setVista] = useState<VistaGafetes>("lista");
 
   const [conteo, alContar] = useConteoVisible();
 
@@ -133,10 +137,44 @@ export default function Gafetes() {
   // reflejaba acá hasta recargar a mano.
   useCargaAlCambiar(recargar, true);
 
+  const selectorVista = (
+    <SegmentadoOpciones<VistaGafetes>
+      etiqueta="Vista"
+      opciones={OPCIONES_VISTA}
+      valor={vista}
+      onCambiar={setVista}
+    />
+  );
+  const selectorTipo = (
+    <div className="campo" style={{ flex: "0 1 12rem" }}>
+      <select
+        aria-label="Tipo de gafete"
+        value={tipo}
+        onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada)}
+      >
+        <option value="contratista">Contratista</option>
+        <option value="visita">Visita</option>
+        <option value="provisional_kof">Provisional KOF</option>
+        <option value="proveedor">Proveedor</option>
+      </select>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        {vista === "conteo" && (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "0.375rem" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "0.375rem" }}>
+              {selectorVista}
+              {selectorTipo}
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ConteoGafetes key={tipo} tipo={tipo} />
+            </div>
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 0, display: vista === "lista" ? undefined : "none" }}>
           <Tabla<GafeteResumen>
             cargando={cargando}
             onConteoVisible={alContar}
@@ -159,6 +197,7 @@ export default function Gafetes() {
             }
             controles={
               <>
+                {selectorVista}
                 <button
                   type="button"
                   className="boton boton-icono"
@@ -167,26 +206,7 @@ export default function Gafetes() {
                   <Plus size={16} aria-hidden="true" />
                   Nuevo gafete
                 </button>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  onClick={() => setConteoAbierto(true)}
-                >
-                  <ListChecks size={16} aria-hidden="true" />
-                  Conteo
-                </button>
-                <div className="campo" style={{ flex: "0 1 12rem" }}>
-                  <select
-                    aria-label="Tipo de gafete"
-                    value={tipo}
-                    onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada)}
-                  >
-                    <option value="contratista">Contratista</option>
-                    <option value="visita">Visita</option>
-                    <option value="provisional_kof">Provisional KOF</option>
-                    <option value="proveedor">Proveedor</option>
-                  </select>
-                </div>
+                {selectorTipo}
               </>
             }
           />
@@ -216,17 +236,6 @@ export default function Gafetes() {
 
       {detalleAbierto && (
         <HistorialGafeteModal gafete={detalleAbierto} onCerrar={() => setDetalleAbierto(null)} />
-      )}
-
-      {conteoAbierto && (
-        <ConteoGafetesModal
-          tipo={tipo}
-          etiquetaTipo={ETIQUETA_TIPO[tipo]}
-          onCerrar={() => {
-            setConteoAbierto(false);
-            recargar();
-          }}
-        />
       )}
     </div>
   );
