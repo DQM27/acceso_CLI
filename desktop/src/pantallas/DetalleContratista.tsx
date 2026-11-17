@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, QrCode, Upload } from "lucide-react";
+import { Pencil, QrCode } from "lucide-react";
 import Modal from "../componentes/Modal";
 import {
   cargarCarnePraindArchivo,
@@ -269,9 +269,8 @@ function CargaDeCarne({
         }}
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
-        <button type="button" className="boton boton-icono" onClick={() => archivo.current?.click()} disabled={ocupado}>
-          <Upload size={16} aria-hidden="true" />
+      <div className="detalle-contratista-carga-botones">
+        <button type="button" className="boton" onClick={() => archivo.current?.click()} disabled={ocupado}>
           Elegir imagen…
         </button>
         <div style={{ display: "flex", gap: "0.5rem" }}>

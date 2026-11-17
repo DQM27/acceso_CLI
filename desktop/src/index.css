@@ -1405,6 +1405,13 @@ textarea::placeholder {
   border-top: 1px solid var(--borde);
 }
 .detalle-contratista-carga p { margin: 0; }
+/* Una sola fila y cada texto en una línea: si no, el botón se parte en dos. */
+.detalle-contratista-carga-botones {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.detalle-contratista-carga-botones .boton { white-space: nowrap; }
 
 /* Conteo de gafetes (pantalla Gafetes, vista "Conteo"). La página nunca
    hace scroll: sólo el tablero, por dentro, si los gafetes no caben. */
