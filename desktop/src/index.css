@@ -615,6 +615,14 @@ textarea::placeholder {
    al cerrar (X o Esc) hace lo inverso, más rápido, y el modal se desmonta
    al terminar (`DURACION_SALIDA_MODAL_MS`). Mientras sale ya no recibe
    clics. */
+/* X de un modal sin fila de encabezado (`tituloEnContenido`): en la
+   esquina, sobre el relleno de la tarjeta. */
+.modal-cerrar-esquina {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+}
 .modal-velo {
   animation: velo-entrar 180ms ease-out both;
 }
@@ -1358,6 +1366,13 @@ textarea::placeholder {
 }
 @media (max-width: 720px) {
   .detalle-contratista-izquierda { height: auto; }
+}
+/* El título va en la columna de los datos, a la altura del carné (el
+   modal no tiene fila de encabezado: `tituloEnContenido`). */
+.detalle-contratista-titulo {
+  margin: 0;
+  font-size: var(--tam-titulo);
+  color: var(--texto);
 }
 .detalle-contratista-acciones {
   display: flex;
