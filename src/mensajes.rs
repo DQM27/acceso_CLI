@@ -616,9 +616,7 @@ pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoEr
     match error {
         IngresoVerificadoError::Servicio(error) => mensaje_ingreso(error),
         IngresoVerificadoError::Bloqueado(bloqueo) => mensaje_bloqueo_ingreso(&bloqueo),
-        IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
-            gafete_en_otro_equipo(numero)
-        }
+        IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => gafete_en_otro_equipo(numero),
     }
 }
 
