@@ -391,6 +391,12 @@ function Shell({
   onCerrarSesion: () => void;
 }) {
   const { tema, alternarTema } = useTema(sesion.id);
+  // Mismo objeto mientras no cambie el usuario: así el contexto no vuelve a
+  // pintar todas las pantallas en cada render de la Shell.
+  const usuarioEnSesion = useMemo(
+    () => ({ id: sesion.id, nombre: sesion.nombre }),
+    [sesion.id, sesion.nombre],
+  );
   const [seccion, setSeccion] = useState<Seccion>("activos");
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
   // desmontarse al cambiar a otra -- antes, el `{seccion === "x" && <X/>}`
@@ -817,7 +823,7 @@ function Shell({
   }
 
   return (
-    <SesionProvider value={sesion.id}>
+    <SesionProvider value={usuarioEnSesion}>
       <BarraEstadoProvider value={setMensajeEstado}>
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

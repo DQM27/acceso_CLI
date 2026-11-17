@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn entregar_un_gafete_dado_de_baja_falla() {
+    fn entregar_un_gafete_perdido_falla() {
         let (connection, encargado_id) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
@@ -357,7 +357,7 @@ mod tests {
             .unwrap()
             .unwrap()
             .id;
-        gafetes.dar_de_baja(id_gafete).unwrap();
+        gafetes.marcar_perdido(id_gafete, None).unwrap();
         let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
 
         let error = servicio
@@ -366,7 +366,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            GafeteProvisionalServiceError::GafeteNoDisponible(EstadoGafete::DeBaja)
+            GafeteProvisionalServiceError::GafeteNoDisponible(EstadoGafete::Perdido)
         ));
     }
 }

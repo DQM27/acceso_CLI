@@ -55,7 +55,7 @@ la persona ya está adentro.
 3. Abajo aparece **Registrar salida** (con varios, **Registrar salida
    (N)**): salen todos de una vez, sin abrir el panel de cada uno.
 4. Si nadie lo tiene, se ve por qué: **"libre, nadie lo tiene"** (en gris),
-   **"no existe"**, **"reportado perdido"** o **"dado de baja"** (en rojo).
+   **"no existe"** o **"reportado perdido"** (en rojo).
 
 ## Mensajes que pueden aparecer
 
@@ -63,7 +63,7 @@ la persona ya está adentro.
 |---|---|---|
 | "Gafete N · libre, nadie lo tiene" | El gafete existe pero nadie adentro lo tiene puesto. | Revise el número. Si la persona salió sin gafete, búsquela por nombre. |
 | "Gafete N · no existe" | No hay un gafete de contratista con ese número. | Revise el número. |
-| "Gafete N · reportado perdido" / "dado de baja" | Ese gafete no está en uso. | Revise el número o busque a la persona por nombre. |
+| "Gafete N · reportado perdido" | Ese gafete no está en uso. | Revise el número o busque a la persona por nombre. |
 | "Revise la fecha y hora del equipo antes de continuar" | La hora del teléfono quedó antes del último registro. | Ver [Problemas frecuentes](problemas-frecuentes.md#revise-la-fecha-y-hora-del-equipo). |
 
 ## Relacionado

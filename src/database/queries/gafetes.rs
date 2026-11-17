@@ -22,9 +22,11 @@ pub struct GafeteResumen {
     pub visita_portador_nombre: Option<String>,
     pub proveedor_portador_id: Option<i64>,
     pub proveedor_portador_nombre: Option<String>,
-    /// Fecha del incidente `PERDIDO` más reciente — sólo tiene sentido
+    pub encargado_portador_id: Option<i64>,
+    pub encargado_portador_nombre: Option<String>,
+    /// Fecha del reporte `PERDIDO` más reciente — sólo tiene sentido
     /// mostrarla cuando `estado == Perdido` (mientras el gafete esté
-    /// disponible o de baja, el incidente que la generó ya fue resuelto).
+    /// disponible, el reporte que la generó ya se cerró).
     pub fecha_marcado_perdido: Option<String>,
 }
 
@@ -78,6 +80,7 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
                 g.contratista_portador_id, c.nombre,
                 g.visita_portador_id, cv.nombre,
                 g.proveedor_portador_id, rp.nombre,
+                g.encargado_portador_id, er.nombre,
                 (SELECT gi.fecha_hora FROM gafetes_incidentes gi
                  WHERE gi.gafete_id = g.id AND gi.tipo = 'PERDIDO'
                  ORDER BY gi.id DESC LIMIT 1)
@@ -85,6 +88,7 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
              LEFT JOIN contratistas c ON c.id = g.contratista_portador_id
              LEFT JOIN cita_visitantes cv ON cv.id = g.visita_portador_id
              LEFT JOIN registro_ingresos_proveedor rp ON rp.id = g.proveedor_portador_id
+             LEFT JOIN encargados_ruta er ON er.id = g.encargado_portador_id
              {where_sql}
              ORDER BY g.numero"
         );
@@ -124,7 +128,9 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<GafeteResumen> {
         visita_portador_nombre: row.get(7)?,
         proveedor_portador_id: row.get(8)?,
         proveedor_portador_nombre: row.get(9)?,
-        fecha_marcado_perdido: row.get(10)?,
+        encargado_portador_id: row.get(10)?,
+        encargado_portador_nombre: row.get(11)?,
+        fecha_marcado_perdido: row.get(12)?,
     })
 }
 
@@ -160,13 +166,13 @@ mod tests {
         connection
             .execute_batch(
                 "INSERT INTO gafetes (numero, tipo, estado) VALUES
-                 (1, 'CONTRATISTA', 'DISPONIBLE'), (2, 'CONTRATISTA', 'DE_BAJA')",
+                 (1, 'CONTRATISTA', 'DISPONIBLE'), (2, 'CONTRATISTA', 'PERDIDO')",
             )
             .unwrap();
 
         let query = SqliteGafetesQuery::new(&connection);
         let filtro = FiltroGafetes {
-            estado: Some(Igualdad::Excluye(EstadoGafete::DeBaja)),
+            estado: Some(Igualdad::Excluye(EstadoGafete::Perdido)),
             ..FiltroGafetes::default()
         };
         let items = query.buscar(&filtro).unwrap();

@@ -97,9 +97,12 @@ const PATRONES_ERROR: ReadonlyArray<readonly [TipoError, RegExp]> = [
   ["rechazado", /acceso denegado|praind (est[aá] )?vencid|no hay ninguna visita|no admite|ya no se puede elegir/i],
   [
     "conflicto",
-    /ya tiene (un |una )|ya est[aá] adentro|ya est[aá] asignad|no est[aá] disponible|ya existe|movimiento activo/i,
+    /ya tiene (un |una )|ya est[aá] adentro|ya est[aá] asignad|no est[aá] disponible|ya existe|movimiento activo|^gafete (\d+ )?(asignado|prestado)|^gafete perdido|cambi[oó] de estado/i,
   ],
-  ["no_encontrado", /no encontrad[oa]|no est[aá] registrad|no est[aá] asignado actualmente|no est[aá] activo/i],
+  [
+    "no_encontrado",
+    /no encontrad[oa]|no est[aá] registrad|no est[aá] asignado actualmente|no est[aá] activo|no existe en el cat[aá]logo/i,
+  ],
   [
     "validacion",
     /es obligatori|inv[aá]lid|no es v[aá]lid|debe tener|no puede tener|s[oó]lo n[uú]meros|no se puede indicar|no puede indicar|falta la placa|anterior (al|a la) (ingreso|entrada)/i,

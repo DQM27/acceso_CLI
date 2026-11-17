@@ -48,10 +48,10 @@ salida](registrar-salida.md).
 | "Elija una empresa del catálogo" | No eligió una empresa de la lista. | Escriba y elija la empresa de la lista. Si no existe, se agrega en **Empresas**. |
 | "La empresa proveedora está dada de baja" | La empresa está desactivada. | No registre el ingreso. Avise a un administrador. |
 | "El número de gafete es obligatorio" / "Ingrese un número de gafete válido" | Falta el gafete o no es un número válido. | Escriba el número del gafete que le entrega. |
-| "El gafete ya está asignado a otro ingreso de proveedor" | Ese gafete lo tiene otra persona adentro. | Entregue otro gafete. |
-| "El gafete no está registrado en el catálogo" | Ese número no existe como gafete de proveedor. | Revise el número. Si es un gafete nuevo, se agrega en **Gafetes**. |
-| "El gafete no está disponible" | El gafete está marcado como perdido o dado de baja. | Entregue otro gafete. |
-| "El gafete N ya está en uso en otro dispositivo del sitio" | Ese gafete se entregó en el otro equipo del sitio. | Entregue otro gafete. |
+| "Gafete asignado a otra persona" | Ese gafete lo tiene otra persona adentro. | Entregue otro gafete. |
+| "Ese gafete no existe en el catálogo" | Ese número no existe como gafete de proveedor. | Revise el número. Si es un gafete nuevo, se agrega en **Gafetes**. |
+| "Gafete perdido: no se puede asignar" | El gafete está marcado como perdido. | Entregue otro gafete. |
+| "Gafete N asignado en el otro equipo" | Ese gafete se entregó en el otro equipo del sitio. | Entregue otro gafete. |
 | "Esta persona tiene el acceso denegado." | Un administrador le quitó el acceso a esta cédula; aplica en todas las entradas. | No registre el ingreso. Sólo un administrador puede devolverle el acceso. |
 | "Esta persona ya está adentro (como contratista, por ejemplo) — registre primero esa salida" | Figura adentro por otra vía. | Registre primero esa salida (Ctrl+S) y luego este ingreso. |
 | "Esta cédula ya tiene un ingreso de proveedor activo en (sitio)" | Figura adentro en otro sitio. | No registre el ingreso. Avise a un administrador. |

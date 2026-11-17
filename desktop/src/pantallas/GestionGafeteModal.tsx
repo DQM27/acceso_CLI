@@ -1,45 +1,54 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { CircleHelp, HandCoins, Loader2, RotateCcw, UserSearch } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { useBusquedaContratistas } from "../componentes/useBusquedaContratistas";
+import { useNombreUsuario } from "../contexto/SesionContexto";
 import {
-  darDeBajaGafete,
   listarEncargadosRutaSeleccionables,
-  marcarGafetePerdidoContratista,
-  marcarGafetePerdidoProvisionalKof,
-  marcarGafetePerdidoVisita,
   nombrePortador,
-  resolverGafete,
+  recuperarGafete,
+  registrarPagoGafete,
+  reportarGafetePerdido,
   verificarCheckInVisita,
 } from "../api";
-import type {
-  ContratistaResumen,
-  EncargadoRuta,
-  GafeteResumen,
-  MotivoResolucionGafete,
-} from "../api";
-import { textoEstado } from "./GestionGafeteModal.logica";
+import type { ContratistaResumen, EncargadoRuta, GafeteResumen, ResponsableGafete } from "../api";
+import { fechaLocalYMD, textoFechaDDMMYYYY } from "../tiempo";
+import { LARGO_MAXIMO_DETALLE, detalleLimpio } from "./GestionGafeteModal.logica";
+
+/** Qué se va a hacer con el gafete, según la tarjeta elegida. */
+type Accion = "con_responsable" | "sin_responsable" | "pago" | "recuperar";
+
+const NOMBRE_TIPO: Record<GafeteResumen["tipo"], string> = {
+  Contratista: "Contratista",
+  Visita: "Visita",
+  ProvisionalKof: "Provisional KOF",
+  Proveedor: "Proveedor",
+};
+
+/** El responsable elegido, con el nombre para mostrarlo antes de confirmar. */
+interface ResponsableElegido {
+  responsable: ResponsableGafete;
+  nombre: string;
+}
 
 /**
- * Acciones de un gafete puntual, según su estado actual — mismo criterio
- * que la TUI (B/P/R en `src/tui/gafetes/`): Disponible ofrece dar de baja o
- * marcar perdido (búsqueda del portador, ramificada por `gafete.tipo`:
- * contratista busca por texto libre, mismo mecanismo de `NuevoIngresoModal`;
- * visita busca por cédula exacta, mismo mecanismo del check-in; KOF elige
- * del catálogo de encargados de ruta, mismo combobox y catálogo
- * `listarEncargadosRutaSeleccionables` que ya usa
- * `EntregarGafeteProvisionalModal` — cualquier gafete se puede perder, KOF
- * no es la excepción); Perdido ofrece resolver (pagado/apareció, sólo tiene
- * sentido para contratista, pero el backend no lo restringe por tipo). De
- * baja no ofrece ninguna acción — es un estado final.
+ * Ventana de un gafete. Cada acción es un reporte que queda a nombre de quien
+ * lo hace, con su detalle en texto libre. Las opciones son tarjetas: se elige
+ * una y lo que pide aparece debajo, sin cambiar de pantalla; el pie siempre
+ * tiene "Cancelar" y la acción, que se habilita cuando el reporte está
+ * completo.
  *
- * Proveedor es la única excepción real: su registro es efímero (la persona
- * llega y se registra en el momento vía `registro_ingresos_proveedor`, sin
- * un catálogo propio de posibles portadores como sí tienen contratistas y
- * encargados de ruta) -- no hay de dónde elegir a quién se le asigna, así
- * que se oculta hasta que exista ese catálogo.
+ * - Disponible → abre directo en **Reportar perdido**: "Responsable conocido"
+ *   (contratista por cédula o nombre, visita por cédula, KOF de la lista de
+ *   encargados; detalle opcional) o "Responsable desconocido" (detalle
+ *   obligatorio). Proveedor no tiene catálogo de personas: sólo
+ *   "Responsable desconocido".
+ * - Perdido → **Registrar pago** (si tiene responsable: se le quita la marca,
+ *   el gafete sigue perdido) o **Recuperar** (apareció o llegó reimpreso;
+ *   detalle obligatorio).
  */
 export default function GestionGafeteModal({
   gafete,
@@ -50,42 +59,45 @@ export default function GestionGafeteModal({
   onCambiado: () => void;
   onCerrar: () => void;
 }) {
-  const [buscandoPortador, setBuscandoPortador] = useState(false);
+  const esVisita = gafete.tipo === "Visita";
+  const esProvisionalKof = gafete.tipo === "ProvisionalKof";
+  const esProveedor = gafete.tipo === "Proveedor";
+  const esContratista = gafete.tipo === "Contratista";
+  const perdido = gafete.estado === "Perdido";
+  const responsableActual = nombrePortador(gafete);
+  const nombreUsuario = useNombreUsuario();
+
+  // Si sólo hay una opción, ya viene elegida.
+  const [accion, setAccion] = useState<Accion | null>(() => {
+    if (!perdido) return esProveedor ? "sin_responsable" : null;
+    return responsableActual ? null : "recuperar";
+  });
+  const [elegido, setElegido] = useState<ResponsableElegido | null>(null);
+  const [detalle, setDetalle] = useState("");
   const [filtro, setFiltro] = useState("");
   const [cedulaVisita, setCedulaVisita] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const esVisita = gafete.tipo === "Visita";
-  const esProvisionalKof = gafete.tipo === "ProvisionalKof";
-  // Sólo se busca contratista como portador (visita va por cédula exacta y
-  // KOF por catálogo). `cargandoResultados`: señal chica mientras pasa la
-  // espera antes de buscar (docs/pendientes.md, "Spinner durante debounce
-  // de búsqueda").
+  const buscandoContratista = accion === "con_responsable" && esContratista && !elegido;
+  // `cargandoResultados`: señal chica mientras pasa la espera antes de
+  // buscar (docs/pendientes.md, "Spinner durante debounce de búsqueda").
   const { resultados, buscando: cargandoResultados } = useBusquedaContratistas(
     filtro,
-    buscandoPortador && !esVisita && !esProvisionalKof,
+    buscandoContratista,
     setError,
   );
-  // El ciclo normal de un gafete de proveedor es ingreso/salida
-  // (`registro_ingresos_proveedor`), sin un catálogo propio de posibles
-  // portadores (registro efímero, ver el doc-comment de arriba) -- se
-  // oculta hasta que exista ese catálogo.
-  const esProveedor = gafete.tipo === "Proveedor";
-  const listaVisible =
-    !esVisita && !esProvisionalKof && buscandoPortador && filtro.trim().length > 0;
+  const listaVisible = buscandoContratista && filtro.trim().length > 0;
   const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
   const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
     resultados,
     listaVisible,
-    elegirPortadorContratista,
+    elegirContratista,
   );
 
-  // Catálogo de encargados de ruta para el combobox de KOF -- mismo patrón
-  // (`<input list>` + `<datalist>`, sin buscador servidor-lado aparte) que
-  // ya usa `EntregarGafeteProvisionalModal`. Sólo activas (`listarEncargados
-  // RutaSeleccionables`): un encargado desactivado no es una opción válida
-  // para asignarle un gafete perdido nuevo.
+  // Catálogo de encargados de ruta para KOF -- mismo combobox y catálogo
+  // (`listarEncargadosRutaSeleccionables`, sólo activos) que ya usa
+  // `EntregarGafeteProvisionalModal`.
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
   useEffect(() => {
     if (!esProvisionalKof) return;
@@ -100,67 +112,35 @@ export default function GestionGafeteModal({
     (encargado) => etiquetaEncargado(encargado).toLowerCase() === encargadoTexto.trim().toLowerCase(),
   );
 
-  async function confirmarBaja() {
+  function elegirAccion(nueva: Accion) {
+    if (nueva === accion) return;
     setError(null);
-    setEnviando(true);
-    try {
-      await darDeBajaGafete(gafete.id);
-      onCambiado();
-    } catch (error) {
-      setError(String(error));
-    } finally {
-      setEnviando(false);
-    }
+    setElegido(null);
+    setFiltro("");
+    setCedulaVisita("");
+    setEncargadoTexto("");
+    setAccion(nueva);
   }
 
-  async function elegirPortadorContratista(contratista: ContratistaResumen) {
+  function elegirContratista(contratista: ContratistaResumen) {
     setError(null);
-    setEnviando(true);
-    try {
-      await marcarGafetePerdidoContratista(gafete.id, contratista.id);
-      onCambiado();
-    } catch (error) {
-      setError(String(error));
-      setEnviando(false);
-    }
+    setElegido({
+      responsable: { tipo: "contratista", id: contratista.id },
+      nombre: `${contratista.nombre} · ${contratista.cedula}`,
+    });
   }
 
-  async function confirmarPortadorProvisionalKof() {
-    if (!encargadoElegido) return;
-    setError(null);
-    setEnviando(true);
-    try {
-      await marcarGafetePerdidoProvisionalKof(gafete.id, encargadoElegido.id);
-      onCambiado();
-    } catch (error) {
-      setError(String(error));
-      setEnviando(false);
-    }
-  }
-
-  /** Sin búsqueda por texto libre para visitantes (a diferencia de
-   * contratista) -- `cita_visitantes` sólo se resuelve por cédula exacta,
-   * mismo mecanismo que ya usa el check-in (`verificarCheckInVisita`); no
-   * hace falta un endpoint de búsqueda nuevo para este flujo puntual. */
-  async function confirmarPortadorVisita() {
+  /** Visitantes sólo se resuelven por cédula exacta, mismo mecanismo que el
+   * check-in (`verificarCheckInVisita`). */
+  async function buscarVisitante() {
     setError(null);
     setEnviando(true);
     try {
       const { visitante } = await verificarCheckInVisita(cedulaVisita.trim());
-      await marcarGafetePerdidoVisita(gafete.id, visitante.id);
-      onCambiado();
-    } catch (error) {
-      setError(String(error));
-      setEnviando(false);
-    }
-  }
-
-  async function confirmarResolver(motivo: MotivoResolucionGafete) {
-    setError(null);
-    setEnviando(true);
-    try {
-      await resolverGafete(gafete.id, motivo);
-      onCambiado();
+      setElegido({
+        responsable: { tipo: "visita", id: visitante.id },
+        nombre: `${visitante.nombre} · ${cedulaVisita.trim()}`,
+      });
     } catch (error) {
       setError(String(error));
     } finally {
@@ -168,59 +148,144 @@ export default function GestionGafeteModal({
     }
   }
 
+  function elegirEncargado() {
+    if (!encargadoElegido) return;
+    setElegido({
+      responsable: { tipo: "provisional_kof", id: encargadoElegido.id },
+      nombre: etiquetaEncargado(encargadoElegido),
+    });
+  }
+
+  const detalleEnviado = detalleLimpio(detalle);
+  const detalleObligatorio = accion === "sin_responsable" || accion === "recuperar";
+
+  const listo =
+    accion !== null &&
+    (accion === "con_responsable" ? elegido !== null : true) &&
+    (!detalleObligatorio || detalleEnviado !== null);
+
+  const textoAccion: Record<Accion, string> = {
+    con_responsable: "Reportar perdido",
+    sin_responsable: "Reportar perdido",
+    pago: "Registrar pago",
+    recuperar: "Recuperar",
+  };
+
+  async function confirmar() {
+    if (!accion || !listo) return;
+    setError(null);
+    setEnviando(true);
+    try {
+      switch (accion) {
+        case "con_responsable":
+          await reportarGafetePerdido(gafete.id, elegido?.responsable ?? null, detalleEnviado);
+          break;
+        case "sin_responsable":
+          await reportarGafetePerdido(gafete.id, null, detalleEnviado);
+          break;
+        case "pago":
+          await registrarPagoGafete(gafete.id, detalleEnviado);
+          break;
+        case "recuperar":
+          await recuperarGafete(gafete.id, detalleEnviado ?? "");
+          break;
+      }
+      onCambiado();
+    } catch (error) {
+      setError(String(error));
+      setEnviando(false);
+    }
+  }
+
+  const numeroGafete = String(gafete.numero).padStart(2, "0");
+  const perdidoDesde = gafete.fecha_marcado_perdido
+    ? textoFechaDDMMYYYY(fechaLocalYMD(gafete.fecha_marcado_perdido))
+    : null;
+
   return (
-    <Modal titulo={`Gafete ${String(gafete.numero).padStart(2, "0")}`} onCerrar={onCerrar}>
+    <Modal
+      titulo={
+        perdido
+          ? `Gafete ${numeroGafete} perdido · ${NOMBRE_TIPO[gafete.tipo]}`
+          : `Reportar perdido · Gafete ${numeroGafete} · ${NOMBRE_TIPO[gafete.tipo]}`
+      }
+      onCerrar={onCerrar}
+      ancho="36rem"
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          Tipo: <strong style={{ color: "var(--texto)" }}>{gafete.tipo}</strong>
-          {" · "}
-          Estado: <strong style={{ color: "var(--texto)" }}>{textoEstado(gafete.estado)}</strong>
-        </p>
-        {nombrePortador(gafete) && (
+        {perdido ? (
           <p style={{ margin: 0, color: "var(--muted)" }}>
-            Asignado a: <strong style={{ color: "var(--texto)" }}>{nombrePortador(gafete)}</strong>
-          </p>
-        )}
-
-        {error && (
-          <p className="login-error" role="alert">
-            {error}
-          </p>
-        )}
-
-        {gafete.estado === "Disponible" && !buscandoPortador && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="boton"
-              disabled={enviando}
-              onClick={confirmarBaja}
-            >
-              Dar de baja
-            </button>
-            {!esProveedor && (
-              <button
-                type="button"
-                className="boton"
-                disabled={enviando}
-                onClick={() => setBuscandoPortador(true)}
-              >
-                Marcar perdido…
-              </button>
+            {perdidoDesde ? `Desde el ${perdidoDesde} · ` : ""}
+            {responsableActual ? (
+              <>
+                Responsable: <strong style={{ color: "var(--texto)" }}>{responsableActual}</strong>
+              </>
+            ) : (
+              "Sin responsable"
             )}
-          </div>
+          </p>
+        ) : (
+          <p style={{ margin: 0, color: "var(--muted)" }}>¿Se sabe a quién se le asignó?</p>
         )}
 
-        {gafete.estado === "Disponible" && buscandoPortador && esVisita && (
+        <div className="opciones-tarjeta" role="group" aria-label="Opciones">
+          {!perdido && !esProveedor && (
+            <Tarjeta
+              activa={accion === "con_responsable"}
+              onElegir={() => elegirAccion("con_responsable")}
+              icono={<UserSearch size={16} aria-hidden="true" />}
+              titulo="Responsable conocido"
+              texto="Se registra a la persona que lo tenía."
+            />
+          )}
+          {!perdido && (
+            <Tarjeta
+              activa={accion === "sin_responsable"}
+              onElegir={() => elegirAccion("sin_responsable")}
+              icono={<CircleHelp size={16} aria-hidden="true" />}
+              titulo="Responsable desconocido"
+              texto="Se registra el detalle de lo ocurrido."
+            />
+          )}
+          {perdido && responsableActual && (
+            <Tarjeta
+              activa={accion === "pago"}
+              onElegir={() => elegirAccion("pago")}
+              icono={<HandCoins size={16} aria-hidden="true" />}
+              titulo="Registrar pago"
+              texto="El responsable queda libre; el gafete sigue perdido."
+            />
+          )}
+          {perdido && (
+            <Tarjeta
+              activa={accion === "recuperar"}
+              onElegir={() => elegirAccion("recuperar")}
+              icono={<RotateCcw size={16} aria-hidden="true" />}
+              titulo="Recuperar"
+              texto="El gafete vuelve a estar disponible."
+            />
+          )}
+        </div>
+
+        {accion === "con_responsable" && elegido && (
+          <p style={{ margin: 0, color: "var(--muted)" }}>
+            Se le asignó a: <strong style={{ color: "var(--texto)" }}>{elegido.nombre}</strong>{" "}
+            <button type="button" className="boton-discreto" onClick={() => setElegido(null)}>
+              Cambiar
+            </button>
+          </p>
+        )}
+
+        {accion === "con_responsable" && !elegido && esVisita && (
           <form
             style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
             onSubmit={(evento) => {
               evento.preventDefault();
-              confirmarPortadorVisita();
+              buscarVisitante();
             }}
           >
             <label className="campo" style={{ flex: 1 }}>
-              Asignado a · cédula del visitante
+              Cédula del visitante
               <input
                 value={cedulaVisita}
                 onChange={(evento) => setCedulaVisita(evento.target.value)}
@@ -229,21 +294,21 @@ export default function GestionGafeteModal({
               />
             </label>
             <button type="submit" className="boton" disabled={enviando || !cedulaVisita.trim()}>
-              Confirmar
+              Buscar
             </button>
           </form>
         )}
 
-        {gafete.estado === "Disponible" && buscandoPortador && esProvisionalKof && (
+        {accion === "con_responsable" && !elegido && esProvisionalKof && (
           <form
             style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
             onSubmit={(evento) => {
               evento.preventDefault();
-              confirmarPortadorProvisionalKof();
+              elegirEncargado();
             }}
           >
             <label className="campo" style={{ flex: 1 }}>
-              Asignado a · encargado de ruta
+              Personal KOF
               <input
                 list="encargados-perdido-datalist"
                 value={encargadoTexto}
@@ -258,16 +323,16 @@ export default function GestionGafeteModal({
                 ))}
               </datalist>
             </label>
-            <button type="submit" className="boton" disabled={enviando || !encargadoElegido}>
-              Confirmar
+            <button type="submit" className="boton" disabled={!encargadoElegido}>
+              Elegir
             </button>
           </form>
         )}
 
-        {gafete.estado === "Disponible" && buscandoPortador && !esVisita && !esProvisionalKof && (
+        {accion === "con_responsable" && !elegido && esContratista && (
           <div ref={campoRef}>
             <label className="campo">
-              Asignado a · cédula o nombre
+              Cédula o nombre del contratista
               <div style={{ position: "relative" }}>
                 <input
                   value={filtro}
@@ -300,7 +365,7 @@ export default function GestionGafeteModal({
                   <FilaListaFlotante
                     key={contratista.id}
                     resaltada={indice === resaltado}
-                    onClick={() => elegirPortadorContratista(contratista)}
+                    onClick={() => elegirContratista(contratista)}
                     onMouseEnter={() => setResaltado(indice)}
                   >
                     <span>
@@ -314,33 +379,83 @@ export default function GestionGafeteModal({
           </div>
         )}
 
-        {gafete.estado === "Perdido" && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="boton"
-              disabled={enviando}
-              onClick={() => confirmarResolver("Pagado")}
-            >
-              Resolver · pagado
-            </button>
-            <button
-              type="button"
-              className="boton"
-              disabled={enviando}
-              onClick={() => confirmarResolver("Aparecido")}
-            >
-              Resolver · apareció
-            </button>
-          </div>
+        {accion !== null && (
+          <label className="campo">
+            <span style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Detalle{detalleObligatorio ? "" : " (opcional)"}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {detalle.length} / {LARGO_MAXIMO_DETALLE}
+              </span>
+            </span>
+            <textarea
+              className="sin-mayuscula"
+              value={detalle}
+              maxLength={LARGO_MAXIMO_DETALLE}
+              onChange={(evento) => setDetalle(evento.target.value)}
+              autoFocus={accion !== "con_responsable"}
+              placeholder={
+                accion === "sin_responsable"
+                  ? "Ej.: Se recibe el turno sin el gafete; entrega Fulano de Tal."
+                  : accion === "recuperar"
+                    ? "Ej.: Encontrado en el parqueo / llegó reimpreso."
+                    : accion === "pago"
+                      ? "Ej.: Número de recibo."
+                      : "Observaciones."
+              }
+            />
+          </label>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button type="button" className="boton" onClick={onCerrar}>
-            Cerrar
+        {error && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {accion !== null && nombreUsuario && (
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
+            Reportado por: <strong style={{ color: "var(--texto)" }}>{nombreUsuario}</strong>
+          </p>
+        )}
+
+        <div className="pie-acciones">
+          <button type="button" className="boton-discreto" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="boton boton-primario"
+            disabled={enviando || !listo}
+            onClick={confirmar}
+          >
+            {accion ? textoAccion[accion] : perdido ? "Elija una opción" : "Reportar perdido"}
           </button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+function Tarjeta({
+  activa,
+  onElegir,
+  icono,
+  titulo,
+  texto,
+}: {
+  activa: boolean;
+  onElegir: () => void;
+  icono: ReactNode;
+  titulo: string;
+  texto: string;
+}) {
+  return (
+    <button type="button" className="opcion-tarjeta" aria-pressed={activa} onClick={onElegir}>
+      <span className="opcion-tarjeta-titulo">
+        {icono}
+        {titulo}
+      </span>
+      <span className="opcion-tarjeta-texto">{texto}</span>
+    </button>
   );
 }

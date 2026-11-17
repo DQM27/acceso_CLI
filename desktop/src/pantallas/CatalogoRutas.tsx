@@ -25,7 +25,7 @@ type Vista = "vehiculos" | "encargados" | "rutas";
 
 const ETIQUETAS_VISTA: Record<Vista, string> = {
   vehiculos: "Vehículos",
-  encargados: "Encargados",
+  encargados: "Personal KOF",
   rutas: "Números de ruta",
 };
 

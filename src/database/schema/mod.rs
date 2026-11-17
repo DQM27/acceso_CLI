@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 64;
+pub const SCHEMA_VERSION: i64 = 65;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -478,6 +478,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 63 {
         aplicar_migracion_64(connection)?;
         *version = 64;
+    }
+
+    if *version == 64 {
+        aplicar_migracion_65(connection)?;
+        *version = 65;
     }
 
     Ok(())
@@ -1105,6 +1110,27 @@ fn aplicar_migracion_64(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_64)?;
     transaction.execute_batch("PRAGMA user_version = 64")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Gafetes con dos estados (`DISPONIBLE`/`PERDIDO`), perdido sin
+/// responsable y reportes con detalle. Mismo criterio que
+/// `aplicar_migracion_41`: `gafetes` y `gafetes_incidentes` se recrean juntas.
+fn aplicar_migracion_65(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_65(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_65(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_65)?;
+    transaction.execute_batch("PRAGMA user_version = 65")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -1790,3 +1816,4 @@ const MIGRACION_61: &str = include_str!("migraciones/migracion_61.sql");
 const MIGRACION_62: &str = include_str!("migraciones/migracion_62.sql");
 const MIGRACION_63: &str = include_str!("migraciones/migracion_63.sql");
 const MIGRACION_64: &str = include_str!("migraciones/migracion_64.sql");
+const MIGRACION_65: &str = include_str!("migraciones/migracion_65.sql");

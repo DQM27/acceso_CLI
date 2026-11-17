@@ -425,15 +425,26 @@ pub(super) fn guardar_gafetes(
         let actualizado_en = crate::tiempo::parsear_utc(&gafete.updated_at)
             .map_err(|_| SincronizacionError::FechaInvalida(gafete.updated_at.clone()))?;
 
-        // Un gafete PERDIDO sin portador resoluble localmente violaría el
-        // `CHECK` de la tabla -- se salta por ahora, mismo criterio que un
+        // `DE_BAJA` ya no existe (MIGRACION_65): la nube lo convierte, pero
+        // por si llega igual de una fila vieja, se guarda como perdido.
+        let estado = if gafete.estado == "DE_BAJA" {
+            "PERDIDO"
+        } else {
+            gafete.estado.as_str()
+        };
+        // Un perdido puede no tener responsable (no se sabe quién lo tenía,
+        // o ya pagó): se guarda tal cual. Si trae uno que todavía no
+        // resuelve localmente, se salta por ahora, mismo criterio que un
         // contratista remoto incompleto: se autorresuelve solo en un sync
         // posterior, en cuanto la fila que le falta también llegue acá (ver
-        // el doc-comment de la función sobre `quedo_pendiente`). Un gafete
-        // `PROVEEDOR` todavía no tiene columna de portador local -- no se
-        // guarda hasta que exista esa categoría de verdad.
+        // el doc-comment de la función sobre `quedo_pendiente`). Los tipos
+        // sin responsable en la nube (proveedor, KOF) se guardan sin él: lo
+        // que importa es que no se pueda asignar.
+        let sin_responsable_remoto = gafete.contratista_portador_id.is_none()
+            && gafete.contratista_portador_nombre.is_none()
+            && gafete.visita_portador_id.is_none();
         let (contratista_portador_id_local, visita_portador_id_local) =
-            if gafete.estado == "PERDIDO" {
+            if estado == "PERDIDO" && !sin_responsable_remoto {
                 match gafete.tipo.as_str() {
                     "CONTRATISTA" => {
                         let Some(id) = indice_contratistas.resolver(
@@ -456,10 +467,7 @@ pub(super) fn guardar_gafetes(
                         };
                         (None, Some(id))
                     }
-                    _ => {
-                        quedo_pendiente = true;
-                        continue;
-                    }
+                    _ => (None, None),
                 }
             } else {
                 (None, None)
@@ -478,7 +486,7 @@ pub(super) fn guardar_gafetes(
             params![
                 gafete.numero,
                 gafete.tipo,
-                gafete.estado,
+                estado,
                 contratista_portador_id_local,
                 visita_portador_id_local,
                 gafete.id

@@ -388,7 +388,7 @@ fn ningun_enlace_del_manual_del_movil_esta_roto() {
 #[test]
 fn los_mensajes_de_la_app_se_encuentran_pegandolos() {
     let primero =
-        buscar_en_manual("Este encargado ya tiene un gafete provisional prestado".to_string())
+        buscar_en_manual("Esta persona ya tiene un gafete provisional prestado".to_string())
             .into_iter()
             .next()
             .expect("algún resultado");

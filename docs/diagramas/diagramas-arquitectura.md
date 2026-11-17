@@ -254,11 +254,9 @@ La fila no se mueve a otra tabla. El historial aparece cuando se completa
 ```mermaid
 stateDiagram-v2
     [*] --> Disponible: crear uno o rango
-    Disponible --> Perdido: marcar perdido con deudor
-    Disponible --> DeBaja: dar de baja
-    Perdido --> Disponible: resolver como aparecido
-    Perdido --> DeBaja: resolver como pagado
-    DeBaja --> [*]
+    Disponible --> Perdido: reportar perdido (con o sin responsable)
+    Perdido --> Perdido: registrar pago (se quita la marca)
+    Perdido --> Disponible: recuperar (apareció o reimpreso)
 ```
 
 ```mermaid

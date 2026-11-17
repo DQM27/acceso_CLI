@@ -48,7 +48,7 @@ pub enum NucleoError {
     /// nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
     /// mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
     /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
-    #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
+    #[error("Gafete {numero} asignado en el otro equipo")]
     GafeteOcupadoEnSitio { numero: i64 },
     /// La cédula ya tiene un ingreso de proveedor abierto en OTRO sitio
     /// (chequeo en vivo contra la nube, de mejor esfuerzo). Mismo texto que

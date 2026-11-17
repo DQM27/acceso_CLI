@@ -70,8 +70,8 @@ pub enum SituacionGafete {
     NoExiste,
     /// Existe y está disponible: nadie lo tiene puesto.
     Libre,
+    /// Reportado perdido (no se puede asignar), con o sin responsable.
     Perdido,
-    DeBaja,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -86,7 +86,6 @@ fn situacion_segun_catalogo(estado: Option<EstadoGafete>) -> SituacionGafete {
         None => SituacionGafete::NoExiste,
         Some(EstadoGafete::Disponible) => SituacionGafete::Libre,
         Some(EstadoGafete::Perdido) => SituacionGafete::Perdido,
-        Some(EstadoGafete::DeBaja) => SituacionGafete::DeBaja,
     }
 }
 
@@ -95,7 +94,6 @@ fn mensaje_gafete_sin_portador(numero: i32, situacion: SituacionGafete) -> Strin
         SituacionGafete::NoExiste => "no existe",
         SituacionGafete::Libre => "libre, nadie lo tiene",
         SituacionGafete::Perdido => "reportado perdido",
-        SituacionGafete::DeBaja => "dado de baja",
     };
     format!("Gafete {numero} · {estado}")
 }
@@ -138,10 +136,6 @@ mod tests {
         assert_eq!(
             situacion_segun_catalogo(Some(EstadoGafete::Perdido)),
             SituacionGafete::Perdido
-        );
-        assert_eq!(
-            situacion_segun_catalogo(Some(EstadoGafete::DeBaja)),
-            SituacionGafete::DeBaja
         );
     }
 

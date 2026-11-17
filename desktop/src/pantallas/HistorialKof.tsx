@@ -8,7 +8,7 @@ import HistorialSitio from "./HistorialSitio";
 const COLUMNAS: ColDef<PrestamoGafeteProvisionalHistorialSitio>[] = [
   {
     field: "encargado_nombre",
-    headerName: "Encargado",
+    headerName: "Personal KOF",
     flex: 1.4,
     minWidth: 160,
     cellStyle: { textAlign: "left" },

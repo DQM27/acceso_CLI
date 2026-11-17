@@ -1,8 +1,11 @@
+import { solicitarSincronizacionNube } from "../eventosNube";
 import { invoke } from "./invocar";
 
 // Espejo de comandos/gafetes.rs y dto/gafetes.rs.
 
-export type EstadoGafete = "Disponible" | "Perdido" | "DeBaja";
+/** `Perdido`: no se puede asignar (no está físicamente), con o sin
+ * responsable. */
+export type EstadoGafete = "Disponible" | "Perdido";
 
 /** Pool físico al que pertenece el gafete — espejo de `TipoGafete` (Rust). */
 export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof" | "Proveedor";
@@ -46,29 +49,28 @@ export interface GafeteResumen {
   visita_portador_nombre: string | null;
   proveedor_portador_id: number | null;
   proveedor_portador_nombre: string | null;
+  encargado_portador_id: number | null;
+  encargado_portador_nombre: string | null;
   fecha_marcado_perdido: string | null;
 }
 
-/** A quién se le asignó este gafete la última vez, sea cual sea su tipo —
- * a lo sumo uno de estos tres campos de `GafeteResumen`/`IncidenteGafete`
- * tiene valor, nunca más de uno (el `CHECK` par-exclusivo de `gafetes` en
- * `schema.rs` lo garantiza).
- *
- * Nota: `ProvisionalKof` todavía no trae portador acá -- su ciclo es
- * entrega/devolución (`prestamos_gafete_provisional`), no
- * marcar-perdido/resolver, y la consulta de este catálogo (`buscar_gafetes`,
- * `src/database/queries/gafetes.rs`) todavía no hace `JOIN` contra
- * `encargados_ruta` para traer ese nombre. */
+/** Quién responde por este gafete perdido, sea cual sea su tipo — a lo sumo
+ * uno de estos campos tiene valor (el `CHECK` de `gafetes` lo garantiza).
+ * `null` si está disponible, si no se sabe quién lo tenía o si ya pagó. */
 export function nombrePortador(
   fila: Pick<
     GafeteResumen,
-    "contratista_portador_nombre" | "visita_portador_nombre" | "proveedor_portador_nombre"
+    | "contratista_portador_nombre"
+    | "visita_portador_nombre"
+    | "proveedor_portador_nombre"
+    | "encargado_portador_nombre"
   >,
 ): string | null {
   return (
     fila.contratista_portador_nombre ??
     fila.visita_portador_nombre ??
-    fila.proveedor_portador_nombre
+    fila.proveedor_portador_nombre ??
+    fila.encargado_portador_nombre
   );
 }
 
@@ -81,21 +83,28 @@ export interface FiltroGafetes {
   tipo?: TipoGafeteEntrada;
   // snake_case y capitalizado a propósito — espejo exacto de
   // `EstadoGafeteEntrada` (Rust, `#[serde(rename_all = "snake_case")]`).
-  estado?: "disponible" | "perdido" | "de_baja";
+  estado?: "disponible" | "perdido";
 }
 
-export type TipoIncidenteGafete = "Perdido" | "Resuelto";
+/** `Resuelto`: cierre anterior a la versión con pago y recuperación
+ * separados (sólo aparece en el historial viejo). */
+export type TipoIncidenteGafete = "Perdido" | "Pagado" | "Recuperado" | "Resuelto";
 
-/** Una fila del historial de un gafete puntual — espejo de `IncidenteGafete`
+/** Un reporte del historial de un gafete — espejo de `IncidenteGafete`
  * (`src/database/queries/gafetes_incidentes.rs`). */
 export interface IncidenteGafete {
   id: number;
   tipo: TipoIncidenteGafete;
   /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
   fecha_hora: string;
+  /** Quién hizo el reporte. */
   usuario_nombre: string;
-  contratista_nombre: string | null;
-  visita_portador_nombre: string | null;
+  /** La persona marcada (`Perdido`) o a la que se le quitó la marca
+   * (`Pagado`). */
+  responsable_nombre: string | null;
+  /** Texto libre de quien reportó. */
+  detalle: string | null;
+  /** Sólo en los `Resuelto` viejos. */
   motivo_resolucion: MotivoResolucionGafete | null;
   /** A qué gafete pertenece — no hace falta cuando ya se sabe por contexto
    * (`historialGafete`), pero es indispensable en la vista global de
@@ -111,37 +120,116 @@ export function historialGafete(id: number): Promise<IncidenteGafete[]> {
   return invoke("historial_gafete", { id });
 }
 
-export function crearGafete(numero: number, tipo: TipoGafeteEntrada): Promise<number> {
-  return invoke("crear_gafete", { numero, tipo });
+// Cada cambio del catálogo pide subir enseguida (`solicitarSincronizacionNube`),
+// igual que contratistas o ingresos: sin esto, el otro equipo del sitio no se
+// enteraba hasta la sincronización periódica o el botón "Sincronizar".
+
+export async function crearGafete(numero: number, tipo: TipoGafeteEntrada): Promise<number> {
+  const id = await invoke<number>("crear_gafete", { numero, tipo });
+  solicitarSincronizacionNube();
+  return id;
 }
 
-export function crearGafetesRango(
+export async function crearGafetesRango(
   desde: number,
   hasta: number,
   tipo: TipoGafeteEntrada,
 ): Promise<number[]> {
-  return invoke("crear_gafetes_rango", { desde, hasta, tipo });
+  const ids = await invoke<number[]>("crear_gafetes_rango", { desde, hasta, tipo });
+  solicitarSincronizacionNube();
+  return ids;
 }
 
-export function darDeBajaGafete(id: number): Promise<void> {
-  return invoke("dar_de_baja_gafete", { id });
-}
+/** A quién se le asignó el gafete perdido, si se sabe. Espejo de
+ * `ResponsableGafeteEntrada` (comandos/gafetes.rs). */
+export type ResponsableGafete =
+  | { tipo: "contratista"; id: number }
+  | { tipo: "visita"; id: number }
+  | { tipo: "provisional_kof"; id: number };
 
-export function marcarGafetePerdidoContratista(id: number, contratistaId: number): Promise<void> {
-  return invoke("marcar_gafete_perdido_contratista", { id, contratistaId });
-}
-
-export function marcarGafetePerdidoVisita(id: number, citaVisitanteId: number): Promise<void> {
-  return invoke("marcar_gafete_perdido_visita", { id, citaVisitanteId });
-}
-
-export function marcarGafetePerdidoProvisionalKof(
+/** Sin `responsable`, el `detalle` es obligatorio. */
+export async function reportarGafetePerdido(
   id: number,
-  encargadoRutaId: number,
+  responsable: ResponsableGafete | null,
+  detalle: string | null,
 ): Promise<void> {
-  return invoke("marcar_gafete_perdido_provisional_kof", { id, encargadoRutaId });
+  await invoke("reportar_gafete_perdido", { id, responsable, detalle });
+  solicitarSincronizacionNube();
 }
 
-export function resolverGafete(id: number, motivo: MotivoResolucionGafete): Promise<void> {
-  return invoke("resolver_gafete", { id, motivo });
+/** El responsable pagó: se le quita la marca; el gafete sigue perdido. */
+export async function registrarPagoGafete(id: number, detalle: string | null): Promise<void> {
+  await invoke("registrar_pago_gafete", { id, detalle });
+  solicitarSincronizacionNube();
+}
+
+/** Apareció o se reimprimió: vuelve a estar disponible. */
+export async function recuperarGafete(id: number, detalle: string): Promise<void> {
+  await invoke("recuperar_gafete", { id, detalle });
+  solicitarSincronizacionNube();
+}
+
+/** Qué es un número escrito en el conteo físico. Espejo de
+ * `domain::gafete::LecturaConteo`. */
+export type LecturaConteo =
+  | { tipo: "esperado" }
+  | { tipo: "no_existe" }
+  | { tipo: "perdido" }
+  | { tipo: "en_uso"; nombre: string };
+
+export interface GafeteEnUso {
+  numero: number;
+  nombre: string;
+}
+
+/** Lo que dice "Comprobar". Espejo de `domain::gafete::ResultadoConteo`. */
+export interface ResultadoConteo {
+  esperados: number;
+  presentes: number[];
+  faltantes: number[];
+  en_uso: GafeteEnUso[];
+  en_uso_contados: GafeteEnUso[];
+  no_existen: number[];
+  perdidos_contados: number[];
+  perdidos: number[];
+  posibles_cruces: PosibleCruce[];
+}
+
+/** Por qué dos números se confunden fácil. Espejo de `domain::gafete::Parecido`. */
+export type ParecidoGafete = "un_digito" | "invertido" | "seis_nueve";
+
+/** Posible error de digitación al entregar: `contado` figura asignado y se
+ * contó; `faltante` es probablemente el que esa persona tiene puesto. Espejo
+ * de `domain::gafete::PosibleCruce`. */
+export interface PosibleCruce {
+  contado: GafeteEnUso;
+  faltante: number;
+  parecido: ParecidoGafete;
+}
+
+/** Un gafete del catálogo para el tablero del conteo. Espejo de
+ * `domain::gafete::GafeteParaConteo`. */
+export interface GafeteParaConteo {
+  numero: number;
+  estado: EstadoGafete;
+  /** Quién lo tiene puesto ahora, si alguien que está adentro. */
+  en_uso_por: string | null;
+}
+
+export function catalogoConteoGafetes(tipo: TipoGafeteEntrada): Promise<GafeteParaConteo[]> {
+  return invoke("catalogo_conteo_gafetes", { tipo });
+}
+
+export function leerNumeroConteoGafetes(
+  tipo: TipoGafeteEntrada,
+  numero: number,
+): Promise<LecturaConteo> {
+  return invoke("leer_numero_conteo_gafetes", { tipo, numero });
+}
+
+export function comprobarConteoGafetes(
+  tipo: TipoGafeteEntrada,
+  numeros: number[],
+): Promise<ResultadoConteo> {
+  return invoke("comprobar_conteo_gafetes", { tipo, numeros });
 }

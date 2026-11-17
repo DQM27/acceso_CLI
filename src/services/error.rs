@@ -382,7 +382,7 @@ pub enum RutaCatalogoServiceError {
     RutaNoEncontrada,
     /// Dar de baja una ruta con una salida activa dejaría el catálogo
     /// contradiciendo un movimiento en curso -- mismo criterio que
-    /// `GafeteServiceError::GafeteConIngresoActivo`.
+    /// `GafeteServiceError::GafeteAsignado`.
     #[error("La ruta tiene una salida activa en este momento")]
     RutaConSalidaActiva,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
@@ -400,11 +400,11 @@ pub enum RutaCatalogoServiceError {
 pub enum GafeteProvisionalServiceError {
     #[error("El número de gafete debe ser mayor a cero")]
     NumeroInvalido,
-    #[error("El encargado no existe en el catálogo")]
+    #[error("Personal KOF no encontrado")]
     EncargadoNoEncontrado,
-    #[error("El encargado está dado de baja en el catálogo")]
+    #[error("Personal KOF dado de baja en el catálogo")]
     EncargadoInactivo,
-    #[error("Este encargado ya tiene un gafete provisional prestado")]
+    #[error("Esta persona ya tiene un gafete provisional prestado")]
     EncargadoYaTienePrestamoActivo,
     #[error("Ese número de gafete ya está prestado a otra persona")]
     GafeteYaPrestado,
@@ -537,23 +537,27 @@ pub enum GafeteServiceError {
     GafeteNoEncontrado,
     #[error("El rango de números no es válido")]
     RangoInvalido,
-    #[error("Marcar un gafete perdido requiere indicar el contratista deudor")]
-    ContratistaDeudorRequerido,
     #[error("Contratista no encontrado")]
     ContratistaNoEncontrado,
     #[error("Visitante no encontrado")]
     VisitaNoEncontrada,
-    #[error("Encargado de ruta no encontrado")]
+    #[error("Personal KOF no encontrado")]
     EncargadoRutaNoEncontrado,
-    /// La transición pedida no aplica al estado actual (ej. dar de baja uno
-    /// ya perdido, o resolver uno que no está perdido).
+    /// La transición pedida no aplica al estado actual (ej. reportar perdido
+    /// uno que ya lo está, o registrar el pago de uno sin responsable).
     #[error("El gafete no está en un estado válido para esta operación")]
     EstadoInvalido,
-    /// Hay un ingreso activo con este gafete asignado — dar de baja o
-    /// marcar perdido dejaría el inventario contradiciendo un movimiento en
-    /// curso. Se revisa dentro de la misma transacción que la transición.
-    #[error("El gafete está asignado a un ingreso activo")]
-    GafeteConIngresoActivo,
+    /// Un reporte sin responsable, o una recuperación, sin detalle: quien
+    /// reporta tiene que contar qué pasó.
+    #[error("Escriba el detalle del reporte")]
+    DetalleRequerido,
+    #[error("El detalle es demasiado largo")]
+    DetalleMuyLargo,
+    /// Alguien que está adentro tiene puesto este gafete (de este mismo
+    /// tipo) — reportarlo perdido dejaría el inventario contradiciendo un
+    /// movimiento en curso. Se revisa dentro de la misma transacción.
+    #[error("Gafete asignado a {nombre}")]
+    GafeteAsignado { nombre: String },
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]

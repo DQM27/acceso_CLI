@@ -616,15 +616,14 @@ fn gafete_sin_portador_distingue_libre_inexistente_y_de_otro_tipo() {
     let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
     conexion
         .execute_batch(
-            // Un gafete PERDIDO siempre tiene a quién se le perdió (CHECK
-            // de la tabla).
+            // Un gafete PERDIDO puede tener responsable (el 12) o no (el 13).
             "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
              INSERT INTO contratistas (
                  cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
              ) VALUES ('111111111', 'Perdio Gafete', 1, 'SWAT', 0, 1);
              INSERT INTO gafetes (numero, tipo, estado) VALUES
                  (11, 'CONTRATISTA', 'DISPONIBLE'),
-                 (13, 'CONTRATISTA', 'DE_BAJA'),
+                 (13, 'CONTRATISTA', 'PERDIDO'),
                  (40, 'VISITA', 'DISPONIBLE');
              INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id)
                  VALUES (12, 'CONTRATISTA', 'PERDIDO', 1);",
@@ -636,7 +635,7 @@ fn gafete_sin_portador_distingue_libre_inexistente_y_de_otro_tipo() {
     let situacion = |numero| nucleo.gafete_sin_portador(numero).unwrap().situacion;
     assert_eq!(situacion(11), SituacionGafete::Libre);
     assert_eq!(situacion(12), SituacionGafete::Perdido);
-    assert_eq!(situacion(13), SituacionGafete::DeBaja);
+    assert_eq!(situacion(13), SituacionGafete::Perdido);
     assert_eq!(situacion(130), SituacionGafete::NoExiste);
     // Un gafete de visita no es uno de contratista.
     assert_eq!(situacion(40), SituacionGafete::NoExiste);

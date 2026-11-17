@@ -44,10 +44,10 @@ salida](registrar-salida.md).
 | "Indique a quién visita y quién lo autorizó por correo" | El campo del motivo está vacío. | Escriba a quién visita y quién lo autorizó. |
 | "Escriba la placa del vehículo" | Eligió **Vehículo** pero no puso la placa. | Escriba la placa o elija **Caminando**. |
 | "El número de gafete es obligatorio" / "Ingrese un número de gafete válido" | Falta el gafete o no es válido. | Escriba el número del gafete de visita. |
-| "El gafete de visita ya está en uso" | Ese gafete lo tiene otra visita adentro. | Entregue otro gafete. |
-| "El gafete de visita no está registrado en el catálogo" | Ese número no existe como gafete de visita. | Revise el número. Si es un gafete nuevo, se agrega en **Gafetes**. |
-| "El gafete no está disponible" | El gafete está marcado como perdido o dado de baja. | Entregue otro gafete. |
-| "El gafete de visita N ya está en uso en otro dispositivo del sitio" | Se entregó en el otro equipo del sitio. | Entregue otro gafete. |
+| "Gafete asignado a otra persona" | Ese gafete lo tiene otra visita adentro. | Entregue otro gafete. |
+| "Ese gafete no existe en el catálogo" | Ese número no existe como gafete de visita. | Revise el número. Si es un gafete nuevo, se agrega en **Gafetes**. |
+| "Gafete perdido: no se puede asignar" | El gafete está marcado como perdido. | Entregue otro gafete. |
+| "Gafete N asignado en el otro equipo" | Se entregó en el otro equipo del sitio. | Entregue otro gafete. |
 | "Esta persona tiene el acceso denegado." | Un administrador le quitó el acceso a esta cédula. | No registre la entrada, aunque tenga el correo. Sólo un administrador puede devolverle el acceso. |
 | "Esta persona ya está adentro (como contratista, por ejemplo) — registre primero esa salida" | Figura adentro por otra vía. | Registre primero esa salida (Ctrl+S) y luego esta entrada. |
 | "Esta persona ya tiene un ingreso por correo activo en (sitio)" | Figura adentro en otro sitio. | No registre la entrada. Avise a un administrador. |

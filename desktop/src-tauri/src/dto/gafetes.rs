@@ -11,7 +11,6 @@ use control_acceso::models::gafete::{EstadoGafete, TipoGafete};
 pub enum EstadoGafeteEntrada {
     Disponible,
     Perdido,
-    DeBaja,
 }
 
 impl From<EstadoGafeteEntrada> for EstadoGafete {
@@ -19,7 +18,6 @@ impl From<EstadoGafeteEntrada> for EstadoGafete {
         match estado {
             EstadoGafeteEntrada::Disponible => Self::Disponible,
             EstadoGafeteEntrada::Perdido => Self::Perdido,
-            EstadoGafeteEntrada::DeBaja => Self::DeBaja,
         }
     }
 }

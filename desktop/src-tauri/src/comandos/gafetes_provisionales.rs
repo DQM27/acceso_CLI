@@ -27,7 +27,7 @@ pub fn buscar_encargados_ruta_provisional(
         // no es una opción válida (mismo criterio que
         // `EncargadoRutaService::buscar_seleccionables`).
         .buscar_encargados_ruta_seleccionables(&texto)
-        .map_err(|_| "No se pudo buscar en el catálogo de encargados".to_string())
+        .map_err(|_| "No se pudo buscar en el catálogo de Personal KOF".to_string())
 }
 
 #[tauri::command(async)]
