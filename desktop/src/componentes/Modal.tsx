@@ -35,12 +35,18 @@ export default function Modal({
   onCerrar,
   children,
   ancho = "32rem",
+  tituloEnContenido = false,
 }: {
   titulo: string;
   onCerrar: () => void;
   children: ReactNode;
   /** Ancho de la tarjeta (sin pasar del de la ventana). */
   ancho?: string;
+  /** La pantalla pone el título dentro de su contenido (ej. Detalles del
+   * contratista, a la altura del carné): sin fila de encabezado, sólo la X
+   * en la esquina. `titulo` sigue nombrando el diálogo para los lectores
+   * de pantalla. */
+  tituloEnContenido?: boolean;
 }) {
   // `onCerrar` puede cambiar en cada render de la pantalla: se lee el último
   // al terminar la salida.
@@ -126,28 +132,43 @@ export default function Modal({
           maxWidth: "calc(100% - 2rem)",
           maxHeight: "calc(100% - 2rem)",
           overflowY: "auto",
-          padding: "1.5rem",
+          // Sin encabezado, la X va en el margen: uno igual en los cuatro
+          // lados, con lugar para la X sin que toque el contenido.
+          padding: tituloEnContenido ? "2.25rem" : "1.5rem",
+          position: tituloEnContenido ? "relative" : undefined,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: "var(--tam-titulo)", color: "var(--texto)" }}>{titulo}</h2>
+        {tituloEnContenido ? (
           <button
             type="button"
-            className="boton boton-discreto boton-icono"
+            className="boton boton-discreto boton-icono modal-cerrar-esquina"
             onClick={cerrar}
             aria-label="Cerrar"
             title="Cerrar (Esc)"
           >
             <X size={18} aria-hidden="true" />
           </button>
-        </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: "var(--tam-titulo)", color: "var(--texto)" }}>{titulo}</h2>
+            <button
+              type="button"
+              className="boton boton-discreto boton-icono"
+              onClick={cerrar}
+              aria-label="Cerrar"
+              title="Cerrar (Esc)"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
         <div className="modal-cuerpo" style={{ height: alto ?? undefined }}>
           <div ref={contenidoRef}>{children}</div>
         </div>
