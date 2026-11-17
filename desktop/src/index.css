@@ -1334,9 +1334,29 @@ textarea::placeholder {
 /* Alto FIJO (pedido del usuario 2026-11-16): con un alto mínimo, el modal
    abría chico con "Cargando carné…" y crecía al llegar la imagen. Fijo,
    abre de una con su tamaño final y sólo se ve la animación de entrada.
-   Sin pasar del alto de la ventana (título, botones y márgenes: ~13rem). */
+   Sin pasar del alto de la ventana (título y márgenes: ~9rem; los botones
+   van en la columna de los datos, no abajo). */
 .detalle-contratista {
-  --alto-carne: min(36rem, calc(100vh - 13rem));
+  --alto-carne: min(36rem, calc(100vh - 9rem));
+}
+/* Columna de los datos, del mismo alto que el carné: datos arriba y las
+   acciones, o la carga del gafete PRAIND, pegadas abajo. */
+.detalle-contratista-izquierda {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: var(--alto-carne);
+  overflow-y: auto;
+}
+@media (max-width: 720px) {
+  .detalle-contratista-izquierda { height: auto; }
+}
+.detalle-contratista-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: auto;
 }
 .detalle-contratista-carne {
   display: flex;
@@ -1362,16 +1382,10 @@ textarea::placeholder {
 .detalle-contratista-imagen img {
   display: block;
   max-width: 100%;
-  /* El recuadro menos su relleno y la pista "Clic para ampliar". */
-  max-height: calc(var(--alto-carne) - 3rem);
+  /* El recuadro menos su relleno; el cursor de lupa avisa que se amplía. */
+  max-height: calc(var(--alto-carne) - 1rem - 2px);
   margin: 0 auto;
   border-radius: var(--radio-chico);
-}
-.detalle-contratista-pista {
-  display: block;
-  margin-top: 0.35rem;
-  color: var(--muted);
-  font-size: 0.85em;
 }
 /* Todo el alto que deja el modal sin barra de desplazamiento: la tarjeta
    llega a 100% - 2rem, y su relleno (3rem) más el título (~3.5rem) se
@@ -1386,7 +1400,7 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid var(--borde);
 }

@@ -22,8 +22,9 @@ gafete PRAIND a la derecha.
 ## Pasos — ver el gafete PRAIND
 
 1. Busque a la persona y haga **doble clic** en su fila.
-2. El gafete PRAIND aparece a la derecha. Haga clic sobre él para verlo en grande.
-3. Para cambiar los datos de la persona, pulse **Editar**.
+2. El gafete PRAIND aparece a la derecha. Al pasar el mouse encima, el cursor
+   se vuelve una lupa: haga clic para verlo en grande.
+3. Para cambiar los datos de la persona, pulse **Editar**, debajo de los datos.
 
 La primera vez que se abre un gafete PRAIND en este equipo hace falta internet:
 se baja de la nube y **queda guardado en el equipo**. Desde entonces se ve
@@ -33,7 +34,8 @@ sólo guarda los que alguien abrió.
 ## Pasos — cargar o reemplazar el gafete PRAIND
 
 1. En **Detalles del contratista**, pulse **Cargar gafete PRAIND** (o **Reemplazar
-   gafete PRAIND** si ya tiene uno).
+   gafete PRAIND** si ya tiene uno), debajo de los datos. Ahí mismo aparece el
+   campo para el enlace.
 2. Escanee el QR del gafete PRAIND con el lector y pegue el enlace en **Enlace del
    QR del gafete PRAIND** (empieza con `https://prd.pw/`).
 3. Pulse **Buscar gafete PRAIND**. Aparece de quién es el gafete PRAIND:

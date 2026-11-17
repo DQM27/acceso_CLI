@@ -94,28 +94,55 @@ export default function DetalleContratista({
   return (
     <Modal titulo="Detalles del contratista" onCerrar={onCerrar} ancho="56rem">
       <div className="detalle-contratista">
-        <dl className="detalle-contratista-datos">
-          <dt>Nombre</dt>
-          <dd>{contratista.nombre}</dd>
-          <dt>Cédula</dt>
-          <dd>{contratista.cedula}</dd>
-          <dt>Empresa</dt>
-          <dd>{contratista.empresa_nombre}</dd>
-          <dt>Tipo de ingreso</dt>
-          <dd>{textoTipoIngreso(contratista.tipo_ingreso)}</dd>
-          <dt>Vence PRAIND</dt>
-          <dd>
-            {contratista.fecha_vencimiento_praind
-              ? textoFechaDDMMYYYY(contratista.fecha_vencimiento_praind)
-              : "—"}
-          </dd>
-          {estadoAcceso && (
-            <>
-              <dt>Estado</dt>
-              <dd style={{ color: colorEstadoAcceso(contratista.estado_acceso) }}>{estadoAcceso}</dd>
-            </>
+        {/* Datos arriba; acciones (o la carga del gafete PRAIND) abajo, en el
+            espacio libre de la columna: el modal no crece ni hace scroll. */}
+        <div className="detalle-contratista-izquierda">
+          <dl className="detalle-contratista-datos">
+            <dt>Nombre</dt>
+            <dd>{contratista.nombre}</dd>
+            <dt>Cédula</dt>
+            <dd>{contratista.cedula}</dd>
+            <dt>Empresa</dt>
+            <dd>{contratista.empresa_nombre}</dd>
+            <dt>Tipo de ingreso</dt>
+            <dd>{textoTipoIngreso(contratista.tipo_ingreso)}</dd>
+            <dt>Vence PRAIND</dt>
+            <dd>
+              {contratista.fecha_vencimiento_praind ? textoFechaDDMMYYYY(contratista.fecha_vencimiento_praind) : "—"}
+            </dd>
+            {estadoAcceso && (
+              <>
+                <dt>Estado</dt>
+                <dd style={{ color: colorEstadoAcceso(contratista.estado_acceso) }}>{estadoAcceso}</dd>
+              </>
+            )}
+          </dl>
+
+          {cargando ? (
+            <CargaDeCarne
+              contratista={contratista}
+              onCancelar={() => setCargando(false)}
+              onCargado={() => {
+                setCargando(false);
+                setVista({ tipo: "cargando" });
+                setVersion((v) => v + 1);
+              }}
+            />
+          ) : (
+            <div className="detalle-contratista-acciones">
+              {permisos?.puede_cargar && (
+                <button type="button" className="boton boton-icono" onClick={() => setCargando(true)}>
+                  <QrCode size={16} aria-hidden="true" />
+                  {vista.tipo === "imagen" ? "Reemplazar gafete PRAIND" : "Cargar gafete PRAIND"}
+                </button>
+              )}
+              <button type="button" className="boton boton-primario boton-icono" onClick={onEditar}>
+                <Pencil size={16} aria-hidden="true" />
+                Editar
+              </button>
+            </div>
           )}
-        </dl>
+        </div>
 
         <div className="detalle-contratista-carne" aria-live="polite">
           {vista.tipo === "cargando" && <p className="texto-tenue">Cargando gafete PRAIND…</p>}
@@ -131,38 +158,10 @@ export default function DetalleContratista({
               title="Ver en grande"
             >
               <img src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
-              <span className="detalle-contratista-pista">Clic para ampliar</span>
             </button>
           )}
         </div>
       </div>
-
-      {cargando && (
-        <CargaDeCarne
-          contratista={contratista}
-          onCancelar={() => setCargando(false)}
-          onCargado={() => {
-            setCargando(false);
-            setVista({ tipo: "cargando" });
-            setVersion((v) => v + 1);
-          }}
-        />
-      )}
-
-      {!cargando && (
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-          {permisos?.puede_cargar && (
-            <button type="button" className="boton boton-icono" onClick={() => setCargando(true)}>
-              <QrCode size={16} aria-hidden="true" />
-              {vista.tipo === "imagen" ? "Reemplazar gafete PRAIND" : "Cargar gafete PRAIND"}
-            </button>
-          )}
-          <button type="button" className="boton boton-primario boton-icono" onClick={onEditar}>
-            <Pencil size={16} aria-hidden="true" />
-            Editar
-          </button>
-        </div>
-      )}
 
       {/* En un portal al <body>: adentro del modal de detalles, la animación
           de entrada (transform) hacía que esta ventana se midiera contra ese
@@ -171,7 +170,11 @@ export default function DetalleContratista({
         vista.tipo === "imagen" &&
         createPortal(
           <Modal titulo={`Gafete PRAIND · ${contratista.nombre}`} onCerrar={() => setAmpliado(false)} ancho="60rem">
-            <img className="detalle-contratista-ampliado" src={vista.url} alt={`Gafete PRAIND de ${contratista.nombre}`} />
+            <img
+              className="detalle-contratista-ampliado"
+              src={vista.url}
+              alt={`Gafete PRAIND de ${contratista.nombre}`}
+            />
           </Modal>,
           document.body,
         )}
@@ -266,7 +269,14 @@ function CargaDeCarne({
         }}
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "0.5rem",
+          flexWrap: "wrap",
+        }}
+      >
         <button type="button" className="boton boton-icono" onClick={() => archivo.current?.click()} disabled={ocupado}>
           <Upload size={16} aria-hidden="true" />
           Elegir imagen…
