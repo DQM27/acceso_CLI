@@ -1572,3 +1572,75 @@ textarea::placeholder {
   align-items: center;
   gap: 0.5rem;
 }
+
+/* Tarjetas de opción (ventana de un gafete): elegir UNA respuesta con su
+   explicación corta. La elegida queda con el color de acento. */
+.opciones-tarjeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.6rem;
+}
+
+.opcion-tarjeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radio);
+  border: 1px solid var(--borde);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duracion) ease,
+    background-color var(--duracion) ease;
+}
+
+.opcion-tarjeta:hover:not([aria-pressed="true"]) {
+  border-color: var(--borde-fuerte);
+}
+
+.opcion-tarjeta[aria-pressed="true"] {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+
+.opcion-tarjeta-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+
+.opcion-tarjeta-texto {
+  font-size: var(--tam-sm);
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* Pie de la ventana de un gafete: salir a la izquierda, la acción a la
+   derecha. */
+.pie-acciones {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--borde);
+}
+
+.boton-discreto {
+  border: none;
+  background: none;
+  padding: 0.35rem 0.25rem;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.boton-discreto:hover {
+  color: var(--texto);
+}

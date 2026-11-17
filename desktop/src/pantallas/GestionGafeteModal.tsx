@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { CircleHelp, HandCoins, Loader2, RotateCcw, UserSearch } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { useBusquedaContratistas } from "../componentes/useBusquedaContratistas";
+import { useNombreUsuario } from "../contexto/SesionContexto";
 import {
   listarEncargadosRutaSeleccionables,
   nombrePortador,
@@ -13,17 +15,18 @@ import {
   verificarCheckInVisita,
 } from "../api";
 import type { ContratistaResumen, EncargadoRuta, GafeteResumen, ResponsableGafete } from "../api";
+import { fechaLocalYMD, textoFechaDDMMYYYY } from "../tiempo";
 import { LARGO_MAXIMO_DETALLE, detalleLimpio, textoEstado } from "./GestionGafeteModal.logica";
 
-/** Paso en que está la ventana. */
-type Paso =
-  | { tipo: "acciones" }
-  /** Reportar perdido: primero la pregunta, después quién o el detalle. */
-  | { tipo: "pregunta" }
-  | { tipo: "con_responsable" }
-  | { tipo: "sin_responsable" }
-  | { tipo: "pago" }
-  | { tipo: "recuperar" };
+/** Qué se va a hacer con el gafete, según la tarjeta elegida. */
+type Accion = "con_responsable" | "sin_responsable" | "pago" | "recuperar";
+
+const NOMBRE_TIPO: Record<GafeteResumen["tipo"], string> = {
+  Contratista: "Contratista",
+  Visita: "Visita",
+  ProvisionalKof: "Provisional KOF",
+  Proveedor: "Proveedor",
+};
 
 /** El responsable elegido, con el nombre para mostrarlo antes de confirmar. */
 interface ResponsableElegido {
@@ -32,18 +35,19 @@ interface ResponsableElegido {
 }
 
 /**
- * Acciones de un gafete puntual. Cada una es un reporte que queda a nombre
- * de quien lo hace, con su detalle en texto libre:
+ * Ventana de un gafete. Cada acción es un reporte que queda a nombre de quien
+ * lo hace, con su detalle en texto libre. Las opciones son tarjetas: se elige
+ * una y lo que pide aparece debajo, sin cambiar de pantalla; el pie siempre
+ * tiene "Cancelar" y la acción, que se habilita cuando el reporte está
+ * completo.
  *
- * - Disponible → **Reportar perdido**: "¿Se sabe a quién se le asignó?".
- *   Sí: se busca a la persona (contratista por cédula o nombre, visita por
- *   cédula, KOF del catálogo de encargados) y el detalle es opcional. No: el
- *   detalle es obligatorio (qué pasó, quién entregó el turno). Proveedor no
- *   tiene catálogo de personas: va directo a "no se sabe".
- * - Perdido con responsable → **Registrar pago**: se le quita la marca, el
- *   gafete sigue perdido hasta que se reimprima.
- * - Perdido → **Recuperar**: apareció o llegó reimpreso; vuelve a estar
- *   disponible. Detalle obligatorio.
+ * - Disponible → abre directo en **Reportar perdido**: "Sé quién lo tenía"
+ *   (contratista por cédula o nombre, visita por cédula, KOF de la lista de
+ *   encargados; detalle opcional) o "No se sabe" (detalle obligatorio).
+ *   Proveedor no tiene catálogo de personas: sólo "No se sabe".
+ * - Perdido → **Registrar pago** (si tiene responsable: se le quita la marca,
+ *   el gafete sigue perdido) o **Recuperar** (apareció o llegó reimpreso;
+ *   detalle obligatorio).
  */
 export default function GestionGafeteModal({
   gafete,
@@ -54,7 +58,19 @@ export default function GestionGafeteModal({
   onCambiado: () => void;
   onCerrar: () => void;
 }) {
-  const [paso, setPaso] = useState<Paso>({ tipo: "acciones" });
+  const esVisita = gafete.tipo === "Visita";
+  const esProvisionalKof = gafete.tipo === "ProvisionalKof";
+  const esProveedor = gafete.tipo === "Proveedor";
+  const esContratista = gafete.tipo === "Contratista";
+  const perdido = gafete.estado === "Perdido";
+  const responsableActual = nombrePortador(gafete);
+  const nombreUsuario = useNombreUsuario();
+
+  // Si sólo hay una opción, ya viene elegida.
+  const [accion, setAccion] = useState<Accion | null>(() => {
+    if (!perdido) return esProveedor ? "sin_responsable" : null;
+    return responsableActual ? null : "recuperar";
+  });
   const [elegido, setElegido] = useState<ResponsableElegido | null>(null);
   const [detalle, setDetalle] = useState("");
   const [filtro, setFiltro] = useState("");
@@ -62,13 +78,7 @@ export default function GestionGafeteModal({
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const esVisita = gafete.tipo === "Visita";
-  const esProvisionalKof = gafete.tipo === "ProvisionalKof";
-  const esProveedor = gafete.tipo === "Proveedor";
-  const esContratista = gafete.tipo === "Contratista";
-  const responsableActual = nombrePortador(gafete);
-  const buscandoContratista = paso.tipo === "con_responsable" && esContratista && !elegido;
-
+  const buscandoContratista = accion === "con_responsable" && esContratista && !elegido;
   // `cargandoResultados`: señal chica mientras pasa la espera antes de
   // buscar (docs/pendientes.md, "Spinner durante debounce de búsqueda").
   const { resultados, buscando: cargandoResultados } = useBusquedaContratistas(
@@ -101,14 +111,14 @@ export default function GestionGafeteModal({
     (encargado) => etiquetaEncargado(encargado).toLowerCase() === encargadoTexto.trim().toLowerCase(),
   );
 
-  function irA(nuevo: Paso) {
+  function elegirAccion(nueva: Accion) {
+    if (nueva === accion) return;
     setError(null);
-    setDetalle("");
     setElegido(null);
     setFiltro("");
     setCedulaVisita("");
     setEncargadoTexto("");
-    setPaso(nuevo);
+    setAccion(nueva);
   }
 
   function elegirContratista(contratista: ContratistaResumen) {
@@ -145,11 +155,40 @@ export default function GestionGafeteModal({
     });
   }
 
-  async function enviar(accion: () => Promise<void>) {
+  const detalleEnviado = detalleLimpio(detalle);
+  const detalleObligatorio = accion === "sin_responsable" || accion === "recuperar";
+
+  const listo =
+    accion !== null &&
+    (accion === "con_responsable" ? elegido !== null : true) &&
+    (!detalleObligatorio || detalleEnviado !== null);
+
+  const textoAccion: Record<Accion, string> = {
+    con_responsable: "Reportar perdido",
+    sin_responsable: "Reportar perdido",
+    pago: "Registrar pago",
+    recuperar: "Recuperar",
+  };
+
+  async function confirmar() {
+    if (!accion || !listo) return;
     setError(null);
     setEnviando(true);
     try {
-      await accion();
+      switch (accion) {
+        case "con_responsable":
+          await reportarGafetePerdido(gafete.id, elegido?.responsable ?? null, detalleEnviado);
+          break;
+        case "sin_responsable":
+          await reportarGafetePerdido(gafete.id, null, detalleEnviado);
+          break;
+        case "pago":
+          await registrarPagoGafete(gafete.id, detalleEnviado);
+          break;
+        case "recuperar":
+          await recuperarGafete(gafete.id, detalleEnviado ?? "");
+          break;
+      }
       onCambiado();
     } catch (error) {
       setError(String(error));
@@ -157,123 +196,90 @@ export default function GestionGafeteModal({
     }
   }
 
-  const detalleEnviado = detalleLimpio(detalle);
-
-  const campoDetalle = (etiqueta: string, obligatorio: boolean) => (
-    <label className="campo">
-      {etiqueta}
-      {obligatorio ? "" : " (opcional)"}
-      <textarea
-        className="sin-mayuscula"
-        value={detalle}
-        maxLength={LARGO_MAXIMO_DETALLE}
-        onChange={(evento) => setDetalle(evento.target.value)}
-        autoFocus={!(paso.tipo === "con_responsable" && !elegido)}
-        placeholder={
-          paso.tipo === "sin_responsable"
-            ? "Ej.: Recibo el turno sin el gafete; me entrega Fulano de Tal."
-            : paso.tipo === "recuperar"
-              ? "Ej.: Lo encontró Fulano en el parqueo / llegó reimpreso."
-              : "Lo que haga falta dejar escrito."
-        }
-      />
-    </label>
-  );
-
-  const botonesConfirmar = (texto: string, deshabilitado: boolean, accion: () => Promise<void>) => (
-    <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-      <button type="button" className="boton" disabled={enviando} onClick={() => irA({ tipo: "acciones" })}>
-        Volver
-      </button>
-      <button
-        type="button"
-        className="boton boton-primario"
-        disabled={enviando || deshabilitado}
-        onClick={() => enviar(accion)}
-      >
-        {texto}
-      </button>
-    </div>
-  );
+  const perdidoDesde = gafete.fecha_marcado_perdido
+    ? textoFechaDDMMYYYY(fechaLocalYMD(gafete.fecha_marcado_perdido))
+    : null;
 
   return (
-    <Modal titulo={`Gafete ${String(gafete.numero).padStart(2, "0")}`} onCerrar={onCerrar}>
+    <Modal
+      titulo={`Gafete ${String(gafete.numero).padStart(2, "0")} · ${NOMBRE_TIPO[gafete.tipo]}`}
+      onCerrar={onCerrar}
+      ancho="36rem"
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          Tipo: <strong style={{ color: "var(--texto)" }}>{gafete.tipo}</strong>
-          {" · "}
-          Estado: <strong style={{ color: "var(--texto)" }}>{textoEstado(gafete.estado)}</strong>
-        </p>
-        {gafete.estado === "Perdido" && (
-          <p style={{ margin: 0, color: "var(--muted)" }}>
-            Responsable:{" "}
-            <strong style={{ color: "var(--texto)" }}>{responsableActual ?? "sin responsable"}</strong>
-          </p>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <span
+            className="chip"
+            style={{ ["--chip-color" as string]: perdido ? "var(--error)" : "var(--exito)" }}
+          >
+            {textoEstado(gafete.estado)}
+          </span>
+          {perdido && (
+            <span style={{ color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
+              {perdidoDesde ? `Desde el ${perdidoDesde} · ` : ""}
+              {responsableActual ? `Responsable: ${responsableActual}` : "Sin responsable"}
+            </span>
+          )}
+        </div>
 
-        {error && (
-          <p className="login-error" role="alert">
-            {error}
-          </p>
-        )}
+        <div>
+          <h3 style={{ margin: "0 0 0.2rem", fontSize: "var(--tam-base)" }}>
+            {perdido ? "¿Qué pasó con el gafete?" : "Reportar perdido"}
+          </h3>
+          {!perdido && (
+            <p style={{ margin: 0, color: "var(--muted)" }}>¿Se sabe a quién se le asignó?</p>
+          )}
+        </div>
 
-        {paso.tipo === "acciones" && gafete.estado === "Disponible" && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="boton"
-              onClick={() => irA(esProveedor ? { tipo: "sin_responsable" } : { tipo: "pregunta" })}
-            >
-              Reportar perdido…
-            </button>
-          </div>
-        )}
+        <div className="opciones-tarjeta" role="group" aria-label="Opciones">
+          {!perdido && !esProveedor && (
+            <Tarjeta
+              activa={accion === "con_responsable"}
+              onElegir={() => elegirAccion("con_responsable")}
+              icono={<UserSearch size={16} aria-hidden="true" />}
+              titulo="Sé quién lo tenía"
+              texto="Búsquela; queda marcada hasta que pague."
+            />
+          )}
+          {!perdido && (
+            <Tarjeta
+              activa={accion === "sin_responsable"}
+              onElegir={() => elegirAccion("sin_responsable")}
+              icono={<CircleHelp size={16} aria-hidden="true" />}
+              titulo="No se sabe"
+              texto="Cuente qué pasó en el detalle."
+            />
+          )}
+          {perdido && responsableActual && (
+            <Tarjeta
+              activa={accion === "pago"}
+              onElegir={() => elegirAccion("pago")}
+              icono={<HandCoins size={16} aria-hidden="true" />}
+              titulo="Registrar pago"
+              texto="Se le quita la marca; sigue perdido hasta que llegue."
+            />
+          )}
+          {perdido && (
+            <Tarjeta
+              activa={accion === "recuperar"}
+              onElegir={() => elegirAccion("recuperar")}
+              icono={<RotateCcw size={16} aria-hidden="true" />}
+              titulo="Recuperar"
+              texto="Apareció o llegó reimpreso; vuelve a estar disponible."
+            />
+          )}
+        </div>
 
-        {paso.tipo === "acciones" && gafete.estado === "Perdido" && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {responsableActual && (
-              <button type="button" className="boton" onClick={() => irA({ tipo: "pago" })}>
-                Registrar pago…
-              </button>
-            )}
-            <button type="button" className="boton" onClick={() => irA({ tipo: "recuperar" })}>
-              Recuperar…
-            </button>
-          </div>
-        )}
-
-        {paso.tipo === "pregunta" && (
-          <>
-            <p style={{ margin: 0 }}>¿Se sabe a quién se le asignó?</p>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button type="button" className="boton" onClick={() => irA({ tipo: "con_responsable" })}>
-                Sí, buscar a la persona
-              </button>
-              <button type="button" className="boton" onClick={() => irA({ tipo: "sin_responsable" })}>
-                No se sabe
-              </button>
-              <button type="button" className="boton" onClick={() => irA({ tipo: "acciones" })}>
-                Volver
-              </button>
-            </div>
-          </>
-        )}
-
-        {paso.tipo === "con_responsable" && elegido && (
+        {accion === "con_responsable" && elegido && (
           <p style={{ margin: 0, color: "var(--muted)" }}>
             Se le asignó a: <strong style={{ color: "var(--texto)" }}>{elegido.nombre}</strong>{" "}
-            <button
-              type="button"
-              className="boton"
-              style={{ padding: "0.1rem 0.5rem", fontSize: "var(--tam-xs)" }}
-              onClick={() => setElegido(null)}
-            >
+            <button type="button" className="boton-discreto" onClick={() => setElegido(null)}>
               Cambiar
             </button>
           </p>
         )}
 
-        {paso.tipo === "con_responsable" && !elegido && esVisita && (
+        {accion === "con_responsable" && !elegido && esVisita && (
           <form
             style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
             onSubmit={(evento) => {
@@ -296,7 +302,7 @@ export default function GestionGafeteModal({
           </form>
         )}
 
-        {paso.tipo === "con_responsable" && !elegido && esProvisionalKof && (
+        {accion === "con_responsable" && !elegido && esProvisionalKof && (
           <form
             style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
             onSubmit={(evento) => {
@@ -326,7 +332,7 @@ export default function GestionGafeteModal({
           </form>
         )}
 
-        {paso.tipo === "con_responsable" && !elegido && esContratista && (
+        {accion === "con_responsable" && !elegido && esContratista && (
           <div ref={campoRef}>
             <label className="campo">
               Cédula o nombre del contratista
@@ -376,61 +382,83 @@ export default function GestionGafeteModal({
           </div>
         )}
 
-        {paso.tipo === "con_responsable" && (
-          <>
-            {campoDetalle("Detalle", false)}
-            {botonesConfirmar("Reportar perdido", !elegido, () =>
-              reportarGafetePerdido(gafete.id, elegido?.responsable ?? null, detalleEnviado),
-            )}
-          </>
+        {accion !== null && (
+          <label className="campo">
+            <span style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Detalle{detalleObligatorio ? "" : " (opcional)"}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {detalle.length} / {LARGO_MAXIMO_DETALLE}
+              </span>
+            </span>
+            <textarea
+              className="sin-mayuscula"
+              value={detalle}
+              maxLength={LARGO_MAXIMO_DETALLE}
+              onChange={(evento) => setDetalle(evento.target.value)}
+              autoFocus={accion !== "con_responsable"}
+              placeholder={
+                accion === "sin_responsable"
+                  ? "Ej.: Recibo el turno sin el gafete; me entrega Fulano de Tal."
+                  : accion === "recuperar"
+                    ? "Ej.: Lo encontró Fulano en el parqueo / llegó reimpreso."
+                    : accion === "pago"
+                      ? "Ej.: Número de recibo."
+                      : "Lo que haga falta dejar escrito."
+              }
+            />
+          </label>
         )}
 
-        {paso.tipo === "sin_responsable" && (
-          <>
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Nadie queda marcado. Cuente qué pasó: el reporte queda a su nombre.
-            </p>
-            {campoDetalle("Detalle", true)}
-            {botonesConfirmar("Reportar perdido", !detalleEnviado, () =>
-              reportarGafetePerdido(gafete.id, null, detalleEnviado),
-            )}
-          </>
+        {error && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
         )}
 
-        {paso.tipo === "pago" && (
-          <>
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Se le quita la marca a {responsableActual}. El gafete sigue perdido (no se puede
-              asignar) hasta que se recupere o llegue reimpreso.
-            </p>
-            {campoDetalle("Detalle", false)}
-            {botonesConfirmar("Registrar pago", false, () =>
-              registrarPagoGafete(gafete.id, detalleEnviado),
-            )}
-          </>
+        {accion !== null && nombreUsuario && (
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
+            Queda a nombre de: <strong style={{ color: "var(--texto)" }}>{nombreUsuario}</strong>
+          </p>
         )}
 
-        {paso.tipo === "recuperar" && (
-          <>
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              El gafete vuelve a estar disponible
-              {responsableActual ? ` y se le quita la marca a ${responsableActual}` : ""}.
-            </p>
-            {campoDetalle("Detalle", true)}
-            {botonesConfirmar("Recuperar", !detalleEnviado, () =>
-              recuperarGafete(gafete.id, detalleEnviado ?? ""),
-            )}
-          </>
-        )}
-
-        {paso.tipo === "acciones" && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="boton" onClick={onCerrar}>
-              Cerrar
-            </button>
-          </div>
-        )}
+        <div className="pie-acciones">
+          <button type="button" className="boton-discreto" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="boton boton-primario"
+            disabled={enviando || !listo}
+            onClick={confirmar}
+          >
+            {accion ? textoAccion[accion] : perdido ? "Elija una opción" : "Reportar perdido"}
+          </button>
+        </div>
       </div>
     </Modal>
+  );
+}
+
+function Tarjeta({
+  activa,
+  onElegir,
+  icono,
+  titulo,
+  texto,
+}: {
+  activa: boolean;
+  onElegir: () => void;
+  icono: ReactNode;
+  titulo: string;
+  texto: string;
+}) {
+  return (
+    <button type="button" className="opcion-tarjeta" aria-pressed={activa} onClick={onElegir}>
+      <span className="opcion-tarjeta-titulo">
+        {icono}
+        {titulo}
+      </span>
+      <span className="opcion-tarjeta-texto">{texto}</span>
+    </button>
   );
 }

@@ -23,22 +23,24 @@ Cualquier usuario con sesión abierta en el escritorio.
 ## Dónde
 
 **Gafetes**, en el menú lateral. **Doble clic** en la fila del gafete (o el
-botón de la columna **Acciones**) abre sus acciones. Lo que se puede hacer
-depende de su estado:
+botón de la columna **Acciones**) abre la ventana **Gafete NN · Tipo**. Las
+opciones son tarjetas: se elige una y lo que pide aparece debajo. Abajo,
+**Cancelar** sale sin hacer nada y el botón de la derecha confirma; se
+habilita cuando el reporte está completo. Antes de confirmar, la ventana
+muestra **Queda a nombre de** con su usuario.
 
-| Estado | Acciones |
+| Estado | Opciones |
 |---|---|
-| Disponible | **Reportar perdido…** |
-| Perdido con responsable | **Registrar pago…** y **Recuperar…** |
-| Perdido sin responsable | **Recuperar…** |
+| Disponible | **Sé quién lo tenía** y **No se sabe** (reportar perdido) |
+| Perdido con responsable | **Registrar pago** y **Recuperar** |
+| Perdido sin responsable | **Recuperar** |
 
 ## Pasos — reportar un gafete perdido
 
 1. En **Gafetes**, elija el tipo y busque el número.
-2. Haga **doble clic** en la fila. Se abre la ventana **Gafete NN**.
-3. Pulse **Reportar perdido…**. La ventana pregunta **¿Se sabe a quién se
-   le asignó?**
-4. **Sí, buscar a la persona**:
+2. Haga **doble clic** en la fila. La ventana abre en **Reportar perdido** y
+   pregunta **¿Se sabe a quién se le asignó?**
+3. **Sé quién lo tenía**:
    - **Contratista**: escriba la cédula o el nombre y elija a la persona de
      la lista.
    - **Provisional KOF**: escriba el nombre o código del encargado y pulse
@@ -47,11 +49,11 @@ depende de su estado:
 
    El **detalle** es opcional. Pulse **Reportar perdido**. El gafete queda
    **Perdido** y esa persona queda marcada.
-5. **No se sabe**: escriba el **detalle** (obligatorio), por ejemplo
+4. **No se sabe**: escriba el **detalle** (obligatorio), por ejemplo
    *"Recibo el turno sin el gafete 07; me entrega Fulano de Tal"*, y pulse
    **Reportar perdido**. El gafete queda **Perdido** sin responsable.
 
-Los gafetes de **proveedor** van directo a "no se sabe": no hay catálogo de
+Los gafetes de **proveedor** solo tienen **No se sabe**: no hay catálogo de
 personas donde buscar.
 
 ### Qué pasa después
@@ -66,7 +68,7 @@ Cuando el responsable paga el gafete, se le quita la marca aunque el gafete
 nuevo todavía no exista:
 
 1. Busque el gafete (estado **Perdido**) y ábralo.
-2. Pulse **Registrar pago…**, escriba un detalle si hace falta (por
+2. Elija **Registrar pago**, escriba un detalle si hace falta (por
    ejemplo, el número de recibo) y pulse **Registrar pago**.
 3. La persona deja de deber el gafete. El gafete **sigue Perdido**: no se
    puede asignar hasta que llegue reimpreso o aparezca.
@@ -76,7 +78,7 @@ nuevo todavía no exista:
 Cuando el gafete aparece o llega reimpreso:
 
 1. Busque el gafete (estado **Perdido**) y ábralo.
-2. Pulse **Recuperar…** y escriba el **detalle** (obligatorio), por
+2. Elija **Recuperar** y escriba el **detalle** (obligatorio), por
    ejemplo *"Lo encontró Fulano en el parqueo"* o *"Llegó reimpreso"*.
 3. Pulse **Recuperar**. El gafete vuelve a **Disponible**. Si todavía tenía
    responsable, se le quita la marca.
