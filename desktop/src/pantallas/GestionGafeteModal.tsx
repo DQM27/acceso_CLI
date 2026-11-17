@@ -16,7 +16,7 @@ import {
 } from "../api";
 import type { ContratistaResumen, EncargadoRuta, GafeteResumen, ResponsableGafete } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY } from "../tiempo";
-import { LARGO_MAXIMO_DETALLE, detalleLimpio, textoEstado } from "./GestionGafeteModal.logica";
+import { LARGO_MAXIMO_DETALLE, detalleLimpio } from "./GestionGafeteModal.logica";
 
 /** Qué se va a hacer con el gafete, según la tarjeta elegida. */
 type Accion = "con_responsable" | "sin_responsable" | "pago" | "recuperar";
@@ -41,10 +41,11 @@ interface ResponsableElegido {
  * tiene "Cancelar" y la acción, que se habilita cuando el reporte está
  * completo.
  *
- * - Disponible → abre directo en **Reportar perdido**: "Sé quién lo tenía"
+ * - Disponible → abre directo en **Reportar perdido**: "Responsable conocido"
  *   (contratista por cédula o nombre, visita por cédula, KOF de la lista de
- *   encargados; detalle opcional) o "No se sabe" (detalle obligatorio).
- *   Proveedor no tiene catálogo de personas: sólo "No se sabe".
+ *   encargados; detalle opcional) o "Responsable desconocido" (detalle
+ *   obligatorio). Proveedor no tiene catálogo de personas: sólo
+ *   "Responsable desconocido".
  * - Perdido → **Registrar pago** (si tiene responsable: se le quita la marca,
  *   el gafete sigue perdido) o **Recuperar** (apareció o llegó reimpreso;
  *   detalle obligatorio).
@@ -196,40 +197,36 @@ export default function GestionGafeteModal({
     }
   }
 
+  const numeroGafete = String(gafete.numero).padStart(2, "0");
   const perdidoDesde = gafete.fecha_marcado_perdido
     ? textoFechaDDMMYYYY(fechaLocalYMD(gafete.fecha_marcado_perdido))
     : null;
 
   return (
     <Modal
-      titulo={`Gafete ${String(gafete.numero).padStart(2, "0")} · ${NOMBRE_TIPO[gafete.tipo]}`}
+      titulo={
+        perdido
+          ? `Gafete ${numeroGafete} perdido · ${NOMBRE_TIPO[gafete.tipo]}`
+          : `Reportar perdido · Gafete ${numeroGafete} · ${NOMBRE_TIPO[gafete.tipo]}`
+      }
       onCerrar={onCerrar}
       ancho="36rem"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-          <span
-            className="chip"
-            style={{ ["--chip-color" as string]: perdido ? "var(--error)" : "var(--exito)" }}
-          >
-            {textoEstado(gafete.estado)}
-          </span>
-          {perdido && (
-            <span style={{ color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
-              {perdidoDesde ? `Desde el ${perdidoDesde} · ` : ""}
-              {responsableActual ? `Responsable: ${responsableActual}` : "Sin responsable"}
-            </span>
-          )}
-        </div>
-
-        <div>
-          <h3 style={{ margin: "0 0 0.2rem", fontSize: "var(--tam-base)" }}>
-            {perdido ? "¿Qué pasó con el gafete?" : "Reportar perdido"}
-          </h3>
-          {!perdido && (
-            <p style={{ margin: 0, color: "var(--muted)" }}>¿Se sabe a quién se le asignó?</p>
-          )}
-        </div>
+        {perdido ? (
+          <p style={{ margin: 0, color: "var(--muted)" }}>
+            {perdidoDesde ? `Desde el ${perdidoDesde} · ` : ""}
+            {responsableActual ? (
+              <>
+                Responsable: <strong style={{ color: "var(--texto)" }}>{responsableActual}</strong>
+              </>
+            ) : (
+              "Sin responsable"
+            )}
+          </p>
+        ) : (
+          <p style={{ margin: 0, color: "var(--muted)" }}>¿Se sabe a quién se le asignó?</p>
+        )}
 
         <div className="opciones-tarjeta" role="group" aria-label="Opciones">
           {!perdido && !esProveedor && (
@@ -237,8 +234,8 @@ export default function GestionGafeteModal({
               activa={accion === "con_responsable"}
               onElegir={() => elegirAccion("con_responsable")}
               icono={<UserSearch size={16} aria-hidden="true" />}
-              titulo="Sé quién lo tenía"
-              texto="Búsquela; queda marcada hasta que pague."
+              titulo="Responsable conocido"
+              texto="Se registra a la persona que lo tenía."
             />
           )}
           {!perdido && (
@@ -246,8 +243,8 @@ export default function GestionGafeteModal({
               activa={accion === "sin_responsable"}
               onElegir={() => elegirAccion("sin_responsable")}
               icono={<CircleHelp size={16} aria-hidden="true" />}
-              titulo="No se sabe"
-              texto="Cuente qué pasó en el detalle."
+              titulo="Responsable desconocido"
+              texto="Se registra el detalle de lo ocurrido."
             />
           )}
           {perdido && responsableActual && (
@@ -256,7 +253,7 @@ export default function GestionGafeteModal({
               onElegir={() => elegirAccion("pago")}
               icono={<HandCoins size={16} aria-hidden="true" />}
               titulo="Registrar pago"
-              texto="Se le quita la marca; sigue perdido hasta que llegue."
+              texto="El responsable queda libre; el gafete sigue perdido."
             />
           )}
           {perdido && (
@@ -265,7 +262,7 @@ export default function GestionGafeteModal({
               onElegir={() => elegirAccion("recuperar")}
               icono={<RotateCcw size={16} aria-hidden="true" />}
               titulo="Recuperar"
-              texto="Apareció o llegó reimpreso; vuelve a estar disponible."
+              texto="El gafete vuelve a estar disponible."
             />
           )}
         </div>
@@ -398,12 +395,12 @@ export default function GestionGafeteModal({
               autoFocus={accion !== "con_responsable"}
               placeholder={
                 accion === "sin_responsable"
-                  ? "Ej.: Recibo el turno sin el gafete; me entrega Fulano de Tal."
+                  ? "Ej.: Se recibe el turno sin el gafete; entrega Fulano de Tal."
                   : accion === "recuperar"
-                    ? "Ej.: Lo encontró Fulano en el parqueo / llegó reimpreso."
+                    ? "Ej.: Encontrado en el parqueo / llegó reimpreso."
                     : accion === "pago"
                       ? "Ej.: Número de recibo."
-                      : "Lo que haga falta dejar escrito."
+                      : "Observaciones."
               }
             />
           </label>
@@ -417,7 +414,7 @@ export default function GestionGafeteModal({
 
         {accion !== null && nombreUsuario && (
           <p style={{ margin: 0, color: "var(--muted)", fontSize: "var(--tam-sm)" }}>
-            Queda a nombre de: <strong style={{ color: "var(--texto)" }}>{nombreUsuario}</strong>
+            Reportado por: <strong style={{ color: "var(--texto)" }}>{nombreUsuario}</strong>
           </p>
         )}
 

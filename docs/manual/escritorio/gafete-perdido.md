@@ -23,15 +23,16 @@ Cualquier usuario con sesión abierta en el escritorio.
 ## Dónde
 
 **Gafetes**, en el menú lateral. **Doble clic** en la fila del gafete (o el
-botón de la columna **Acciones**) abre la ventana **Gafete NN · Tipo**. Las
-opciones son tarjetas: se elige una y lo que pide aparece debajo. Abajo,
+botón de la columna **Acciones**) abre la ventana del gafete: **Reportar
+perdido · Gafete NN · Tipo** si está disponible, **Gafete NN perdido · Tipo**
+si ya está perdido. Las opciones son tarjetas: se elige una y lo que pide aparece debajo. Abajo,
 **Cancelar** sale sin hacer nada y el botón de la derecha confirma; se
 habilita cuando el reporte está completo. Antes de confirmar, la ventana
-muestra **Queda a nombre de** con su usuario.
+muestra **Reportado por** con su usuario.
 
 | Estado | Opciones |
 |---|---|
-| Disponible | **Sé quién lo tenía** y **No se sabe** (reportar perdido) |
+| Disponible | **Responsable conocido** y **Responsable desconocido** (reportar perdido) |
 | Perdido con responsable | **Registrar pago** y **Recuperar** |
 | Perdido sin responsable | **Recuperar** |
 
@@ -40,7 +41,7 @@ muestra **Queda a nombre de** con su usuario.
 1. En **Gafetes**, elija el tipo y busque el número.
 2. Haga **doble clic** en la fila. La ventana abre en **Reportar perdido** y
    pregunta **¿Se sabe a quién se le asignó?**
-3. **Sé quién lo tenía**:
+3. **Responsable conocido**:
    - **Contratista**: escriba la cédula o el nombre y elija a la persona de
      la lista.
    - **Provisional KOF**: escriba el nombre o código del encargado y pulse
@@ -49,12 +50,12 @@ muestra **Queda a nombre de** con su usuario.
 
    El **detalle** es opcional. Pulse **Reportar perdido**. El gafete queda
    **Perdido** y esa persona queda marcada.
-4. **No se sabe**: escriba el **detalle** (obligatorio), por ejemplo
-   *"Recibo el turno sin el gafete 07; me entrega Fulano de Tal"*, y pulse
+4. **Responsable desconocido**: escriba el **detalle** (obligatorio), por
+   ejemplo *"Se recibe el turno sin el gafete 07; entrega Fulano de Tal"*, y pulse
    **Reportar perdido**. El gafete queda **Perdido** sin responsable.
 
-Los gafetes de **proveedor** solo tienen **No se sabe**: no hay catálogo de
-personas donde buscar.
+Los gafetes de **proveedor** solo tienen **Responsable desconocido**: no hay
+catálogo de personas donde buscar.
 
 ### Qué pasa después
 
