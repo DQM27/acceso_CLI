@@ -88,7 +88,7 @@ describe("textoCruce", () => {
         parecido: "seis_nueve",
       }),
     ).toBe(
-      "El 06 figura asignado a Juan Pérez y se contó; falta el 09. Revise qué gafete tiene puesto Juan Pérez: pudo digitarse el 06 en vez del 09.",
+      "El 06 figura asignado a Juan Pérez y se contó; falta el 09. Revise qué gafete se le entregó a Juan Pérez: pudo digitarse el 06 en vez del 09.",
     );
   });
 });

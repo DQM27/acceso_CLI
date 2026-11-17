@@ -100,7 +100,7 @@ export function avisosParaRevisar(resultado: ResultadoConteo): string[] {
 export function textoCruce(cruce: PosibleCruce): string {
   const contado = textoNumero(cruce.contado.numero);
   const faltante = textoNumero(cruce.faltante);
-  return `El ${contado} figura asignado a ${cruce.contado.nombre} y se contó; falta el ${faltante}. Revise qué gafete tiene puesto ${cruce.contado.nombre}: pudo digitarse el ${contado} en vez del ${faltante}.`;
+  return `El ${contado} figura asignado a ${cruce.contado.nombre} y se contó; falta el ${faltante}. Revise qué gafete se le entregó a ${cruce.contado.nombre}: pudo digitarse el ${contado} en vez del ${faltante}.`;
 }
 
 /** Número de gafete como se ve impreso: dos dígitos mínimo. */

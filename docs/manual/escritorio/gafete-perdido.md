@@ -95,7 +95,7 @@ detalle que se escribió.
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
 | "Escriba el detalle del reporte" | Un reporte sin responsable, o una recuperación, necesita detalle. | Escriba qué pasó. |
-| "El gafete está asignado a un ingreso activo" | Ese gafete lo tiene alguien que está adentro ahora. | Registre primero la salida de esa persona (Ctrl+S). |
+| "Gafete asignado a NOMBRE: registre primero su salida" | Ese gafete lo tiene asignado alguien que está adentro ahora. | Registre primero la salida de esa persona (Ctrl+S). |
 | "El gafete no está en un estado válido para esa operación" | El gafete cambió de estado (quizá desde el otro equipo). | Cierre la ventana y vuelva a abrir el gafete. |
 | "El visitante ya no existe" o un error al buscar la cédula de una visita | No se encontró a esa visita. | Revise la cédula, o repórtelo como "no se sabe" y escriba el nombre en el detalle. |
 

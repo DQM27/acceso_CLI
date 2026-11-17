@@ -157,7 +157,7 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
             "El detalle es demasiado largo (máximo 1000 caracteres)".into()
         }
         GafeteServiceError::GafeteAsignado { nombre } => {
-            format!("El gafete lo tiene puesto {nombre}: registre primero su salida")
+            format!("Gafete asignado a {nombre}: registre primero su salida")
         }
         GafeteServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()

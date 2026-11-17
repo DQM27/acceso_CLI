@@ -558,7 +558,7 @@ pub enum GafeteServiceError {
     /// Alguien que está adentro tiene puesto este gafete (de este mismo
     /// tipo) — reportarlo perdido dejaría el inventario contradiciendo un
     /// movimiento en curso. Se revisa dentro de la misma transacción.
-    #[error("El gafete lo tiene puesto {nombre}")]
+    #[error("Gafete asignado a {nombre}")]
     GafeteAsignado { nombre: String },
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
