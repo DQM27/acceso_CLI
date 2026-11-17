@@ -577,14 +577,23 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   escritas por 2.5.1 (escritorio y móvil, con y sin `-wal`) y que los tests
   de cifrado real (`sqlite3mc_cifra_de_verdad_*`) pasan; quitar
   RUSTSEC-2026-0459 de los tres `audit.toml`.
-- [ ] **Subir Tauri a >= 2.12 por `zip` del actualizador (2026-11-13).**
+- [ ] **PRIORITARIO: subir Tauri a >= 2.12 por `zip` del actualizador
+  (2026-11-13; prioridad subida el 2026-11-17).**
   `tauri-plugin-updater` 2.12 usa `zip` 4.6.1 (RUSTSEC-2026-0367/-0368/
   -0369/-0429, todas de extracción). Ignoradas en
   `desktop/src-tauri/.cargo/audit.toml`: el zip sólo se extrae después de
-  verificar la firma minisign. El arreglo es `tauri-plugin-updater` 2.14.1
+  verificar la firma minisign. El 2026-11-17 salieron dos avisos más contra
+  la misma versión y rompieron `cargo audit` en `test-gui` (PR #276):
+  RUSTSEC-2026-0545 (AES sin código de autenticación; no aplica porque el
+  updater compila `zip` sin `aes-crypto`) y RUSTSEC-2026-0548
+  (`ZipStreamReader`; no aplica porque el updater usa `ZipArchive`). Se
+  ignoraron como excepción temporal, pero ya son seis avisos sobre el mismo
+  crate y cada uno nuevo vuelve a romper el CI del escritorio: hay que
+  hacerlo cuanto antes, en un PR propio, probando el ciclo completo del
+  actualizador (descarga, verificación de firma, instalación) en Windows. El arreglo es `tauri-plugin-updater` 2.14.1
   (`zip` 9), que exige `tauri` >= 2.12 y arrastra `wry` 0.57 y
   `webview2-com` 0.39 (ver el punto de arriba sobre `webview2-com`). Quitar
-  las cuatro líneas al subir.
+  las seis líneas de `zip` del `audit.toml` al subir.
 
 ## Panel web y modelo multi-sitio
 
