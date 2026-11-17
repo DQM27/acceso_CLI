@@ -1,4 +1,11 @@
-import type { LecturaConteo } from "../api";
+import type { LecturaConteo, PosibleCruce } from "../api";
+
+/** Frase de un posible error de digitación al entregar. */
+export function textoCruce(cruce: PosibleCruce): string {
+  const contado = textoNumero(cruce.contado.numero);
+  const faltante = textoNumero(cruce.faltante);
+  return `El ${contado} figura asignado a ${cruce.contado.nombre} y se contó; falta el ${faltante}. Revise qué gafete tiene puesto ${cruce.contado.nombre}: pudo digitarse el ${contado} en vez del ${faltante}.`;
+}
 
 /** Número de gafete como se ve impreso: dos dígitos mínimo. */
 export function textoNumero(numero: number): string {

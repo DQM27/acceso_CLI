@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { avisoLectura, avisoPrevio, parsearNumero, textoNumero } from "./ConteoGafetesModal.logica";
+import {
+  avisoLectura,
+  avisoPrevio,
+  parsearNumero,
+  textoCruce,
+  textoNumero,
+} from "./ConteoGafetesModal.logica";
+
+describe("textoCruce", () => {
+  it("dice qué se contó, qué falta y a quién revisar", () => {
+    expect(
+      textoCruce({
+        contado: { numero: 6, nombre: "Juan Pérez" },
+        faltante: 9,
+        parecido: "seis_nueve",
+      }),
+    ).toBe(
+      "El 06 figura asignado a Juan Pérez y se contó; falta el 09. Revise qué gafete tiene puesto Juan Pérez: pudo digitarse el 06 en vez del 09.",
+    );
+  });
+});
 
 describe("parsearNumero", () => {
   it("acepta números positivos y rechaza lo demás", () => {

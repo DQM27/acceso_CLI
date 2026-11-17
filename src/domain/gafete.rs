@@ -146,6 +146,115 @@ pub struct ResultadoConteo {
     pub perdidos_contados: Vec<i64>,
     /// Perdidos que no se contaron (lo normal: no están).
     pub perdidos: Vec<i64>,
+    /// Posibles errores de digitación al entregar: un asignado que se contó
+    /// junto con un faltante de número parecido (ver [`PosibleCruce`]).
+    pub posibles_cruces: Vec<PosibleCruce>,
+}
+
+/// Al entregar se digitó un número y se dio otro: el 06 figura asignado a
+/// alguien pero se contó, y falta el 09, que es el que esa persona tiene
+/// puesto. Sólo es un aviso para revisar el gafete: los registros no se
+/// corrigen (decisión del usuario, 2026-11-16).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct PosibleCruce {
+    /// El que figura asignado y sin embargo se contó.
+    pub contado: GafeteEnUso,
+    /// El que falta: probablemente el que esa persona tiene puesto.
+    pub faltante: i64,
+    pub parecido: Parecido,
+}
+
+/// Por qué dos números se confunden fácil al digitarlos o leerlos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum Parecido {
+    /// Un solo dígito distinto (17 y 27).
+    UnDigito,
+    /// Los mismos dígitos en otro orden (12 y 21).
+    Invertido,
+    /// Se lee al revés: 6 y 9 cambiados (6 y 9, 16 y 19).
+    SeisNueve,
+}
+
+/// Qué tanto se parecen dos números de gafete, si se parecen. Más alto, más
+/// probable el error.
+pub fn parecido_entre(a: i64, b: i64) -> Option<Parecido> {
+    if a == b {
+        return None;
+    }
+    let (texto_a, texto_b) = (a.to_string(), b.to_string());
+    if texto_a.len() != texto_b.len() {
+        return None;
+    }
+    let girado: String = texto_a
+        .chars()
+        .map(|c| match c {
+            '6' => '9',
+            '9' => '6',
+            otro => otro,
+        })
+        .collect();
+    if girado == texto_b {
+        return Some(Parecido::SeisNueve);
+    }
+    let mut digitos_a: Vec<char> = texto_a.chars().collect();
+    let mut digitos_b: Vec<char> = texto_b.chars().collect();
+    let distintos = digitos_a
+        .iter()
+        .zip(&digitos_b)
+        .filter(|(x, y)| x != y)
+        .count();
+    if distintos == 1 {
+        return Some(Parecido::UnDigito);
+    }
+    digitos_a.sort_unstable();
+    digitos_b.sort_unstable();
+    (digitos_a == digitos_b).then_some(Parecido::Invertido)
+}
+
+/// Empareja cada asignado que se contó con el faltante que más se le
+/// parece, uno con uno, empezando por los parecidos más fuertes. Un
+/// asignado sin faltante parecido no se empareja: su propia sección ya pide
+/// revisar la digitación.
+fn emparejar_cruces(en_uso_contados: &[GafeteEnUso], faltantes: &[i64]) -> Vec<PosibleCruce> {
+    let mut candidatos: Vec<(Parecido, i64, &GafeteEnUso, i64)> = Vec::new();
+    for contado in en_uso_contados {
+        for &faltante in faltantes {
+            if let Some(parecido) = parecido_entre(contado.numero, faltante) {
+                candidatos.push((
+                    parecido,
+                    (contado.numero - faltante).abs(),
+                    contado,
+                    faltante,
+                ));
+            }
+        }
+    }
+    // Primero el parecido más fuerte; a igual parecido, los números más
+    // cercanos; después, por número, para que el resultado sea estable.
+    candidatos.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.numero.cmp(&b.2.numero))
+            .then(a.3.cmp(&b.3))
+    });
+    let mut cruces: Vec<PosibleCruce> = Vec::new();
+    for (parecido, _, contado, faltante) in candidatos {
+        let usado = cruces
+            .iter()
+            .any(|cruce| cruce.contado.numero == contado.numero || cruce.faltante == faltante);
+        if !usado {
+            cruces.push(PosibleCruce {
+                contado: contado.clone(),
+                faltante,
+                parecido,
+            });
+        }
+    }
+    cruces.sort_by_key(|cruce| cruce.contado.numero);
+    cruces
 }
 
 /// Compara los números escritos en el conteo con el catálogo. Los repetidos
@@ -191,6 +300,7 @@ pub fn comprobar_conteo(catalogo: &[GafeteParaConteo], numeros: &[i64]) -> Resul
         .into_iter()
         .filter(|numero| !catalogo.iter().any(|gafete| gafete.numero == *numero))
         .collect();
+    resultado.posibles_cruces = emparejar_cruces(&resultado.en_uso_contados, &resultado.faltantes);
     resultado
 }
 
@@ -243,6 +353,71 @@ mod tests {
         assert_eq!(resultado.no_existen, vec![99]);
         assert_eq!(resultado.perdidos_contados, vec![6]);
         assert_eq!(resultado.perdidos, vec![5]);
+    }
+
+    #[test]
+    fn reconoce_los_numeros_que_se_confunden() {
+        assert_eq!(parecido_entre(6, 9), Some(Parecido::SeisNueve));
+        assert_eq!(parecido_entre(16, 19), Some(Parecido::SeisNueve));
+        assert_eq!(parecido_entre(66, 99), Some(Parecido::SeisNueve));
+        assert_eq!(parecido_entre(12, 21), Some(Parecido::Invertido));
+        assert_eq!(parecido_entre(17, 27), Some(Parecido::UnDigito));
+        assert_eq!(parecido_entre(3, 8), Some(Parecido::UnDigito));
+        assert_eq!(parecido_entre(12, 45), None);
+        assert_eq!(parecido_entre(7, 17), None);
+        assert_eq!(parecido_entre(5, 5), None);
+    }
+
+    /// El caso real: se digitó el 06 al entregar pero se dio el 09.
+    #[test]
+    fn sugiere_el_cruce_de_un_gafete_mal_digitado() {
+        let catalogo = vec![
+            gafete(5, EstadoGafete::Disponible, None),
+            gafete(6, EstadoGafete::Disponible, Some("Juan Pérez")),
+            gafete(8, EstadoGafete::Disponible, None),
+            gafete(9, EstadoGafete::Disponible, None),
+        ];
+
+        let resultado = comprobar_conteo(&catalogo, &[5, 6]);
+
+        assert_eq!(resultado.faltantes, vec![8, 9]);
+        // El 9 gana sobre el 8 (un dígito distinto): 6 y 9 se confunden más.
+        assert_eq!(
+            resultado.posibles_cruces,
+            vec![PosibleCruce {
+                contado: GafeteEnUso {
+                    numero: 6,
+                    nombre: "Juan Pérez".to_string()
+                },
+                faltante: 9,
+                parecido: Parecido::SeisNueve,
+            }]
+        );
+    }
+
+    #[test]
+    fn cada_faltante_se_empareja_una_sola_vez() {
+        let catalogo = vec![
+            gafete(12, EstadoGafete::Disponible, Some("Ana")),
+            gafete(13, EstadoGafete::Disponible, Some("Luis")),
+            gafete(21, EstadoGafete::Disponible, None),
+            gafete(40, EstadoGafete::Disponible, None),
+        ];
+
+        let resultado = comprobar_conteo(&catalogo, &[12, 13]);
+
+        // El 21 va con el 12 (invertido gana a un dígito distinto con el 13),
+        // y el 13 no tiene otro faltante parecido: queda sin emparejar.
+        assert_eq!(resultado.posibles_cruces.len(), 1);
+        assert_eq!(resultado.posibles_cruces[0].contado.numero, 12);
+        assert_eq!(resultado.posibles_cruces[0].faltante, 21);
+        assert_eq!(resultado.posibles_cruces[0].parecido, Parecido::Invertido);
+    }
+
+    #[test]
+    fn sin_asignados_contados_no_hay_cruces() {
+        let resultado = comprobar_conteo(&catalogo(), &[1, 3]);
+        assert!(resultado.posibles_cruces.is_empty());
     }
 
     #[test]

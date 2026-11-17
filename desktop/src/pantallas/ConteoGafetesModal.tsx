@@ -4,7 +4,13 @@ import { X } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { comprobarConteoGafetes, leerNumeroConteoGafetes } from "../api";
 import type { ResultadoConteo, TipoGafeteEntrada } from "../api";
-import { avisoLectura, avisoPrevio, parsearNumero, textoNumero } from "./ConteoGafetesModal.logica";
+import {
+  avisoLectura,
+  avisoPrevio,
+  parsearNumero,
+  textoCruce,
+  textoNumero,
+} from "./ConteoGafetesModal.logica";
 import type { AvisoNumero, NivelAviso } from "./ConteoGafetesModal.logica";
 
 const COLOR_AVISO: Record<NivelAviso, string> = {
@@ -215,6 +221,15 @@ function Resultado({ resultado }: { resultado: ResultadoConteo }) {
           ? `Están los ${resultado.esperados} gafetes disponibles.`
           : `Faltan ${resultado.faltantes.length} de los ${resultado.esperados} gafetes disponibles.`}
       </p>
+      {resultado.posibles_cruces.length > 0 && (
+        <Seccion titulo="Posible error de digitación al entregar" color="var(--advertencia)">
+          {resultado.posibles_cruces.map((cruce) => (
+            <p key={cruce.contado.numero} style={{ margin: "0 0 0.25rem" }}>
+              {textoCruce(cruce)}
+            </p>
+          ))}
+        </Seccion>
+      )}
       {!completo && (
         <Seccion titulo="Faltan (no se contaron)" color="var(--error)">
           {lista(resultado.faltantes)}

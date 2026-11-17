@@ -192,6 +192,19 @@ export interface ResultadoConteo {
   no_existen: number[];
   perdidos_contados: number[];
   perdidos: number[];
+  posibles_cruces: PosibleCruce[];
+}
+
+/** Por qué dos números se confunden fácil. Espejo de `domain::gafete::Parecido`. */
+export type ParecidoGafete = "un_digito" | "invertido" | "seis_nueve";
+
+/** Posible error de digitación al entregar: `contado` figura asignado y se
+ * contó; `faltante` es probablemente el que esa persona tiene puesto. Espejo
+ * de `domain::gafete::PosibleCruce`. */
+export interface PosibleCruce {
+  contado: GafeteEnUso;
+  faltante: number;
+  parecido: ParecidoGafete;
 }
 
 export function leerNumeroConteoGafetes(

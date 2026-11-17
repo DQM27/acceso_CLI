@@ -31,6 +31,11 @@ Provisional KOF o Proveedor) y pulse **Conteo**.
      de esa persona.
 3. Si anotó uno por error, quítelo con la **×** al lado del número.
 4. Cuando termine, pulse **Comprobar**. La ventana muestra:
+   - **Posible error de digitación al entregar**: por ejemplo, el 06
+     figura asignado a Fulano y se contó, y falta el 09. Lo más probable es
+     que al registrar a Fulano se digitara 06 pero se le entregara el 09.
+     Revise qué gafete tiene puesto. Los registros no se corrigen; el aviso
+     sirve para saber dónde está cada gafete;
    - cuántos gafetes disponibles había que contar y si **faltan** (con sus
      números);
    - los que **se contaron pero figuran asignados** a alguien adentro;
