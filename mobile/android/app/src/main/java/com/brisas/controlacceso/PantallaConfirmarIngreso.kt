@@ -133,9 +133,13 @@ internal fun HojaIngreso(
     onEscanearPlaca: () -> Unit,
     onCerrada: () -> Unit,
     // Carné PRAIND (fase 6 de docs/features-futuras/plan-fotos-praind.md):
-    // el botón sólo aparece si el contratista tiene carné cargado.
+    // el botón sólo aparece si el contratista tiene carné cargado. Si no lo
+    // tiene y la nube deja cargar desde este teléfono, en su lugar aparece
+    // "Cargar gafete PRAIND" (abre la cámara para su QR).
     tieneCarne: Boolean = false,
     onVerCarne: () -> Unit = {},
+    puedeCargarCarne: Boolean = false,
+    onCargarCarne: () -> Unit = {},
 ) {
     RegistrarPantalla("confirmar_ingreso")
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -301,6 +305,10 @@ internal fun HojaIngreso(
                 if (tieneCarne) {
                     BotonDiscretoBrisas(onClick = onVerCarne) {
                         Text("Ver gafete PRAIND")
+                    }
+                } else if (puedeCargarCarne) {
+                    BotonDiscretoBrisas(onClick = onCargarCarne) {
+                        Text("Cargar gafete PRAIND")
                     }
                 }
             }

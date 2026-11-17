@@ -13,19 +13,60 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URI
+import uniffi.control_acceso_mobile.CargaCarnePraind
 import uniffi.control_acceso_mobile.CarnePraind
 import uniffi.control_acceso_mobile.EstadoCarnePraind
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.PermisosCarnePraind
 
 /// Lo que el ViewModel necesita del núcleo (en las pruebas, un doble).
 interface FuenteCarnes {
     fun estado(contratistaId: Long): EstadoCarnePraind
     fun ver(contratistaId: Long): CarnePraind
+    fun permisos(): PermisosCarnePraind
+    fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean): CargaCarnePraind
 }
 
 private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
     override fun estado(contratistaId: Long) = nucleo.estadoCarnePraind(contratistaId)
     override fun ver(contratistaId: Long) = nucleo.verCarnePraind(contratistaId)
+    override fun permisos() = nucleo.permisosCarnePraind()
+    override fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean) =
+        nucleo.cargarCarnePraindDesdeQr(contratistaId, enlace, soloPrevisualizar)
+}
+
+/// El QR del gafete PRAIND lleva un enlace web (`https://prd.pw/…`). La
+/// cámara acepta cualquier enlace http(s) y deja que la nube diga si es de
+/// un gafete PRAIND: la lista de sitios válidos vive en un solo lugar (el
+/// Worker), no repetida acá. Lo que no es un enlace (el QR de vinculación,
+/// otros códigos) se ignora y la cámara sigue mirando.
+object EnlaceQrPraind {
+    fun desdeQr(contenido: String): String? {
+        val texto = contenido.trim()
+        val uri = runCatching { URI(texto) }.getOrNull() ?: return null
+        val esquema = uri.scheme?.lowercase() ?: return null
+        if (esquema != "https" && esquema != "http") return null
+        if (uri.host.isNullOrBlank()) return null
+        return texto
+    }
+}
+
+/// Cargar el gafete PRAIND desde el QR: primero se muestra de quién es (sin
+/// guardar nada) y recién al confirmar se guarda.
+sealed interface CargaCarne {
+    data object Inactiva : CargaCarne
+    data class Buscando(val nombre: String) : CargaCarne
+    /// Lo que encontró la nube, todavía sin guardar.
+    data class Previa(
+        val contratistaId: Long,
+        val nombre: String,
+        val enlace: String,
+        val nombreEnOrigen: String?,
+        val coincide: Boolean,
+        val guardando: Boolean = false,
+    ) : CargaCarne
+    data class Error(val nombre: String, val mensaje: String) : CargaCarne
 }
 
 sealed interface VistaCarne {
@@ -55,14 +96,32 @@ class CarnePraindViewModel(
     private val _vista = MutableStateFlow<VistaCarne>(VistaCarne.Cerrada)
     val vista: StateFlow<VistaCarne> = _vista.asStateFlow()
 
+    /// Si la nube deja cargar gafetes PRAIND desde este teléfono (lo decide
+    /// el panel). Se pregunta una vez; sin conexión se vuelve a intentar al
+    /// abrir la próxima hoja.
+    private val _puedeCargar = MutableStateFlow(false)
+    val puedeCargar: StateFlow<Boolean> = _puedeCargar.asStateFlow()
+    private var permisosConsultados = false
+
+    private val _carga = MutableStateFlow<CargaCarne>(CargaCarne.Inactiva)
+    val carga: StateFlow<CargaCarne> = _carga.asStateFlow()
+
+    /// Se llena al guardar: la pantalla muestra "Gafete PRAIND de … guardado".
+    private val _guardado = MutableStateFlow<String?>(null)
+    val guardado: StateFlow<String?> = _guardado.asStateFlow()
+
     private var consulta: Job? = null
-    private var carga: Job? = null
+    private var lectura: Job? = null
+    private var subida: Job? = null
+    private var contratistaHoja: Long? = null
 
     /// Consulta local (sin red) al abrir la hoja de un contratista.
     fun consultar(contratistaId: Long?) {
         consulta?.cancel()
+        contratistaHoja = contratistaId
         _disponible.value = false
         if (contratistaId == null) return
+        consultarPermisos()
         consulta = viewModelScope.launch {
             _disponible.value = withContext(dispatcherIO) {
                 try {
@@ -76,9 +135,9 @@ class CarnePraindViewModel(
     }
 
     fun abrir(contratistaId: Long, nombre: String) {
-        carga?.cancel()
+        lectura?.cancel()
         _vista.value = VistaCarne.Cargando(nombre)
-        carga = viewModelScope.launch {
+        lectura = viewModelScope.launch {
             _vista.value = withContext(dispatcherIO) {
                 try {
                     VistaCarne.Imagen(nombre, fuente.ver(contratistaId).bytes)
@@ -90,8 +149,75 @@ class CarnePraindViewModel(
     }
 
     fun cerrar() {
-        carga?.cancel()
+        lectura?.cancel()
         _vista.value = VistaCarne.Cerrada
+    }
+
+    private fun consultarPermisos() {
+        if (permisosConsultados) return
+        viewModelScope.launch {
+            val permisos = withContext(dispatcherIO) {
+                try {
+                    fuente.permisos()
+                } catch (excepcion: Exception) {
+                    excepcion.mensajeDeErrorEsperado()
+                    null
+                }
+            } ?: return@launch
+            _puedeCargar.value = permisos.puedeCargar
+            // Sin conexión no se sabe: se pregunta otra vez la próxima hoja.
+            permisosConsultados = !permisos.sinConexion
+        }
+    }
+
+    /// Con el enlace leído del QR, pregunta de quién es el gafete sin
+    /// guardar nada.
+    fun previsualizar(contratistaId: Long, nombre: String, enlace: String) {
+        subida?.cancel()
+        _carga.value = CargaCarne.Buscando(nombre)
+        subida = viewModelScope.launch {
+            _carga.value = withContext(dispatcherIO) {
+                try {
+                    val previa = fuente.cargarDesdeQr(contratistaId, enlace, soloPrevisualizar = true)
+                    CargaCarne.Previa(contratistaId, nombre, enlace, previa.nombreEnOrigen, previa.nombreCoincide)
+                } catch (excepcion: Exception) {
+                    CargaCarne.Error(nombre, excepcion.mensajeDeErrorEsperado() ?: "No se pudo buscar el gafete PRAIND.")
+                }
+            }
+        }
+    }
+
+    /// Guarda el gafete que se previsualizó.
+    fun guardar() {
+        val previa = _carga.value as? CargaCarne.Previa ?: return
+        if (previa.guardando) return
+        _carga.value = previa.copy(guardando = true)
+        subida = viewModelScope.launch {
+            val error = withContext(dispatcherIO) {
+                try {
+                    fuente.cargarDesdeQr(previa.contratistaId, previa.enlace, soloPrevisualizar = false)
+                    null
+                } catch (excepcion: Exception) {
+                    excepcion.mensajeDeErrorEsperado() ?: "No se pudo guardar el gafete PRAIND."
+                }
+            }
+            if (error != null) {
+                _carga.value = CargaCarne.Error(previa.nombre, error)
+                return@launch
+            }
+            _carga.value = CargaCarne.Inactiva
+            if (contratistaHoja == previa.contratistaId) _disponible.value = true
+            _guardado.value = "Gafete PRAIND de ${previa.nombre} guardado."
+        }
+    }
+
+    fun cancelarCarga() {
+        subida?.cancel()
+        _carga.value = CargaCarne.Inactiva
+    }
+
+    fun avisoGuardadoVisto() {
+        _guardado.value = null
     }
 
     companion object {
