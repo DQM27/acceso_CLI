@@ -20,7 +20,6 @@ use crate::database::repositories::encargado_ruta_repository::{
     EncargadoRutaRepository, SqliteEncargadoRutaRepository,
 };
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
-use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::domain::gafete::{
     GafeteParaConteo, LecturaConteo, ResultadoConteo, comprobar_conteo, leer_numero_conteo,
 };
@@ -158,6 +157,8 @@ impl AppCore {
         responsable: Option<PortadorGafete>,
         detalle: Option<&str>,
     ) -> Result<(), GafeteServiceError> {
+        // Se decide antes de abrir la transacción: consulta la sesión de nube.
+        let incluir_otro_equipo = self.incluir_otro_equipo(actor);
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
@@ -169,10 +170,16 @@ impl AppCore {
         }
         let gafetes = SqliteGafeteRepository::new(&transaction);
         let incidentes = SqliteGafetesIncidentes::new(&transaction);
-        let registros = SqliteRegistroIngresoRepository::new(&transaction);
         GafeteService::new(&gafetes).reportar_perdido(
             &incidentes,
-            &registros,
+            |gafete| {
+                quien_tiene_puesto(
+                    &transaction,
+                    gafete.tipo,
+                    gafete.numero,
+                    incluir_otro_equipo,
+                )
+            },
             id,
             responsable,
             detalle,
@@ -280,25 +287,7 @@ impl AppCore {
             tipo: Some(Igualdad::Incluye(tipo)),
             ..FiltroGafetes::default()
         })?;
-
-        let (locales, remotas) = consultas_en_uso(tipo);
-        #[cfg(feature = "nube")]
-        let incluir_remotas = self.autorizar_uso_nube(actor).is_ok();
-        #[cfg(not(feature = "nube"))]
-        let incluir_remotas = false;
-        let mut en_uso: Vec<(i64, String)> = Vec::new();
-        let consultas = locales
-            .iter()
-            .chain(remotas.iter().filter(|_| incluir_remotas));
-        for sql in consultas {
-            let mut statement = self.connection.prepare(sql).map_err(DatabaseError::from)?;
-            let filas = statement
-                .query_map(params![], |row| Ok((row.get(0)?, row.get(1)?)))
-                .map_err(DatabaseError::from)?
-                .collect::<Result<Vec<(i64, String)>, _>>()
-                .map_err(DatabaseError::from)?;
-            en_uso.extend(filas);
-        }
+        let en_uso = gafetes_en_uso(&self.connection, tipo, self.incluir_otro_equipo(actor))?;
 
         Ok(gafetes
             .into_iter()
@@ -312,6 +301,60 @@ impl AppCore {
             })
             .collect())
     }
+
+    /// Si la sesión puede usar la nube, "en uso" también mira lo abierto por
+    /// el otro equipo del sitio (las cachés `*_remotos`), mismo criterio que
+    /// `tenedores_del_gafete`.
+    #[cfg_attr(not(feature = "nube"), allow(clippy::unused_self))]
+    fn incluir_otro_equipo(&self, actor: &UsuarioSesion) -> bool {
+        #[cfg(feature = "nube")]
+        {
+            self.autorizar_uso_nube(actor).is_ok()
+        }
+        #[cfg(not(feature = "nube"))]
+        {
+            let _ = actor;
+            false
+        }
+    }
+}
+
+/// Quién tiene puesto cada gafete de **un** tipo: `(numero, nombre)`. Es la
+/// única respuesta a "¿alguien tiene este gafete?" para el conteo y para
+/// reportar perdido. Cada tipo mira sólo sus propios movimientos
+/// ([`consultas_en_uso`]): el 5 de contratista y el 5 de proveedor son dos
+/// gafetes distintos y nunca se cruzan.
+fn gafetes_en_uso(
+    connection: &rusqlite::Connection,
+    tipo: TipoGafete,
+    incluir_otro_equipo: bool,
+) -> Result<Vec<(i64, String)>, DatabaseError> {
+    let (locales, remotas) = consultas_en_uso(tipo);
+    let consultas = locales
+        .iter()
+        .chain(remotas.iter().filter(|_| incluir_otro_equipo));
+    let mut en_uso: Vec<(i64, String)> = Vec::new();
+    for sql in consultas {
+        let mut statement = connection.prepare(sql)?;
+        let filas = statement
+            .query_map(params![], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<(i64, String)>, _>>()?;
+        en_uso.extend(filas);
+    }
+    Ok(en_uso)
+}
+
+/// Quién tiene puesto el gafete `numero` de este tipo, si alguien.
+fn quien_tiene_puesto(
+    connection: &rusqlite::Connection,
+    tipo: TipoGafete,
+    numero: i64,
+    incluir_otro_equipo: bool,
+) -> Result<Option<String>, DatabaseError> {
+    Ok(gafetes_en_uso(connection, tipo, incluir_otro_equipo)?
+        .into_iter()
+        .find(|(en_uso, _)| *en_uso == numero)
+        .map(|(_, nombre)| nombre))
 }
 
 /// El responsable de un gafete perdido tiene que existir, según su tipo.
@@ -485,5 +528,48 @@ mod tests {
                 nombre: "Encargado Test".to_string()
             }
         );
+    }
+
+    /// Los tipos no se mezclan: el préstamo KOF del 3 bloquea reportar
+    /// perdido el 3 de KOF, pero no el 3 de contratista, que es otro gafete
+    /// aunque lleve el mismo número. Y el conteo de contratistas no ve el
+    /// préstamo KOF.
+    #[test]
+    fn el_gafete_en_uso_de_un_tipo_no_afecta_al_mismo_numero_de_otro_tipo() {
+        let (core, actor, encargado_id) = nucleo_con_usuario_encargado_y_gafete();
+        let gafete_contratista_3 = SqliteGafeteRepository::new(&core.connection)
+            .crear(3, TipoGafete::Contratista)
+            .unwrap();
+        core.connection
+            .execute(
+                "INSERT INTO prestamos_gafete_provisional (
+                    encargado_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                    fecha_hora_entrega, usuario_entrega_id, usuario_entrega_nombre, uuid
+                 ) VALUES (?1, 'Encargado Test', 'E1', 3, '2026-09-19T11:00:00Z', 1, 'Operador', 'p1')",
+                params![encargado_id],
+            )
+            .unwrap();
+        let gafete_kof_3 = SqliteGafeteRepository::new(&core.connection)
+            .buscar_por_numero(3, TipoGafete::ProvisionalKof)
+            .unwrap()
+            .unwrap()
+            .id;
+
+        let error = core
+            .reportar_gafete_perdido(&actor, gafete_kof_3, None, Some("no está"))
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            GafeteServiceError::GafeteAsignado { nombre } if nombre == "Encargado Test"
+        ));
+
+        core.reportar_gafete_perdido(&actor, gafete_contratista_3, None, Some("no está"))
+            .unwrap();
+
+        let conteo_contratistas = core
+            .comprobar_conteo_gafetes(&actor, TipoGafete::Contratista, &[])
+            .unwrap();
+        assert!(conteo_contratistas.en_uso.is_empty());
+        assert_eq!(conteo_contratistas.perdidos, vec![3]);
     }
 }

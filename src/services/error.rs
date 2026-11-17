@@ -382,7 +382,7 @@ pub enum RutaCatalogoServiceError {
     RutaNoEncontrada,
     /// Dar de baja una ruta con una salida activa dejaría el catálogo
     /// contradiciendo un movimiento en curso -- mismo criterio que
-    /// `GafeteServiceError::GafeteConIngresoActivo`.
+    /// `GafeteServiceError::GafeteAsignado`.
     #[error("La ruta tiene una salida activa en este momento")]
     RutaConSalidaActiva,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
@@ -555,11 +555,11 @@ pub enum GafeteServiceError {
     DetalleRequerido,
     #[error("El detalle es demasiado largo")]
     DetalleMuyLargo,
-    /// Hay un ingreso activo con este gafete asignado — reportarlo perdido
-    /// dejaría el inventario contradiciendo un movimiento en curso. Se
-    /// revisa dentro de la misma transacción que la transición.
-    #[error("El gafete está asignado a un ingreso activo")]
-    GafeteConIngresoActivo,
+    /// Alguien que está adentro tiene puesto este gafete (de este mismo
+    /// tipo) — reportarlo perdido dejaría el inventario contradiciendo un
+    /// movimiento en curso. Se revisa dentro de la misma transacción.
+    #[error("El gafete lo tiene puesto {nombre}")]
+    GafeteAsignado { nombre: String },
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]

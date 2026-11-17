@@ -21,9 +21,29 @@ fn esta_disponible(estado: EstadoGafete) -> bool {
     estado == EstadoGafete::Disponible
 }
 
-/// Sólo un gafete `Disponible` puede reportarse perdido.
-pub fn puede_reportarse_perdido(estado: EstadoGafete) -> bool {
-    esta_disponible(estado)
+/// Si un gafete puede reportarse perdido.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReporteDePerdido {
+    Permitido,
+    /// Ya está perdido.
+    NoDisponible,
+    /// Alguien que está adentro lo tiene puesto ahora: no puede estar
+    /// perdido. Primero se registra su salida.
+    LoTienePuesto(String),
+}
+
+/// Regla común a todos los tipos: sólo se reporta perdido un gafete
+/// `Disponible` que nadie tiene puesto. `quien_lo_tiene` lo responde cada
+/// tipo mirando sus propios movimientos: el 5 de contratista y el 5 de
+/// proveedor son gafetes distintos.
+pub fn puede_reportarse_perdido(
+    estado: EstadoGafete,
+    quien_lo_tiene: Option<String>,
+) -> ReporteDePerdido {
+    if !esta_disponible(estado) {
+        return ReporteDePerdido::NoDisponible;
+    }
+    quien_lo_tiene.map_or(ReporteDePerdido::Permitido, ReporteDePerdido::LoTienePuesto)
 }
 
 /// Sólo se registra el pago de un gafete perdido que tiene responsable.
@@ -353,6 +373,22 @@ mod tests {
         assert_eq!(resultado.no_existen, vec![99]);
         assert_eq!(resultado.perdidos_contados, vec![6]);
         assert_eq!(resultado.perdidos, vec![5]);
+    }
+
+    #[test]
+    fn un_gafete_puesto_o_ya_perdido_no_se_reporta_perdido() {
+        assert_eq!(
+            puede_reportarse_perdido(EstadoGafete::Disponible, None),
+            ReporteDePerdido::Permitido
+        );
+        assert_eq!(
+            puede_reportarse_perdido(EstadoGafete::Disponible, Some("Ana".to_string())),
+            ReporteDePerdido::LoTienePuesto("Ana".to_string())
+        );
+        assert_eq!(
+            puede_reportarse_perdido(EstadoGafete::Perdido, None),
+            ReporteDePerdido::NoDisponible
+        );
     }
 
     #[test]

@@ -5,11 +5,12 @@
 use chrono::{DateTime, Utc};
 
 use crate::application::puertos::gafetes::GafeteRepository;
-use crate::application::puertos::registros_ingreso::RegistroIngresoRepository;
+use crate::database::error::DatabaseError;
 use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, GafetesQuery};
 use crate::database::queries::gafetes_incidentes::GafetesIncidentesWriter;
 use crate::domain::gafete::{
-    normalizar_detalle, puede_recuperarse, puede_registrarse_pago, puede_reportarse_perdido,
+    ReporteDePerdido, normalizar_detalle, puede_recuperarse, puede_registrarse_pago,
+    puede_reportarse_perdido,
 };
 use crate::models::gafete::{Gafete, PortadorGafete, TipoGafete};
 
@@ -92,32 +93,35 @@ impl<'a, R: GafeteRepository + ?Sized> GafeteService<'a, R> {
     /// sin él (no se sabe a quién se le dio), el detalle es obligatorio:
     /// quien reporta tiene que contar qué pasó. No valida que `portador`
     /// exista -- a propósito, ver el doc-comment del servicio.
-    pub fn reportar_perdido<
-        W: GafetesIncidentesWriter + ?Sized,
-        I: RegistroIngresoRepository + ?Sized,
-    >(
+    ///
+    /// `quien_lo_tiene`: quién tiene puesto ESE gafete ahora, mirando sólo
+    /// los movimientos de su tipo. Lo responde quien llama (`AppCore`), que
+    /// sabe dónde vive cada tipo; este servicio sólo aplica la regla común.
+    pub fn reportar_perdido<W, F>(
         &self,
         incidentes: &W,
-        registros: &I,
+        quien_lo_tiene: F,
         id: i64,
         portador: Option<PortadorGafete>,
         detalle: Option<&str>,
         autor: AutorReporte,
-    ) -> Result<(), GafeteServiceError> {
+    ) -> Result<(), GafeteServiceError>
+    where
+        W: GafetesIncidentesWriter + ?Sized,
+        F: FnOnce(&Gafete) -> Result<Option<String>, DatabaseError>,
+    {
         let detalle =
             normalizar_detalle(detalle).map_err(|_| GafeteServiceError::DetalleMuyLargo)?;
         if portador.is_none() && detalle.is_none() {
             return Err(GafeteServiceError::DetalleRequerido);
         }
         let gafete = self.buscar_por_id(id)?;
-        if !puede_reportarse_perdido(gafete.estado) {
-            return Err(GafeteServiceError::EstadoInvalido);
-        }
-        if registros
-            .buscar_ingreso_activo_por_gafete(gafete.numero)?
-            .is_some()
-        {
-            return Err(GafeteServiceError::GafeteConIngresoActivo);
+        match puede_reportarse_perdido(gafete.estado, quien_lo_tiene(&gafete)?) {
+            ReporteDePerdido::Permitido => {}
+            ReporteDePerdido::NoDisponible => return Err(GafeteServiceError::EstadoInvalido),
+            ReporteDePerdido::LoTienePuesto(nombre) => {
+                return Err(GafeteServiceError::GafeteAsignado { nombre });
+            }
         }
         self.gafetes.marcar_perdido(id, portador)?;
         incidentes.registrar_perdido(
@@ -190,11 +194,8 @@ mod tests {
         GafetesIncidentesQuery, SqliteGafetesIncidentes,
     };
     use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
-    use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
     use crate::database::schema::initialize_database;
     use crate::models::gafete::{EstadoGafete, TipoIncidenteGafete};
-    use crate::models::registro_ingreso::NuevoRegistroIngreso;
-    use crate::models::tipo_ingreso::TipoIngreso;
     use rusqlite::Connection;
 
     fn conexion_con_contratista() -> (Connection, i64) {
@@ -219,31 +220,10 @@ mod tests {
         }
     }
 
-    fn abrir_ingreso_con_gafete(connection: &Connection, contratista_id: i64, gafete_numero: i64) {
-        let registros = SqliteRegistroIngresoRepository::new(connection);
-        registros
-            .crear(&NuevoRegistroIngreso {
-                contratista_id,
-                empresa_id: 1,
-                fecha_hora_ingreso: Utc::now(),
-                medio_ingreso: crate::models::medio_ingreso::MedioIngreso::Caminando,
-                tipo_ingreso: TipoIngreso::Praind,
-                gafete_numero: Some(gafete_numero),
-                placa: None,
-                usuario_ingreso_id: 1,
-                datos_historicos: crate::models::registro_ingreso::DatosHistoricosEntrada {
-                    contratista_cedula: "1".to_owned(),
-                    contratista_nombre: "Juan".to_owned(),
-                    fecha_vencimiento_praind: None,
-                    es_personal_ruta: false,
-                    tiene_acceso: true,
-                    empresa_activa: true,
-                    resultado_acceso:
-                        crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
-                    reglas_version: crate::domain::acceso::VERSION_REGLAS_ACCESO,
-                },
-            })
-            .unwrap();
+    /// Nadie tiene puesto el gafete.
+    #[allow(clippy::unnecessary_wraps)]
+    fn nadie(_: &Gafete) -> Result<Option<String>, DatabaseError> {
+        Ok(None)
     }
 
     #[test]
@@ -306,14 +286,13 @@ mod tests {
         let (connection, contratista_id) = conexion_con_contratista();
         let gafetes = SqliteGafeteRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
-        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes);
         let id = servicio.crear_uno(1, TipoGafete::Contratista).unwrap();
 
         servicio
             .reportar_perdido(
                 &incidentes,
-                &registros,
+                nadie,
                 id,
                 Some(PortadorGafete::Contratista(contratista_id)),
                 None,
@@ -369,19 +348,18 @@ mod tests {
         let (connection, _) = conexion_con_contratista();
         let gafetes = SqliteGafeteRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
-        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes);
         let id = servicio.crear_uno(1, TipoGafete::Contratista).unwrap();
 
         assert!(matches!(
-            servicio.reportar_perdido(&incidentes, &registros, id, None, Some("   "), autor()),
+            servicio.reportar_perdido(&incidentes, nadie, id, None, Some("   "), autor()),
             Err(GafeteServiceError::DetalleRequerido)
         ));
 
         servicio
             .reportar_perdido(
                 &incidentes,
-                &registros,
+                nadie,
                 id,
                 None,
                 Some("Recibí el turno sin el 01, me entregó Pedro"),
@@ -428,13 +406,12 @@ mod tests {
         let (connection, contratista_id) = conexion_con_contratista();
         let gafetes = SqliteGafeteRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
-        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes);
         let id = servicio.crear_uno(1, TipoGafete::Contratista).unwrap();
         servicio
             .reportar_perdido(
                 &incidentes,
-                &registros,
+                nadie,
                 id,
                 Some(PortadorGafete::Contratista(contratista_id)),
                 None,
@@ -455,26 +432,30 @@ mod tests {
     }
 
     #[test]
-    fn reportar_perdido_con_ingreso_activo_se_bloquea() {
+    fn reportar_perdido_un_gafete_que_alguien_tiene_puesto_se_bloquea() {
         let (connection, contratista_id) = conexion_con_contratista();
         let gafetes = SqliteGafeteRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
-        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes);
         let id = servicio.crear_uno(1, TipoGafete::Contratista).unwrap();
-        abrir_ingreso_con_gafete(&connection, contratista_id, 1);
+
+        let resultado = servicio.reportar_perdido(
+            &incidentes,
+            |_| Ok(Some("Juan".to_string())),
+            id,
+            Some(PortadorGafete::Contratista(contratista_id)),
+            None,
+            autor(),
+        );
 
         assert!(matches!(
-            servicio.reportar_perdido(
-                &incidentes,
-                &registros,
-                id,
-                Some(PortadorGafete::Contratista(contratista_id)),
-                None,
-                autor()
-            ),
-            Err(GafeteServiceError::GafeteConIngresoActivo)
+            resultado,
+            Err(GafeteServiceError::GafeteAsignado { nombre }) if nombre == "Juan"
         ));
+        assert_eq!(
+            gafetes.buscar_por_id(id).unwrap().unwrap().estado,
+            EstadoGafete::Disponible
+        );
     }
 
     #[test]
@@ -482,15 +463,14 @@ mod tests {
         let (connection, _) = conexion_con_contratista();
         let gafetes = SqliteGafeteRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
-        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes);
         let id = servicio.crear_uno(1, TipoGafete::Contratista).unwrap();
 
         servicio
-            .reportar_perdido(&incidentes, &registros, id, None, Some("no está"), autor())
+            .reportar_perdido(&incidentes, nadie, id, None, Some("no está"), autor())
             .unwrap();
         assert!(matches!(
-            servicio.reportar_perdido(&incidentes, &registros, id, None, Some("no está"), autor()),
+            servicio.reportar_perdido(&incidentes, nadie, id, None, Some("no está"), autor()),
             Err(GafeteServiceError::EstadoInvalido)
         ));
     }
