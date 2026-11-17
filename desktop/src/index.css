@@ -1377,7 +1377,10 @@ textarea::placeholder {
    modal no tiene fila de encabezado: `tituloEnContenido`). */
 .detalle-contratista-titulo {
   margin: 0;
-  font-size: var(--tam-titulo);
+  /* Más grande y con más peso que los datos (que aquí se ven casi del
+     mismo tamaño que un título normal): 22 px en vez de 18. */
+  font-size: 1.375rem;
+  font-weight: 600;
   color: var(--texto);
 }
 .detalle-contratista-acciones {
