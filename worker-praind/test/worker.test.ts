@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { manejar } from "../src/index";
-import { decodificarEntidades, leerPagina } from "../src/origen";
+import { decodificarEntidades, leerPagina, MENSAJE_CARNE_NO_EXISTE, MENSAJE_ENLACE_SIN_GAFETE } from "../src/origen";
 import { hashHex, vaciarCachePermisos } from "../src/supabase";
 import type { Dependencias, Env } from "../src/tipos";
 
@@ -247,6 +247,43 @@ describe("POST /cargar-desde-qr", () => {
     expect(r.status).toBe(403);
     expect((await r.json()) as Record<string, unknown>).toEqual({ error: "sin_permiso", detail: "No tiene permiso." });
     expect((await ENV.FOTOS.list({ prefix: `contratistas/${contratista}/` })).objects).toHaveLength(0);
+  });
+
+  describe("gafete PRAIND borrado en el sistema PRAIND", () => {
+    async function respuesta(rutas: Record<string, Manejador>) {
+      const contratista = nuevoContratista();
+      const s = simular({ ...permisosRpc(true, true), ...origenNormal, ...rutas });
+      const r = await manejar(pedido("POST", "/cargar-desde-qr", { cuerpo: cuerpo(contratista) }), ENV, s.deps);
+      return { estado: r.status, cuerpo: (await r.json()) as Record<string, unknown> };
+    }
+
+    it("la página del QR da 404 o 410", async () => {
+      for (const estado of [404, 410]) {
+        const r = await respuesta({ [PAGINA]: () => new Response("no", { status: estado }) });
+        expect(r).toEqual({ estado: 404, cuerpo: { error: "carne_no_encontrado", detail: MENSAJE_CARNE_NO_EXISTE } });
+      }
+    });
+
+    it("la página abre pero es la de «no existe»: sin nombre ni imagen", async () => {
+      const r = await respuesta({ [PAGINA]: () => new Response("<html><h1>Página no encontrada</h1></html>") });
+      expect(r).toEqual({ estado: 404, cuerpo: { error: "carne_no_encontrado", detail: MENSAJE_CARNE_NO_EXISTE } });
+    });
+
+    it("la imagen ya no está", async () => {
+      const r = await respuesta({ [IMAGEN]: () => new Response("no", { status: 404 }) });
+      expect(r).toEqual({ estado: 404, cuerpo: { error: "carne_no_encontrado", detail: MENSAJE_CARNE_NO_EXISTE } });
+    });
+
+    it("el acortador no conoce el código (responde 502)", async () => {
+      const r = await respuesta({ [ENLACE]: () => new Response("error code: 502", { status: 502 }) });
+      expect(r).toEqual({ estado: 404, cuerpo: { error: "carne_no_encontrado", detail: MENSAJE_ENLACE_SIN_GAFETE } });
+    });
+
+    it("un error de servidor de la página (no del acortador) sigue siendo una falla del sitio", async () => {
+      const r = await respuesta({ [PAGINA]: () => new Response("caído", { status: 503 }) });
+      expect(r.estado).toBe(502);
+      expect(r.cuerpo.error).toBe("origen_no_disponible");
+    });
   });
 });
 
