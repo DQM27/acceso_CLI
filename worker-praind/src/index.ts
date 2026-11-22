@@ -65,6 +65,16 @@ function conCors(respuesta: Response, origen: string, preflight: boolean): Respo
   return conCabeceras;
 }
 
+/** Base64 de los bytes de la imagen, por tramos: `String.fromCharCode` con
+ * todos los bytes de una vez desborda la pila con una imagen de ~1 MB. */
+export function aBase64(bytes: Uint8Array): string {
+  let binario = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binario);
+}
+
 function json(cuerpo: unknown, estado = 200): Response {
   return new Response(JSON.stringify(cuerpo), {
     status: estado,
@@ -157,7 +167,7 @@ async function cargarDesdeQr(request: Request, env: Env, deps: Dependencias): Pr
   const texto = new TextDecoder().decode(
     await leerConLimite(request.body, MAXIMO_JSON, new ErrorHttp(413, "pedido_grande", "Pedido demasiado grande.")),
   );
-  let cuerpo: { contratista_id?: unknown; enlace?: unknown; solo_previsualizar?: unknown };
+  let cuerpo: { contratista_id?: unknown; enlace?: unknown; solo_previsualizar?: unknown; incluir_imagen?: unknown };
   try {
     cuerpo = JSON.parse(texto);
   } catch {
@@ -170,7 +180,12 @@ async function cargarDesdeQr(request: Request, env: Env, deps: Dependencias): Pr
   await exigirCarga(env, deps, token);
   const carne = await descargarCarne(deps, enlace);
   const resumen = { nombre_en_origen: carne.nombre, bytes: carne.bytes.byteLength, tipo_mime: carne.tipo };
-  if (cuerpo.solo_previsualizar === true) return json(resumen);
+  if (cuerpo.solo_previsualizar === true) {
+    // El teléfono lee la imagen con OCR antes de guardar (cédula, fechas):
+    // la pide con `incluir_imagen`. El escritorio y el panel no la piden.
+    if (cuerpo.incluir_imagen === true) return json({ ...resumen, imagen_base64: aBase64(carne.bytes) });
+    return json(resumen);
+  }
 
   const clave = await guardar(env, deps, token, contratistaId, carne.bytes, carne.tipo, enlace.toString(), carne.nombre);
   return json({ clave, ...resumen });
