@@ -82,12 +82,57 @@ internal fun SeccionFormulario(
     }
 }
 
+/// Versión angosta de [TarjetaEscaner] para poner dos lado a lado (QR y
+/// OCR en Nuevo contratista): ícono chico y un título corto en una fila,
+/// baja para no ocupar media pantalla (pedido del usuario 2026-11-22).
+@Composable
+internal fun TarjetaEscanerCompacta(
+    titulo: String,
+    icono: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(RADIO_CONTROL))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(RADIO_CONTROL))
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            titulo,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
 /// El escáner como primera pieza del formulario: casi siempre los datos los
 /// llena la cámara (OCR), así que va arriba, grande y tocable entera, en el
 /// color suave de la sección. No es un botón relleno: la acción principal del
 /// formulario sigue siendo una sola, la de abajo (guardar o registrar).
 @Composable
-internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TarjetaEscaner(
+    titulo: String,
+    detalle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icono: ImageVector = IconosLucide.EscanearDocumento,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -105,7 +150,7 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(IconosLucide.EscanearDocumento, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         }
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {

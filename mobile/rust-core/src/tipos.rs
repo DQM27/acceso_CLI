@@ -279,6 +279,10 @@ pub struct PreparacionIngreso {
     /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
     /// significa bloqueado, y es el texto a mostrar tal cual.
     pub mensaje_bloqueo: Option<String>,
+    /// El bloqueo es el PRAIND (vencido o sin fecha): se ofrece actualizar
+    /// la ficha con el QR del gafete nuevo
+    /// (`BloqueoIngreso::se_resuelve_con_gafete_praind`).
+    pub se_resuelve_con_gafete_praind: bool,
     /// Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
     /// vence en 3 días (15-09-2026)"), con el reloj del núcleo. Reemplaza
     /// `mensajeVencimientoPraind` de Kotlin.
@@ -289,10 +293,13 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
     fn from(preparacion: PreparacionIngresoNucleo) -> Self {
         // Antes de mover el resto de los campos -- `bloqueo()` sólo lee,
         // no consume.
-        let mensaje_bloqueo = preparacion
-            .bloqueo()
+        let bloqueo = preparacion.bloqueo();
+        let mensaje_bloqueo = bloqueo
             .as_ref()
             .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
+        let se_resuelve_con_gafete_praind = bloqueo.as_ref().is_some_and(
+            control_acceso::services::registro_ingreso_service::BloqueoIngreso::se_resuelve_con_gafete_praind,
+        );
         Self {
             contratista_id: preparacion.contratista_id,
             cedula: preparacion.cedula,
@@ -306,6 +313,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
             mensaje_bloqueo,
+            se_resuelve_con_gafete_praind,
             aviso_praind: preparacion.aviso_praind,
         }
     }

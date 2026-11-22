@@ -29,6 +29,15 @@ use crate::tiempo::fecha_costa_rica;
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
+/// Lo que se corrige en la ficha con lo que dice el gafete PRAIND
+/// ([`AppCore::corregir_ficha_desde_gafete`]). `None`: queda como estaba.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CorreccionDesdeGafete {
+    pub vencimiento: Option<NaiveDate>,
+    pub nombre: Option<String>,
+    pub empresa_id: Option<i64>,
+}
+
 /// Núcleo de [`AppCore::buscar_auditoria`] sobre una `Connection` cualquiera
 /// — mismo motivo que `buscar_historial_con_conexion`
 /// (`src/application/historial.rs`): un comando Tauri puede abrir su propia
@@ -222,6 +231,166 @@ impl AppCore {
         datos: DatosActualizacionContratista,
     ) -> Result<(), ContratistaServiceError> {
         self.actualizar_contratista_con(actor, id, datos, true)
+    }
+
+    /// Revisa el gafete PRAIND leído (OCR de su imagen) contra la ficha del
+    /// contratista, con el "hoy" del reloj del núcleo
+    /// (`domain::gafete_praind`). Sólo lee.
+    pub fn revisar_gafete_praind(
+        &self,
+        id: i64,
+        leido: &crate::domain::gafete_praind::DatosGafeteLeido,
+    ) -> Result<crate::domain::gafete_praind::RevisionGafetePraind, ContratistaServiceError> {
+        use crate::database::repositories::empresa_repository::EmpresaRepository as _;
+        use crate::domain::gafete_praind::{DatosFicha, revisar_gafete_praind};
+
+        let empresas = SqliteEmpresaRepository::new(&self.connection);
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        let contratista = ContratistaService::con_hoy(
+            &SqliteContratistaRepository::new(&self.connection),
+            &empresas,
+            hoy,
+        )
+        .buscar_por_id(id)?;
+        let empresa = empresas
+            .buscar_por_id(contratista.empresa_id)?
+            .map(|empresa| empresa.nombre)
+            .unwrap_or_default();
+        let mut revision = revisar_gafete_praind(
+            leido,
+            DatosFicha {
+                cedula: &contratista.cedula,
+                nombre: &contratista.nombre,
+                empresa: &empresa,
+                vencimiento: contratista.fecha_vencimiento_praind,
+            },
+            hoy,
+        );
+        // La empresa del gafete, si corresponde a exactamente una del
+        // catálogo (activa): se propone para corregir la ficha.
+        if let crate::domain::gafete_praind::Comparacion::Difiere { gafete, .. } = &revision.empresa
+        {
+            revision.empresa_para_ficha = self.empresa_del_gafete(gafete)?;
+        }
+        Ok(revision)
+    }
+
+    /// La empresa del catálogo (de las que se pueden elegir) que corresponde
+    /// a la que dice el gafete, si hay exactamente una
+    /// (`domain::gafete_praind::empresas_coinciden`).
+    pub fn empresa_del_gafete(
+        &self,
+        en_gafete: &str,
+    ) -> Result<Option<crate::domain::gafete_praind::EmpresaPropuesta>, ContratistaServiceError>
+    {
+        let empresas = SqliteEmpresaRepository::new(&self.connection);
+        let candidatas: Vec<_> = EmpresaService::new(&empresas)
+            .listar_seleccionables()
+            .map_err(|_| ContratistaServiceError::EmpresaNoEncontrada)?
+            .into_iter()
+            .filter(|candidata| {
+                crate::domain::gafete_praind::empresas_coinciden(en_gafete, &candidata.nombre)
+            })
+            .collect();
+        Ok(match candidatas.as_slice() {
+            [unica] => Some(crate::domain::gafete_praind::EmpresaPropuesta {
+                id: unica.id,
+                nombre: unica.nombre.clone(),
+            }),
+            _ => None,
+        })
+    }
+
+    /// Los datos del gafete PRAIND leído (OCR de su imagen) para dar de alta
+    /// a un contratista nuevo, con la empresa del catálogo si corresponde y
+    /// el "hoy" del reloj del núcleo. El nombre es el de la página del QR
+    /// si la trajo ([`DatosGafeteLeido::con_nombre_de_pagina`]). Sólo lee.
+    ///
+    /// [`DatosGafeteLeido::con_nombre_de_pagina`]: crate::domain::gafete_praind::DatosGafeteLeido::con_nombre_de_pagina
+    pub fn datos_alta_desde_gafete(
+        &self,
+        leido: &crate::domain::gafete_praind::DatosGafeteLeido,
+        nombre_en_origen: Option<&str>,
+    ) -> Result<crate::domain::gafete_praind::DatosAltaDesdeGafete, ContratistaServiceError> {
+        let mut datos = crate::domain::gafete_praind::datos_alta_desde_gafete(
+            &leido.clone().con_nombre_de_pagina(nombre_en_origen),
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        );
+        if let Some(empresa) = datos.empresa.as_deref() {
+            datos.empresa_catalogo = self.empresa_del_gafete(empresa)?;
+        }
+        if let Some(cedula) = datos.cedula.as_deref() {
+            use crate::application::puertos::contratistas::ContratistaRepository as _;
+            datos.ya_registrado = SqliteContratistaRepository::new(&self.connection)
+                .buscar_por_cedula(cedula)?
+                .map(
+                    |contratista| crate::domain::gafete_praind::ContratistaRegistrado {
+                        id: contratista.id,
+                        nombre: contratista.nombre,
+                    },
+                );
+        }
+        Ok(datos)
+    }
+
+    /// Corrige la ficha con lo que dice el gafete PRAIND: el vencimiento de un
+    /// gafete más nuevo y, si el portero lo eligió, el nombre y la empresa.
+    /// Una sola edición por la misma vía que el formulario
+    /// ([`Self::actualizar_datos_contratista`]): mismas reglas (no acepta un
+    /// PRAIND vencido), auditoría y subida a la nube. Lo que no se pasa y el
+    /// acceso quedan como estaban.
+    pub fn corregir_ficha_desde_gafete(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        cambios: CorreccionDesdeGafete,
+    ) -> Result<(), ContratistaServiceError> {
+        let actual = ContratistaService::con_hoy(
+            &SqliteContratistaRepository::new(&self.connection),
+            &SqliteEmpresaRepository::new(&self.connection),
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        )
+        .buscar_por_id(id)?;
+        self.actualizar_datos_contratista(
+            actor,
+            id,
+            DatosActualizacionContratista {
+                cedula: actual.cedula,
+                nombre: cambios.nombre.unwrap_or(actual.nombre),
+                empresa_id: cambios.empresa_id.unwrap_or(actual.empresa_id),
+                tipo_ingreso: actual.tipo_ingreso,
+                // Sólo avanza: si mientras se revisaba el gafete la ficha
+                // recibió una fecha más nueva (otro equipo, el panel), no se
+                // la pisa con una más vieja. Se compara con la ficha de este
+                // momento, no con la de la revisión.
+                fecha_vencimiento_praind: match (
+                    cambios.vencimiento,
+                    actual.fecha_vencimiento_praind,
+                ) {
+                    (Some(nueva), Some(en_ficha)) if nueva <= en_ficha => Some(en_ficha),
+                    (nueva, en_ficha) => nueva.or(en_ficha),
+                },
+                es_personal_ruta: actual.es_personal_ruta,
+                tiene_acceso: actual.tiene_acceso,
+            },
+        )
+    }
+
+    /// Sólo el vencimiento ([`Self::corregir_ficha_desde_gafete`]).
+    pub fn actualizar_vencimiento_praind(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        vencimiento: NaiveDate,
+    ) -> Result<(), ContratistaServiceError> {
+        self.corregir_ficha_desde_gafete(
+            actor,
+            id,
+            CorreccionDesdeGafete {
+                vencimiento: Some(vencimiento),
+                ..CorreccionDesdeGafete::default()
+            },
+        )
     }
 
     fn actualizar_contratista_con(

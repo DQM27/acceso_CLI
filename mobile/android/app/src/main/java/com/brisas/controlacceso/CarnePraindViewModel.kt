@@ -17,8 +17,11 @@ import java.net.URI
 import uniffi.control_acceso_mobile.CargaCarnePraind
 import uniffi.control_acceso_mobile.CarnePraind
 import uniffi.control_acceso_mobile.EstadoCarnePraind
+import uniffi.control_acceso_mobile.GafeteGuardado
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PermisosCarnePraind
+import uniffi.control_acceso_mobile.PreviaGafetePraind
+import uniffi.control_acceso_mobile.RevisionGafetePraind
 
 /// Lo que el ViewModel necesita del núcleo (en las pruebas, un doble).
 interface FuenteCarnes {
@@ -26,6 +29,18 @@ interface FuenteCarnes {
     fun ver(contratistaId: Long): CarnePraind
     fun permisos(): PermisosCarnePraind
     fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean): CargaCarnePraind
+    fun previsualizarConImagen(contratistaId: Long, enlace: String): PreviaGafetePraind
+    fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?): RevisionGafetePraind
+    /// Guarda el gafete y corrige la ficha en una sola llamada: el orden y
+    /// las reglas son del núcleo (`guardar_gafete_praind_revisado`).
+    fun guardarRevisado(
+        contratistaId: Long,
+        enlace: String,
+        textoOcr: String,
+        nombreEnOrigen: String?,
+        corregirNombre: Boolean,
+        corregirEmpresa: Boolean,
+    ): GafeteGuardado
 }
 
 private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
@@ -34,6 +49,18 @@ private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
     override fun permisos() = nucleo.permisosCarnePraind()
     override fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean) =
         nucleo.cargarCarnePraindDesdeQr(contratistaId, enlace, soloPrevisualizar)
+    override fun previsualizarConImagen(contratistaId: Long, enlace: String) =
+        nucleo.previsualizarCarnePraindConImagen(contratistaId, enlace)
+    override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?) =
+        nucleo.revisarGafetePraind(contratistaId, textoOcr, nombreEnOrigen)
+    override fun guardarRevisado(
+        contratistaId: Long,
+        enlace: String,
+        textoOcr: String,
+        nombreEnOrigen: String?,
+        corregirNombre: Boolean,
+        corregirEmpresa: Boolean,
+    ) = nucleo.guardarGafetePraindRevisado(contratistaId, enlace, textoOcr, nombreEnOrigen, corregirNombre, corregirEmpresa)
 }
 
 /// El QR del gafete PRAIND lleva un enlace web (`https://prd.pw/…`). La
@@ -57,7 +84,9 @@ object EnlaceQrPraind {
 sealed interface CargaCarne {
     data object Inactiva : CargaCarne
     data class Buscando(val nombre: String) : CargaCarne
-    /// Lo que encontró la nube, todavía sin guardar.
+    /// Lo que encontró la nube, todavía sin guardar. [revision]: el gafete
+    /// leído con OCR contra la ficha; `null` si la imagen no se pudo leer
+    /// (queda sólo la comparación del nombre de la página).
     data class Previa(
         val contratistaId: Long,
         val nombre: String,
@@ -65,7 +94,18 @@ sealed interface CargaCarne {
         val nombreEnOrigen: String?,
         val coincide: Boolean,
         val guardando: Boolean = false,
-    ) : CargaCarne
+        val revision: RevisionGafetePraind? = null,
+        /// El texto que el OCR leyó de la imagen: el núcleo lo vuelve a
+        /// revisar contra la ficha al guardar.
+        val textoOcr: String = "",
+        /// Si el portero eligió corregir la ficha con el nombre o la empresa
+        /// del gafete (sólo si difieren). El vencimiento de un gafete más
+        /// nuevo se corrige siempre.
+        val corregirNombre: Boolean = false,
+        val corregirEmpresa: Boolean = false,
+    ) : CargaCarne {
+        val sePuedeGuardar: Boolean get() = revision?.bloqueaGuardar != true
+    }
     data class Error(val nombre: String, val mensaje: String) : CargaCarne
 }
 
@@ -88,6 +128,7 @@ sealed interface VistaCarne {
 class CarnePraindViewModel(
     private val fuente: FuenteCarnes,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
+    private val lector: LectorTextoImagen = LectorTextoMlKit(),
 ) : ViewModel() {
     /// Si el contratista de la hoja abierta tiene carné (muestra "Ver carné").
     private val _disponible = MutableStateFlow(false)
@@ -170,45 +211,102 @@ class CarnePraindViewModel(
         }
     }
 
-    /// Con el enlace leído del QR, pregunta de quién es el gafete sin
-    /// guardar nada.
+    /// Con el enlace leído del QR, baja el gafete sin guardar nada, lo lee
+    /// con OCR y lo revisa contra la ficha (cédula, nombre, empresa,
+    /// vencimiento).
     fun previsualizar(contratistaId: Long, nombre: String, enlace: String) {
         subida?.cancel()
         _carga.value = CargaCarne.Buscando(nombre)
         subida = viewModelScope.launch {
-            _carga.value = withContext(dispatcherIO) {
+            val previa = withContext(dispatcherIO) {
                 try {
-                    val previa = fuente.cargarDesdeQr(contratistaId, enlace, soloPrevisualizar = true)
-                    CargaCarne.Previa(contratistaId, nombre, enlace, previa.nombreEnOrigen, previa.nombreCoincide)
+                    fuente.previsualizarConImagen(contratistaId, enlace)
                 } catch (excepcion: Exception) {
-                    CargaCarne.Error(nombre, excepcion.mensajeDeErrorEsperado() ?: "No se pudo buscar el gafete PRAIND.")
+                    _carga.value = CargaCarne.Error(
+                        nombre,
+                        excepcion.mensajeDeErrorEsperado() ?: "No se pudo buscar el gafete PRAIND.",
+                    )
+                    null
+                }
+            } ?: return@launch
+            // Si el OCR o la revisión fallan, se sigue con la comparación del
+            // nombre de la página: no impide cargar el gafete.
+            val texto = runCatching { lector.leer(previa.imagen) }.getOrNull()
+            val revision = texto?.let {
+                withContext(dispatcherIO) {
+                    try {
+                        fuente.revisar(contratistaId, it, previa.nombreEnOrigen)
+                    } catch (excepcion: Exception) {
+                        excepcion.mensajeDeErrorEsperado()
+                        null
+                    }
                 }
             }
+            _carga.value = CargaCarne.Previa(
+                contratistaId,
+                nombre,
+                enlace,
+                previa.nombreEnOrigen,
+                previa.nombreCoincide,
+                revision = revision,
+                textoOcr = texto.orEmpty(),
+            )
         }
     }
 
-    /// Guarda el gafete que se previsualizó.
+    /// Guarda el gafete que se previsualizó y corrige la ficha con él
+    /// (vencimiento más nuevo y, si se marcó, nombre y empresa). Todo lo
+    /// decide el núcleo en una llamada; acá sólo se muestra el resultado.
     fun guardar() {
         val previa = _carga.value as? CargaCarne.Previa ?: return
-        if (previa.guardando) return
+        if (previa.guardando || !previa.sePuedeGuardar) return
         _carga.value = previa.copy(guardando = true)
         subida = viewModelScope.launch {
-            val error = withContext(dispatcherIO) {
-                try {
-                    fuente.cargarDesdeQr(previa.contratistaId, previa.enlace, soloPrevisualizar = false)
-                    null
-                } catch (excepcion: Exception) {
-                    excepcion.mensajeDeErrorEsperado() ?: "No se pudo guardar el gafete PRAIND."
+            val resultado = withContext(dispatcherIO) {
+                runCatching {
+                    fuente.guardarRevisado(
+                        previa.contratistaId,
+                        previa.enlace,
+                        previa.textoOcr,
+                        previa.nombreEnOrigen,
+                        corregirNombre = previa.corregirNombre,
+                        corregirEmpresa = previa.corregirEmpresa,
+                    )
                 }
             }
-            if (error != null) {
-                _carga.value = CargaCarne.Error(previa.nombre, error)
+            val guardado = resultado.getOrElse { excepcion ->
+                _carga.value = CargaCarne.Error(
+                    previa.nombre,
+                    (excepcion as? Exception)?.mensajeDeErrorEsperado() ?: "No se pudo guardar el gafete PRAIND.",
+                )
+                return@launch
+            }
+            if (contratistaHoja == previa.contratistaId) _disponible.value = true
+            // La ficha corregida sube ya, como cualquier cambio de este
+            // teléfono (si no, esperaba a la próxima sincronización).
+            if (guardado.fichaCambio) CambiosNube.cambioLocal()
+            if (guardado.avisoEsError) {
+                // El gafete quedó guardado; sólo falló la corrección.
+                _carga.value = CargaCarne.Error(previa.nombre, guardado.aviso)
                 return@launch
             }
             _carga.value = CargaCarne.Inactiva
-            if (contratistaHoja == previa.contratistaId) _disponible.value = true
-            _guardado.value = "Gafete PRAIND de ${previa.nombre} guardado."
+            _guardado.value = guardado.aviso
         }
+    }
+
+    /// Marcar o desmarcar "corregir la ficha" con el nombre del gafete.
+    fun alternarCorregirNombre() {
+        val previa = _carga.value as? CargaCarne.Previa ?: return
+        if (previa.guardando || previa.revision?.nombreParaFicha == null) return
+        _carga.value = previa.copy(corregirNombre = !previa.corregirNombre)
+    }
+
+    /// Marcar o desmarcar "corregir la ficha" con la empresa del gafete.
+    fun alternarCorregirEmpresa() {
+        val previa = _carga.value as? CargaCarne.Previa ?: return
+        if (previa.guardando || previa.revision?.empresaParaFicha == null) return
+        _carga.value = previa.copy(corregirEmpresa = !previa.corregirEmpresa)
     }
 
     fun cancelarCarga() {
@@ -222,7 +320,7 @@ class CarnePraindViewModel(
 
     companion object {
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CarnePraindViewModel(FuenteCarnesNucleo(nucleo)) }
+            initializer { CarnePraindViewModel(FuenteCarnesNucleo(nucleo), lector = LectorTextoMlKit()) }
         }
     }
 }

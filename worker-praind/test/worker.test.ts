@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { manejar } from "../src/index";
+import { aBase64, manejar } from "../src/index";
 import { decodificarEntidades, leerPagina, MENSAJE_CARNE_NO_EXISTE, MENSAJE_ENLACE_SIN_GAFETE } from "../src/origen";
 import { hashHex, vaciarCachePermisos } from "../src/supabase";
 import type { Dependencias, Env } from "../src/tipos";
@@ -168,9 +168,65 @@ describe("POST /cargar-desde-qr", () => {
       s.deps,
     );
     expect(r.status).toBe(200);
-    expect(((await r.json()) as Record<string, unknown>).nombre_en_origen).toBe("Persona De Prueba Muñoz");
+    const datos = (await r.json()) as Record<string, unknown>;
+    expect(datos.nombre_en_origen).toBe("Persona De Prueba Muñoz");
+    // Sin pedirla, la imagen no viaja (escritorio y panel).
+    expect(datos).not.toHaveProperty("imagen_base64");
     expect(s.rpc("praind_registrar")).toBe(0);
     expect((await ENV.FOTOS.list({ prefix: `contratistas/${contratista}/` })).objects).toHaveLength(0);
+  });
+
+  it("convierte a base64 una imagen del tamaño de un gafete real (~1,5 MB)", () => {
+    const grande = new Uint8Array(1_500_000).map((_, i) => i % 251);
+    const vuelta = Uint8Array.from(atob(aBase64(grande)), (c) => c.charCodeAt(0));
+    expect(vuelta).toEqual(grande);
+  });
+
+  it("con incluir_imagen la vista previa trae la imagen, sin guardar nada", async () => {
+    const contratista = nuevoContratista();
+    const s = simular({ ...permisosRpc(true, true), ...origenNormal });
+    const r = await manejar(
+      pedido("POST", "/cargar-desde-qr", {
+        cuerpo: cuerpo(contratista, { solo_previsualizar: true, incluir_imagen: true }),
+      }),
+      ENV,
+      s.deps,
+    );
+    expect(r.status).toBe(200);
+    const datos = (await r.json()) as Record<string, unknown>;
+    const bytes = Uint8Array.from(atob(String(datos.imagen_base64)), (c) => c.charCodeAt(0));
+    expect(bytes).toEqual(PNG);
+    expect(s.rpc("praind_registrar")).toBe(0);
+    expect((await ENV.FOTOS.list({ prefix: `contratistas/${contratista}/` })).objects).toHaveLength(0);
+  });
+
+  it("la vista previa sin contratista sirve para dar de alta a uno nuevo", async () => {
+    const s = simular({ ...permisosRpc(true, true), ...origenNormal });
+    const r = await manejar(
+      pedido("POST", "/cargar-desde-qr", {
+        cuerpo: JSON.stringify({ enlace: ENLACE, solo_previsualizar: true, incluir_imagen: true }),
+      }),
+      ENV,
+      s.deps,
+    );
+    expect(r.status).toBe(200);
+    const datos = (await r.json()) as Record<string, unknown>;
+    expect(datos.nombre_en_origen).toBe("Persona De Prueba Muñoz");
+    expect(datos).toHaveProperty("imagen_base64");
+    expect(s.rpc("praind_registrar")).toBe(0);
+  });
+
+  it("guardar sin contratista (o con uno mal formado) se rechaza sin salir a internet", async () => {
+    for (const extra of [{}, { contratista_id: "no-es-uuid", solo_previsualizar: true }]) {
+      const s = simular({});
+      const r = await manejar(
+        pedido("POST", "/cargar-desde-qr", { cuerpo: JSON.stringify({ enlace: ENLACE, ...extra }) }),
+        ENV,
+        s.deps,
+      );
+      expect(r.status).toBe(400);
+      expect(s.llamadas).toEqual([]);
+    }
   });
 
   it("rechaza enlaces que no son de gafetes PRAIND sin salir a internet", async () => {

@@ -455,6 +455,10 @@ fun PantallaIngresoBloqueado(
     salida: SalidaPorOtraVia? = null,
     salidaOtraVia: EstadoSalidaOtraVia = EstadoSalidaOtraVia(),
     onRegistrarSalidaOtraVia: () -> Unit = {},
+    // Bloqueado por el PRAIND: leer el QR del gafete nuevo, que actualiza la
+    // ficha. `null`: no se ofrece (otro motivo, o el teléfono no tiene
+    // permiso o conexión para cargar gafetes).
+    onActualizarConGafete: (() -> Unit)? = null,
 ) {
     PantallaBloqueoIngreso(
         titulo = preparacion.nombre,
@@ -464,6 +468,7 @@ fun PantallaIngresoBloqueado(
         salida = salida,
         estadoSalida = salidaOtraVia,
         onRegistrarSalida = onRegistrarSalidaOtraVia,
+        onActualizarConGafete = onActualizarConGafete,
     )
 }
 
@@ -488,6 +493,7 @@ internal fun PantallaBloqueoIngreso(
     salida: SalidaPorOtraVia? = null,
     estadoSalida: EstadoSalidaOtraVia = EstadoSalidaOtraVia(),
     onRegistrarSalida: () -> Unit = {},
+    onActualizarConGafete: (() -> Unit)? = null,
 ) {
     PantallaConGestoVolver(onVolver = onVolver) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -502,6 +508,20 @@ internal fun PantallaBloqueoIngreso(
             // más fuerza que el resto del texto. Sin toque de rechazo: tras un
             // escaneo ya suena y vibra la alerta (`AlertaEscaneo.kt`).
             FranjaEstado(mensaje, TipoEstado.ERROR)
+            if (onActualizarConGafete != null) {
+                Text(
+                    "Si trae su gafete PRAIND al día, lea su QR: se actualiza la ficha y puede entrar.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                BotonBrisas(
+                    onClick = onActualizarConGafete,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                ) {
+                    Text("Actualizar con el QR del gafete PRAIND")
+                }
+            }
             if (salida != null) {
                 DetalleSalidaOtraVia(salida, modifier = Modifier.padding(top = 16.dp))
                 estadoSalida.error?.let {

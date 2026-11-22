@@ -2,6 +2,11 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -76,7 +83,7 @@ private val TIPOS_CONTRATISTA = TipoIngreso.entries.filter { it != TipoIngreso.P
 fun PantallaNuevoContratista(
     nucleo: Nucleo,
     onVolver: () -> Unit,
-    onGuardado: (contratistaId: Long) -> Unit,
+    onGuardado: (contratistaId: Long, aviso: AvisoAlta?) -> Unit,
     textoInicial: String = "",
 ) {
     RegistrarPantalla("nuevo_contratista")
@@ -92,6 +99,87 @@ fun PantallaNuevoContratista(
     var buscandoEmpresa by remember { mutableStateOf(false) }
     var textoEmpresa by remember { mutableStateOf("") }
     var eligiendoFecha by remember { mutableStateOf(false) }
+    // La cámara del QR del gafete PRAIND (alta en un paso: datos y gafete).
+    // Va encima de la otra cámara: su X vuelve a donde estaba.
+    var camaraQr by rememberSaveable { mutableStateOf(false) }
+    // El lector QR es la cámara que se abre al entrar si el teléfono puede
+    // cargar gafetes (pedido del usuario 2026-11-22); el OCR queda como
+    // opción. Entonces su X cancela todo, como la otra cámara directa.
+    var qrDirecto by rememberSaveable { mutableStateOf(false) }
+    var inicioDecidido by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(vm.permisoQrResuelto) {
+        if (vm.permisoQrResuelto && !inicioDecidido) {
+            inicioDecidido = true
+            if (vm.puedeLeerQr && escaneando && escaneoDirecto) {
+                camaraQr = true
+                qrDirecto = true
+            }
+        }
+    }
+    // Un instante, mientras se sabe qué cámara abrir: así no se abre una y
+    // enseguida se cambia por la otra.
+    if (escaneando && escaneoDirecto && !inicioDecidido) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (camaraQr) {
+        val cerrarQr = {
+            camaraQr = false
+            if (qrDirecto) {
+                qrDirecto = false
+                escaneando = false
+                onVolver()
+            }
+        }
+        EscanerConPermisoCamara(
+            mensajePermiso = "Se necesita permiso de cámara para leer el QR del gafete PRAIND.",
+            onCerrar = cerrarQr,
+        ) {
+            EscanerQr(
+                textoGuia = "Apunte al código QR del gafete PRAIND",
+                interpretar = EnlaceQrPraind::desdeQr,
+                onLeido = { enlace ->
+                    camaraQr = false
+                    qrDirecto = false
+                    escaneando = false
+                    escaneoDirecto = false
+                    vm.aplicarQrGafete(enlace)
+                },
+                onCerrar = cerrarQr,
+                accionSecundaria = if (qrDirecto) {
+                    {
+                        Column(
+                            modifier = Modifier.padding(top = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            // El OCR como opción: la cámara de siempre.
+                            BotonSobreCamara(
+                                "Lector OCR",
+                                IconosLucide.EscanearDocumento,
+                                onClick = {
+                                    camaraQr = false
+                                    qrDirecto = false
+                                },
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                            BotonLlenarAManoCamara(onClick = {
+                                camaraQr = false
+                                qrDirecto = false
+                                escaneando = false
+                                escaneoDirecto = false
+                            })
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        return
+    }
 
     if (escaneando) {
         PantallaEscanearCedula(
@@ -110,6 +198,11 @@ fun PantallaNuevoContratista(
                     escaneando = false
                     escaneoDirecto = false
                 }
+            } else {
+                null
+            },
+            onLeerQr = if (vm.puedeLeerQr) {
+                { camaraQr = true }
             } else {
                 null
             },
@@ -132,17 +225,39 @@ fun PantallaNuevoContratista(
     ) {
         EncabezadoPantalla(titulo = "Nuevo contratista", onVolver = onVolver)
 
-        TarjetaEscaner(
-            "Escanear gafete PRAIND",
-            "Llena cédula, nombre, empresa y vencimiento.",
-            onClick = {
-                // Un solo escaneo llena TODOS los campos, así que se parte de
-                // cero (a diferencia de Proveedores/Rutas, donde cada escáner
-                // llena un solo dato).
-                vm.limpiarParaEscanear()
-                escaneando = true
-            },
-        )
+        // Con el QR (hace falta internet y el permiso del panel) se llenan
+        // los datos y, al guardar, queda cargado el gafete PRAIND.
+        // Un solo escaneo llena TODOS los campos, así que se parte de cero
+        // (a diferencia de Proveedores/Rutas, donde cada escáner llena un
+        // solo dato).
+        val abrirCamara = {
+            vm.limpiarParaEscanear()
+            escaneando = true
+        }
+        if (vm.puedeLeerQr) {
+            // Las dos vías lado a lado, para no ocupar media pantalla
+            // (pedido del usuario 2026-11-21).
+            Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TarjetaEscanerCompacta(
+                    "Lector QR",
+                    IconosLucide.EscanearQr,
+                    onClick = { camaraQr = true },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+                TarjetaEscanerCompacta(
+                    "Lector OCR",
+                    IconosLucide.EscanearDocumento,
+                    onClick = abrirCamara,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+            }
+        } else {
+            TarjetaEscaner(
+                "Escanear gafete PRAIND",
+                "Llena cédula, nombre, empresa y vencimiento.",
+                onClick = abrirCamara,
+            )
+        }
 
         SeccionFormulario("Persona") {
             CampoAgrupado(
@@ -218,6 +333,17 @@ fun PantallaNuevoContratista(
             }
         }
 
+        if (vm.leyendoQr) {
+            Row(
+                modifier = Modifier.padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("Leyendo el gafete PRAIND…")
+            }
+        }
+
         val mensajeError = vm.error
         if (mensajeError != null) {
             FranjaEstado(mensajeError, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
@@ -227,14 +353,27 @@ fun PantallaNuevoContratista(
             FranjaEstado(mensajeExito, TipoEstado.EXITO, modifier = Modifier.padding(top = 16.dp))
         }
 
-        BotonBrisas(
-            onClick = { vm.guardar(onGuardado = onGuardado) },
-            enabled = !vm.enviando && !praindVencido,
-            // Sin padding inferior: sumado al `imePadding()` del teclado dejaba
-            // un hueco de más entre el botón y el teclado (reportado 2026-09-20).
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-        ) {
-            Text(if (vm.enviando) "Guardando…" else "Guardar")
+        // La cédula del gafete del QR ya tiene ficha: en vez de darla de alta
+        // otra vez se actualiza directo y pasa a su ingreso (sólo por QR;
+        // pedidos del usuario 2026-11-21 y 22).
+        if (vm.yaRegistrado != null && vm.enlaceGafeteLeido != null) {
+            BotonBrisas(
+                onClick = { vm.actualizarRegistrado(onActualizado = onGuardado) },
+                enabled = !vm.enviando && !vm.leyendoQr && !praindVencido,
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            ) {
+                Text(if (vm.enviando) "Actualizando…" else "Actualizar su ficha con este gafete")
+            }
+        } else {
+            BotonBrisas(
+                onClick = { vm.guardar(onGuardado = onGuardado) },
+                enabled = !vm.enviando && !vm.leyendoQr && !praindVencido,
+                // Sin padding inferior: sumado al `imePadding()` del teclado dejaba
+                // un hueco de más entre el botón y el teclado (reportado 2026-09-20).
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            ) {
+                Text(if (vm.enviando) "Guardando…" else "Guardar")
+            }
         }
     }
     }

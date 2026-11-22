@@ -42,6 +42,9 @@ fun PantallaEscanearCedula(
     // vacío y la X cancela todo -- como "Escribir el código" en la cámara
     // del QR. `null`: sólo la X.
     onLlenarAMano: (() -> Unit)? = null,
+    // "Leer el QR del gafete" sobre "Llenar a mano": el alta de un
+    // contratista con el QR de su gafete PRAIND. `null`: no aparece.
+    onLeerQr: (() -> Unit)? = null,
 ) {
     RegistrarPantalla("escanear_cedula")
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
@@ -59,6 +62,7 @@ fun PantallaEscanearCedula(
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
             onLlenarAMano = onLlenarAMano,
+            onLeerQr = onLeerQr,
         )
     }
 }
@@ -71,6 +75,7 @@ private fun VistaCamaraCedula(
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
     onLlenarAMano: (() -> Unit)?,
+    onLeerQr: (() -> Unit)?,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -338,6 +343,14 @@ private fun VistaCamaraCedula(
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (onLeerQr != null) {
+                BotonSobreCamara(
+                    "Leer el QR del gafete",
+                    IconosLucide.EscanearQr,
+                    onClick = onLeerQr,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
             if (onLlenarAMano != null) {
                 BotonLlenarAManoCamara(onClick = onLlenarAMano, modifier = Modifier.padding(bottom = 16.dp))
             }

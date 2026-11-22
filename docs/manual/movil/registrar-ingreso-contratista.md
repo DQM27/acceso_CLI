@@ -76,14 +76,27 @@ aparece **Cargar gafete PRAIND**. Hace falta internet.
 1. Toque **Cargar gafete PRAIND**. Se abre la cámara.
 2. Apunte al **código QR del gafete PRAIND** que trae la persona. Se lee solo,
    sin escribir nada.
-3. Aparece de quién es el gafete PRAIND:
-   - En verde, si el nombre coincide con el del contratista: toque
-     **Guardar**.
-   - En amarillo, si **no** coincide: revise que sea el gafete PRAIND correcto
-     de esta persona antes de tocar **Guardar igual**.
+3. El teléfono lee el gafete y lo compara con la ficha del contratista. Aparece
+   una línea por dato, en verde si está bien, en amarillo si hay que revisarlo
+   y en rojo si hay un problema:
+   - **Cédula**: si no coincide, **no se puede guardar**: puede ser el gafete
+     de otra persona.
+   - **Nombre** y **empresa**: si no coinciden, señala la palabra que difiere
+     (por ejemplo, **«JOHANNA» en el gafete, «JOHANA» en la ficha**). Igual se
+     puede guardar. Debajo aparece **Corregir el nombre de la ficha** (o la
+     empresa): márquelo si la ficha está mal escrita y debe quedar como dice
+     el gafete. La empresa sólo se ofrece si existe en el catálogo.
+   - **Vencimiento**:
+     - Si el gafete es **más nuevo** que la ficha, al guardar se actualiza la
+       fecha de la ficha.
+     - Si el gafete está **vencido**, se guarda sólo como imagen ilustrativa:
+       pida a la persona el gafete actualizado. El botón dice **Guardar como
+       imagen**.
+     - Si es **más viejo** que la ficha, la ficha no cambia.
    - **Escanear otra vez** vuelve a la cámara; **Cancelar** no guarda nada.
-4. Al guardar aparece **"Gafete PRAIND de … guardado."** y el botón pasa a
-   **Ver gafete PRAIND**. El escritorio y el panel lo ven también.
+4. Al guardar aparece **"Gafete PRAIND de … guardado."** (y la fecha nueva, si
+   se actualizó) y el botón pasa a **Ver gafete PRAIND**. El escritorio y el
+   panel lo ven también.
 
 Para cambiar uno que ya está cargado: **Ver gafete PRAIND** → **Reemplazar
 gafete PRAIND**, y los mismos pasos.
@@ -123,12 +136,31 @@ Si la persona no puede entrar, en vez del formulario se ve el motivo, con
 
 | Mensaje | Qué hacer |
 |---|---|
-| "Acceso denegado · PRAIND vencido" | No puede entrar hasta renovar el PRAIND. |
-| "Acceso denegado · PRAIND sin fecha registrada" | Falta la fecha del PRAIND en sus datos. Avise a un administrador o corríjala en el escritorio. |
+| "Acceso denegado · PRAIND vencido" | No puede entrar hasta renovar el PRAIND. Si trae su gafete PRAIND al día, toque **Actualizar con el QR del gafete PRAIND** (ver abajo). |
+| "Acceso denegado · PRAIND sin fecha registrada" | Falta la fecha del PRAIND en sus datos. Igual que el anterior: con el QR del gafete al día se completa. Si no, avise a un administrador o corríjala en el escritorio. |
 | "Acceso denegado · no tiene acceso autorizado" | Un administrador le quitó el acceso. No puede entrar. |
 | "Acceso denegado · la empresa está inactiva" | Su empresa está desactivada. Avise a un administrador. |
 | "El contratista ya tiene un ingreso activo en (sitio)." | Ver [Problemas frecuentes](problemas-frecuentes.md#el-contratista-ya-tiene-un-ingreso-activo). |
 | "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Debajo se ve ese ingreso (gafete y hora). Toque **Registrar esa salida y continuar**: se cierra ahí mismo y pasa al formulario de ingreso. |
+
+### Actualizar el PRAIND vencido con el QR del gafete
+
+Cuando el único motivo es el PRAIND (vencido o sin fecha) y la persona trae
+su gafete PRAIND al día, debajo del motivo aparece **Actualizar con el QR del
+gafete PRAIND**. Sólo con el QR, nunca con la cámara: la imagen se baja del
+sistema PRAIND (así se sabe que el gafete es real) y queda guardada. Hace
+falta internet y el permiso del panel para cargar gafetes; sin eso, no puede
+entrar.
+
+1. Toque el botón y apunte al QR del gafete.
+2. Se ve la misma revisión que al cargar un gafete (cédula, nombre, empresa
+   y vencimiento). Si el gafete es más nuevo, dice que la ficha pasa a la
+   fecha nueva.
+3. Toque **Guardar**: se actualiza la ficha, queda cargado el gafete y pasa
+   directo al formulario de ingreso.
+
+Si el gafete también está vencido, se puede guardar como imagen, pero la
+persona sigue sin poder entrar.
 
 Otros mensajes al registrar:
 

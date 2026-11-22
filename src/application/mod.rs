@@ -38,7 +38,9 @@ mod unidad_de_trabajo;
 
 pub mod puertos;
 pub use accesos::{AvisosPermanencia, ResultadoSalidas, SalidaRechazada};
-pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
+pub use catalogos::{
+    CorreccionDesdeGafete, buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion,
+};
 #[cfg(feature = "nube")]
 pub use con_nube::{
     EntradaVisitaVerificadaError, EntregaGafeteProvisionalVerificadaError,

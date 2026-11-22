@@ -75,6 +75,11 @@ fun PantallaActivos(
         val texto = carneGuardado ?: return@LaunchedEffect
         viewModel.confirmacion.mostrar(texto)
         carneViewModel.avisoGuardadoVisto()
+        // Si estaba bloqueado por el PRAIND, se vuelve a preparar su ingreso:
+        // con la ficha ya al día pasa al formulario.
+        (viewModel.seleccionIngreso as? SeleccionIngreso.Bloqueada)?.preparacion
+            ?.takeIf { it.seResuelveConGafetePraind }
+            ?.let { viewModel.elegir(it.contratistaId, origen = "gafete_praind") }
     }
     var escanerAbierto by remember { mutableStateOf(false) }
     // El buscador de abajo (la píldora de búsqueda).
@@ -105,7 +110,17 @@ fun PantallaActivos(
     }
     val camposIngreso = rememberCamposIngreso(hojaIngreso?.contratistaId)
     // Si el contratista de la hoja tiene carné PRAIND (consulta local, sin red).
-    LaunchedEffect(hojaIngreso?.contratistaId) { carneViewModel.consultar(hojaIngreso?.contratistaId) }
+    // Bloqueado por el PRAIND (vencido o sin fecha): se puede actualizar la
+    // ficha con el QR del gafete nuevo (sólo por QR: la imagen se baja del
+    // sistema PRAIND, así no es una falsificación, y queda guardada).
+    val bloqueadaPorPraind = (viewModel.seleccionIngreso as? SeleccionIngreso.Bloqueada)
+        ?.preparacion?.takeIf { it.seResuelveConGafetePraind }
+    // A quién es el gafete que se lee con el QR: el de la hoja de ingreso o
+    // el bloqueado por el PRAIND.
+    val preparacionCarne = formulario?.preparacion ?: bloqueadaPorPraind
+    LaunchedEffect(hojaIngreso?.contratistaId ?: bloqueadaPorPraind?.contratistaId) {
+        carneViewModel.consultar(hojaIngreso?.contratistaId ?: bloqueadaPorPraind?.contratistaId)
+    }
     var escanerPlacaAbierto by remember { mutableStateOf(false) }
     // Cámara para el QR del gafete PRAIND del contratista de la hoja.
     var escanerCarneAbierto by remember { mutableStateOf(false) }
@@ -113,7 +128,8 @@ fun PantallaActivos(
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
     // ingreso bloqueado, luego los escáneres, y si no la lista).
     val panel: PanelActivos = when (val actual = viewModel.seleccionIngreso) {
-        is SeleccionIngreso.Bloqueada -> PanelActivos.Bloqueado(actual)
+        is SeleccionIngreso.Bloqueada ->
+            if (escanerCarneAbierto && bloqueadaPorPraind != null) PanelActivos.EscanerQrCarne else PanelActivos.Bloqueado(actual)
         else -> when {
             escanerPlacaAbierto && formulario != null -> PanelActivos.EscanerPlaca
             escanerCarneAbierto && formulario != null -> PanelActivos.EscanerQrCarne
@@ -151,6 +167,22 @@ fun PantallaActivos(
                     salida = mostrado.seleccion.salidaOtraVia,
                     salidaOtraVia = viewModel.salidaOtraVia,
                     onRegistrarSalidaOtraVia = viewModel::registrarSalidaPorOtraVia,
+                    onActualizarConGafete = if (puedeCargarCarne && mostrado.seleccion.preparacion.seResuelveConGafetePraind) {
+                        { escanerCarneAbierto = true }
+                    } else {
+                        null
+                    },
+                )
+                DialogoCargaCarnePraind(
+                    carga = cargaCarne,
+                    onGuardar = carneViewModel::guardar,
+                    onEscanearOtraVez = {
+                        carneViewModel.cancelarCarga()
+                        escanerCarneAbierto = true
+                    },
+                    onCancelar = carneViewModel::cancelarCarga,
+                    onCorregirNombre = carneViewModel::alternarCorregirNombre,
+                    onCorregirEmpresa = carneViewModel::alternarCorregirEmpresa,
                 )
             }
             PanelActivos.EscanerCedula -> {
@@ -209,7 +241,7 @@ fun PantallaActivos(
                         textoGuia = "Apunte al código QR del gafete PRAIND",
                         interpretar = EnlaceQrPraind::desdeQr,
                         onLeido = { enlace ->
-                            formulario?.preparacion?.let {
+                            preparacionCarne?.let {
                                 carneViewModel.previsualizar(it.contratistaId, it.nombre, enlace)
                             }
                             escanerCarneAbierto = false
@@ -352,6 +384,8 @@ fun PantallaActivos(
                     escanerCarneAbierto = true
                 },
                 onCancelar = carneViewModel::cancelarCarga,
+                onCorregirNombre = carneViewModel::alternarCorregirNombre,
+                onCorregirEmpresa = carneViewModel::alternarCorregirEmpresa,
             )
 
             }

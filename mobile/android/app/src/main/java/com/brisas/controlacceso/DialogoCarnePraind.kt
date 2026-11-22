@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +30,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import uniffi.control_acceso_mobile.ModoGuardadoGafete
+import uniffi.control_acceso_mobile.NivelRevisionGafete
 
 /// El carné PRAIND a pantalla completa, para comparar la foto con la persona
 /// que está en la portería. "Cerrar" o el gesto de volver lo cierran. Con
@@ -105,6 +110,8 @@ internal fun DialogoCargaCarnePraind(
     onGuardar: () -> Unit,
     onEscanearOtraVez: () -> Unit,
     onCancelar: () -> Unit,
+    onCorregirNombre: () -> Unit = {},
+    onCorregirEmpresa: () -> Unit = {},
 ) {
     val nombre = when (carga) {
         CargaCarne.Inactiva -> return
@@ -135,25 +142,52 @@ internal fun DialogoCargaCarnePraind(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("Buscando el gafete PRAIND…")
+                    Text("Buscando y leyendo el gafete PRAIND…")
                 }
-                is CargaCarne.Previa -> FranjaEstado(
-                    textoPrevia(carga),
-                    if (carga.coincide) TipoEstado.EXITO else TipoEstado.AVISO,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                is CargaCarne.Previa -> {
+                    val revision = carga.revision
+                    if (revision != null) {
+                        // Cédula, nombre, empresa y vencimiento, con el texto
+                        // del núcleo (`lineas_revision_gafete_praind`).
+                        revision.lineas.forEach { linea ->
+                            FranjaEstado(linea.texto, tipoDeLinea(linea.nivel), modifier = Modifier.fillMaxWidth())
+                        }
+                        // Corregir la ficha con lo que dice el gafete: sólo si
+                        // el portero lo marca (pedido del usuario 2026-11-21).
+                        revision.nombreParaFicha?.let { nuevo ->
+                            OpcionCorregir(
+                                texto = "Corregir el nombre de la ficha: $nuevo",
+                                marcada = carga.corregirNombre,
+                                habilitada = !guardando,
+                                onCambiar = onCorregirNombre,
+                            )
+                        }
+                        revision.empresaParaFicha?.let { empresa ->
+                            OpcionCorregir(
+                                texto = "Corregir la empresa de la ficha: ${empresa.nombre}",
+                                marcada = carga.corregirEmpresa,
+                                habilitada = !guardando,
+                                onCambiar = onCorregirEmpresa,
+                            )
+                        }
+                    } else {
+                        FranjaEstado(
+                            textoPrevia(carga),
+                            if (carga.coincide) TipoEstado.EXITO else TipoEstado.AVISO,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
                 is CargaCarne.Error -> FranjaEstado(carga.mensaje, TipoEstado.ERROR, modifier = Modifier.fillMaxWidth())
                 CargaCarne.Inactiva -> Unit
             }
             if (carga is CargaCarne.Previa) {
-                BotonBrisas(onClick = onGuardar, enabled = !guardando, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        when {
-                            guardando -> "Guardando…"
-                            carga.coincide -> "Guardar"
-                            else -> "Guardar igual"
-                        },
-                    )
+                BotonBrisas(
+                    onClick = onGuardar,
+                    enabled = !guardando && carga.sePuedeGuardar,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(textoBotonGuardar(carga))
                 }
             }
             if (carga !is CargaCarne.Buscando) {
@@ -164,6 +198,43 @@ internal fun DialogoCargaCarnePraind(
             BotonDiscretoBrisas(onClick = onCancelar, enabled = !guardando, modifier = Modifier.fillMaxWidth()) {
                 Text("Cancelar")
             }
+        }
+    }
+}
+
+/// Una casilla con su texto; toda la fila se puede tocar.
+@Composable
+private fun OpcionCorregir(texto: String, marcada: Boolean, habilitada: Boolean, onCambiar: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = marcada, enabled = habilitada, role = Role.Checkbox, onValueChange = { onCambiar() }),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = marcada, onCheckedChange = null, enabled = habilitada)
+        Text(texto, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+internal fun tipoDeLinea(nivel: NivelRevisionGafete): TipoEstado = when (nivel) {
+    NivelRevisionGafete.BIEN -> TipoEstado.EXITO
+    NivelRevisionGafete.AVISO -> TipoEstado.AVISO
+    NivelRevisionGafete.ERROR -> TipoEstado.ERROR
+}
+
+/// El botón dice qué pasa al tocarlo, según el modo que decide el núcleo
+/// (`RevisionGafetePraind::modo_guardado`).
+internal fun textoBotonGuardar(previa: CargaCarne.Previa): String {
+    val revision = previa.revision
+    return when {
+        previa.guardando -> "Guardando…"
+        revision == null -> if (previa.coincide) "Guardar" else "Guardar igual"
+        else -> when (revision.modoGuardado) {
+            ModoGuardadoGafete.NO_SE_PUEDE -> "No se puede guardar"
+            ModoGuardadoGafete.SOLO_IMAGEN -> "Guardar como imagen"
+            ModoGuardadoGafete.CON_AVISOS -> "Guardar igual"
+            ModoGuardadoGafete.NORMAL -> "Guardar"
         }
     }
 }

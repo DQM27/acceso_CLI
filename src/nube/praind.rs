@@ -59,6 +59,10 @@ pub struct CargaPraind {
     pub nombre_en_origen: Option<String>,
     pub bytes: u64,
     pub tipo_mime: String,
+    /// Sólo en la vista previa pedida con la imagen (el teléfono la lee con
+    /// OCR antes de guardar). No se manda a las pantallas.
+    #[serde(default, skip_serializing)]
+    pub imagen_base64: Option<String>,
 }
 
 /// Un carné bajado del Worker.
@@ -176,20 +180,28 @@ pub fn descargar(token: &str, clave: &str) -> Result<CarneDescargado, ErrorPrain
 /// Pide al Worker que baje el carné del enlace del QR. Con
 /// `solo_previsualizar` no guarda nada y devuelve el nombre de la página,
 /// para compararlo con el contratista antes de confirmar.
+///
+/// Sin `contratista_uuid` sólo sirve para previsualizar: es el alta de un
+/// contratista nuevo, que todavía no existe en la nube.
 pub fn cargar_desde_qr(
     token: &str,
-    contratista_uuid: &str,
+    contratista_uuid: Option<&str>,
     enlace: &str,
     solo_previsualizar: bool,
+    incluir_imagen: bool,
 ) -> Result<CargaPraind, ErrorPraind> {
+    let mut cuerpo = serde_json::json!({
+        "enlace": enlace,
+        "solo_previsualizar": solo_previsualizar,
+        "incluir_imagen": incluir_imagen,
+    });
+    if let Some(uuid) = contratista_uuid {
+        cuerpo["contratista_id"] = serde_json::Value::from(uuid);
+    }
     let respuesta = CLIENTE
         .post(format!("{}/cargar-desde-qr", praind_url()))
         .bearer_auth(token)
-        .json(&serde_json::json!({
-            "contratista_id": contratista_uuid,
-            "enlace": enlace,
-            "solo_previsualizar": solo_previsualizar,
-        }))
+        .json(&cuerpo)
         .send()
         .map_err(|error| error_de_red(&error))?;
     if !respuesta.status().is_success() {
@@ -237,28 +249,10 @@ fn ahora() -> String {
     crate::tiempo::serializar_utc(chrono::Utc::now())
 }
 
-/// Si el nombre de la página del QR corresponde al contratista: todas las
-/// palabras del nombre más corto están en el otro (puede sobrar un segundo
-/// nombre o apellido), con al menos dos en común, sin tildes ni mayúsculas.
-/// Mismo criterio que el escritorio y el panel (`nombresCoinciden` en TS).
-pub fn nombres_coinciden(en_origen: Option<&str>, contratista: &str) -> bool {
-    fn palabras(nombre: &str) -> Vec<String> {
-        crate::texto::plegar_diacriticos(nombre)
-            .to_uppercase()
-            .split(|c: char| !c.is_ascii_alphabetic())
-            .filter(|p| !p.is_empty())
-            .map(str::to_string)
-            .collect()
-    }
-    let Some(en_origen) = en_origen else {
-        return false;
-    };
-    let a = palabras(en_origen);
-    let b = palabras(contratista);
-    let (corto, largo) = if a.len() <= b.len() { (a, b) } else { (b, a) };
-    let comunes = corto.iter().filter(|p| largo.contains(p)).count();
-    comunes == corto.len() && comunes >= 2
-}
+/// Si el nombre de la página del QR corresponde al contratista. La regla
+/// vive en el dominio ([`crate::domain::gafete_praind::nombres_coinciden`]),
+/// la misma que compara el nombre leído del gafete.
+pub use crate::domain::gafete_praind::nombres_coinciden;
 
 fn carne_de(
     connection: &rusqlite::Connection,
@@ -345,12 +339,62 @@ pub fn cargar_carne_desde_qr(
         .uuid
         .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
     let carga = token()
-        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), solo_previsualizar))
+        .and_then(|token| {
+            cargar_desde_qr(
+                &token,
+                Some(&uuid),
+                enlace.trim(),
+                solo_previsualizar,
+                false,
+            )
+        })
         .map_err(|error| error.to_string())?;
     if let Some(clave) = carga.clave.as_deref() {
         anotar_clave(connection, contratista_id, clave)?;
     }
     Ok(carga)
+}
+
+/// Vista previa del gafete del QR **con su imagen**, sin guardar nada: el
+/// teléfono la lee con OCR para compararla con la ficha antes de guardar.
+pub fn previsualizar_carne_con_imagen(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    let uuid = carne_de(connection, contratista_id)?
+        .uuid
+        .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
+    previsualizar_con_imagen(Some(&uuid), enlace, token)
+}
+
+/// Vista previa del gafete del QR con su imagen para dar de alta a un
+/// contratista nuevo: todavía no existe, ni en el equipo ni en la nube. No
+/// guarda nada.
+pub fn previsualizar_gafete_para_alta(
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    previsualizar_con_imagen(None, enlace, token)
+}
+
+fn previsualizar_con_imagen(
+    uuid: Option<&str>,
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    use base64::Engine as _;
+
+    let mut carga = token()
+        .and_then(|token| cargar_desde_qr(&token, uuid, enlace.trim(), true, true))
+        .map_err(|error| error.to_string())?;
+    let imagen = carga
+        .imagen_base64
+        .take()
+        .and_then(|texto| base64::engine::general_purpose::STANDARD.decode(texto).ok())
+        .ok_or_else(|| "La vista previa no trajo la imagen del gafete PRAIND.".to_string())?;
+    Ok((carga, imagen))
 }
 
 /// Carga la imagen del carné. Queda guardada en el equipo para verla sin

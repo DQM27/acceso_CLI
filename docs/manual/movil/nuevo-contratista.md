@@ -19,9 +19,44 @@ Cualquier usuario con sesión abierta.
   a la derecha) y luego **Nuevo contratista**. Conviene buscarlo antes: si
   ya estaba registrado, darlo de alta otra vez lo duplica.
 
-## Pasos — escaneando el gafete PRAIND (lo más rápido)
+## Pasos — con el QR del gafete PRAIND (datos y gafete en un paso)
 
-1. Se abre directo la cámara: apunte al gafete PRAIND.
+Hace falta internet y que un administrador le haya dado permiso a este
+teléfono desde el panel para cargar gafetes PRAIND. Con eso, es lo que se
+abre al entrar. Sin eso, se abre la cámara del gafete (más abajo).
+
+1. Se abre el **lector QR**. Debajo están **Lector OCR** (leer el gafete
+   con la cámara, sin QR) y **Llenar a mano**; la **X** cancela. En el
+   formulario, **Lector QR** lo vuelve a abrir.
+2. Apunte al **código QR** del gafete PRAIND. Se lee solo.
+3. La app baja el gafete, lo lee y llena cédula, nombre, empresa y
+   vencimiento. Dice **"Gafete PRAIND leído: revise los datos. Al guardar se
+   carga el gafete."**
+   - Si el gafete está **vencido**, lo dice con la fecha y **Guardar** queda
+     deshabilitado: pida a la persona el gafete actualizado.
+   - Si falta algún dato (no se pudo leer), dice **"complete lo que falta"**.
+4. **Revise todo** y toque **Guardar**. Se registra al contratista **y
+   queda cargado su gafete PRAIND**: en el formulario de ingreso ya aparece
+   **Ver gafete PRAIND**, y arriba se ve **"Gafete PRAIND de … guardado."**
+
+**Si la persona ya está registrada** (por ejemplo, alguien que no viene
+hace tiempo y tiene la ficha vieja), en vez de **Guardar** aparece
+**Actualizar su ficha con este gafete**. Al tocarlo, sin más ventanas:
+guarda el gafete, la ficha toma su fecha si es más nueva (y el nombre y la
+empresa del formulario, si eran distintos) y pasa directo a su ingreso.
+Arriba se ve, por ejemplo, **"Gafete PRAIND de … guardado; la ficha vence el
+…"**. Si el gafete no se pudo guardar (sin internet), la ficha no cambia y
+puede volver a tocar el botón. Así no se intenta darla de alta otra vez.
+
+Si cambia la cédula por otra, el gafete no se carga (sería de otra
+persona). Si la carga del gafete falla (por ejemplo, se cortó internet), el
+contratista queda registrado igual y se avisa: cárguelo desde su ingreso con
+**Cargar gafete PRAIND**.
+
+## Pasos — escaneando el gafete PRAIND con la cámara
+
+1. Se abre directo la cámara (si se abrió el lector QR, toque **Lector
+   OCR**): apunte al gafete PRAIND.
 2. La app llena cédula, nombre, empresa y vencimiento, y dice **"Gafete
    PRAIND leído — revise los datos antes de guardar"**.
 3. **Revise todo** contra el gafete PRAIND. Si la empresa del gafete PRAIND no coincide
@@ -48,7 +83,8 @@ cancela sin registrar a nadie.
    el calendario, cuando el tipo lo pide.
 5. Toque **Guardar**. Pasa directo a su ingreso.
 
-**Escanear gafete PRAIND**, arriba del formulario, vuelve a abrir la
+**Escanear gafete PRAIND** (o **Lector OCR**, al lado de
+**Lector QR** cuando está la opción del QR), arriba del formulario, vuelve a abrir la
 cámara (borra lo escrito). **‹ Volver** cancela sin guardar.
 
 ## Mensajes que pueden aparecer
@@ -62,6 +98,8 @@ cámara (borra lo escrito). **‹ Volver** cancela sin guardar.
 | "La cédula debe tener sólo números, entre 9 y 13 dígitos" | La cédula no tiene el formato correcto. | Revísela. |
 | "Ya existe un contratista con esa cédula" | La persona ya está registrada. | Búsquela en **Contratistas** y registre su ingreso. Para corregir sus datos, use el escritorio. |
 | "Fecha PRAIND requerida" | El tipo elegido necesita fecha de PRAIND. | Elija la fecha del gafete PRAIND. |
+| "El gafete PRAIND venció el …: pida a la persona el gafete actualizado." | El gafete del QR está vencido. | No puede quedar registrada hasta tener un gafete vigente. |
+| "Contratista guardado, pero el gafete PRAIND no se cargó…" | El alta quedó, pero el gafete no subió. | En su ingreso, toque **Cargar gafete PRAIND**. |
 
 ## Relacionado
 
