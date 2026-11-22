@@ -229,6 +229,35 @@ fn empresas_coinciden(en_gafete: &str, ficha: &str) -> bool {
     corto.iter().all(|p| largo.contains(p))
 }
 
+/// Las palabras que tiene sólo el gafete y sólo la ficha, en mayúscula y con
+/// sus tildes, para decir **dónde** difiere ("JOHANNA" en el gafete,
+/// "JOHANA" en la ficha). Al comparar no cuentan tildes ni mayúsculas, y en
+/// una empresa tampoco la forma jurídica ni los artículos.
+#[must_use]
+pub fn palabras_que_difieren(
+    gafete: &str,
+    ficha: &str,
+    es_empresa: bool,
+) -> (Vec<String>, Vec<String>) {
+    let con_clave = |texto: &str| -> Vec<(String, String)> {
+        texto
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|p| !p.is_empty())
+            .map(|p| (plegar_diacriticos(p).to_uppercase(), p.to_uppercase()))
+            .filter(|(clave, _)| !es_empresa || !PALABRAS_DE_RELLENO.contains(&clave.as_str()))
+            .collect()
+    };
+    let a = con_clave(gafete);
+    let b = con_clave(ficha);
+    let solo = |de: &[(String, String)], en: &[(String, String)]| -> Vec<String> {
+        de.iter()
+            .filter(|(clave, _)| !en.iter().any(|(otra, _)| otra == clave))
+            .map(|(_, palabra)| palabra.clone())
+            .collect()
+    };
+    (solo(&a, &b), solo(&b, &a))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,6 +450,29 @@ mod tests {
             "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL"
         ));
         assert!(!empresas_coinciden("S.A.", "SODEXO"));
+    }
+
+    #[test]
+    fn palabras_que_difieren_sin_contar_tildes_mayusculas_ni_relleno() {
+        assert_eq!(
+            palabras_que_difieren(
+                "Hazel Johanna Angulo Aguilar",
+                "HAZEL JOHANA ANGULO AGUILAR",
+                false
+            ),
+            (vec!["JOHANNA".to_string()], vec!["JOHANA".to_string()])
+        );
+        assert_eq!(
+            palabras_que_difieren("Rafael Carranza Nuñez", "RAFAEL CARRANZA NUNEZ", false),
+            (vec![], vec![])
+        );
+        assert_eq!(
+            palabras_que_difieren("Expenic Ing S.A", "ALDAMA S.A.", true),
+            (
+                vec!["EXPENIC".to_string(), "ING".to_string()],
+                vec!["ALDAMA".to_string()]
+            )
+        );
     }
 
     #[test]

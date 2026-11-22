@@ -977,10 +977,31 @@ pub fn lineas_revision_gafete_praind(
     ] {
         lineas.push(match comparacion {
             Comparacion::Coincide => linea(Bien, format!("{dato}: coincide.")),
-            Comparacion::Difiere { gafete, ficha } => linea(
-                Aviso,
-                format!("{dato} {distinto}: el gafete dice «{gafete}» y la ficha «{ficha}»."),
-            ),
+            // Se señala la palabra que difiere y todo en mayúscula: con el
+            // nombre completo de cada lado (uno en minúscula, el otro en
+            // mayúscula) parecía que la diferencia eran las mayúsculas
+            // ("Johanna" contra "JOHANA", pedido del usuario 2026-11-21).
+            Comparacion::Difiere { gafete, ficha } => {
+                let (en_gafete, en_ficha) = crate::domain::gafete_praind::palabras_que_difieren(
+                    gafete,
+                    ficha,
+                    dato == "Empresa",
+                );
+                let texto = if !en_gafete.is_empty() && !en_ficha.is_empty() {
+                    format!(
+                        "{dato} {distinto}: «{}» en el gafete, «{}» en la ficha.",
+                        en_gafete.join(" "),
+                        en_ficha.join(" ")
+                    )
+                } else {
+                    format!(
+                        "{dato} {distinto}: el gafete dice «{}» y la ficha «{}».",
+                        gafete.to_uppercase(),
+                        ficha.to_uppercase()
+                    )
+                };
+                linea(Aviso, texto)
+            }
             Comparacion::NoLeido => {
                 linea(Aviso, format!("No se pudo leer {con_articulo} del gafete."))
             }
@@ -1542,9 +1563,33 @@ mod tests {
             );
             assert_eq!(
                 todas[2].1,
-                "Empresa distinta: el gafete dice «Componentes el Orbe» y la ficha «SODEXO»."
+                "Empresa distinta: «COMPONENTES ORBE» en el gafete, «SODEXO» en la ficha."
             );
             assert_eq!(todas[3].1, "Vigente hasta el 27/01/2027.");
+        }
+
+        /// El caso real de staging (2026-11-21): una N de menos en la ficha.
+        /// Antes salía el nombre entero de cada lado, uno en minúscula y el
+        /// otro en mayúscula, y parecía que eso era la diferencia.
+        #[test]
+        fn un_nombre_distinto_senala_la_palabra_que_difiere() {
+            let todas = {
+                let ficha = DatosFicha {
+                    cedula: "305450949",
+                    nombre: "HAZEL JOHANA ANGULO AGUILAR",
+                    empresa: "SODEXO",
+                    vencimiento: Some(fecha("2027-05-30")),
+                };
+                lineas_revision_gafete_praind(&revisar_gafete_praind(
+                    &gafete("2025-06-19", "2026-06-19"),
+                    ficha,
+                    fecha("2026-11-21"),
+                ))
+            };
+            assert_eq!(
+                todas[1].texto,
+                "Nombre distinto: «JOHANNA» en el gafete, «JOHANA» en la ficha."
+            );
         }
     }
 }
