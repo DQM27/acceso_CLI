@@ -83,7 +83,8 @@ internal fun SeccionFormulario(
 }
 
 /// Versión angosta de [TarjetaEscaner] para poner dos lado a lado (QR y
-/// cámara en Nuevo contratista): ícono arriba y el título debajo, centrado.
+/// OCR en Nuevo contratista): ícono chico y un título corto en una fila,
+/// baja para no ocupar media pantalla (pedido del usuario 2026-11-22).
 @Composable
 internal fun TarjetaEscanerCompacta(
     titulo: String,
@@ -91,30 +92,31 @@ internal fun TarjetaEscanerCompacta(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier = modifier
             .padding(top = 12.dp)
             .clip(RoundedCornerShape(RADIO_CONTROL))
             .background(MaterialTheme.colorScheme.primaryContainer)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(32.dp)
                 .clip(RoundedCornerShape(RADIO_CONTROL))
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.size(8.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
             titulo,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

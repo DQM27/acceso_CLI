@@ -268,6 +268,10 @@ class CarnePraindViewModel(
                 withContext(dispatcherIO) {
                     try {
                         fuente.corregirFicha(previa.contratistaId, fecha, nombre, empresa?.id)
+                        // La ficha corregida sube ya, como cualquier cambio
+                        // de este teléfono: sin esto esperaba a la próxima
+                        // sincronización ("1 registro sin subir").
+                        CambiosNube.cambioLocal()
                         null
                     } catch (excepcion: Exception) {
                         excepcion.mensajeDeErrorEsperado() ?: "No se pudo corregir la ficha."

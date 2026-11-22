@@ -185,13 +185,13 @@ fun PantallaNuevoContratista(
             // (pedido del usuario 2026-11-21).
             Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TarjetaEscanerCompacta(
-                    "Escanear QR del gafete",
+                    "Lector QR",
                     IconosLucide.EscanearQr,
                     onClick = { camaraQr = true },
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 TarjetaEscanerCompacta(
-                    "Leer con la cámara",
+                    "Lector OCR",
                     IconosLucide.EscanearDocumento,
                     onClick = abrirCamara,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
