@@ -514,6 +514,12 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * distinguía. */
 @Composable
 fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    BotonSobreCamara("Llenar a mano", IconosLucide.Lapiz, onClick, modifier)
+}
+
+/// Botón con ícono y texto sobre la vista de la cámara (como "Llenar a mano").
+@Composable
+fun BotonSobreCamara(texto: String, icono: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val forma = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
@@ -526,8 +532,8 @@ fun BotonLlenarAManoCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(IconosLucide.Lapiz, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Text("Llenar a mano", color = Color.White, style = MaterialTheme.typography.labelLarge)
+        Icon(icono, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Text(texto, color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
 }
 

@@ -87,7 +87,13 @@ internal fun SeccionFormulario(
 /// color suave de la sección. No es un botón relleno: la acción principal del
 /// formulario sigue siendo una sola, la de abajo (guardar o registrar).
 @Composable
-internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TarjetaEscaner(
+    titulo: String,
+    detalle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icono: ImageVector = IconosLucide.EscanearDocumento,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -105,7 +111,7 @@ internal fun TarjetaEscaner(titulo: String, detalle: String, onClick: () -> Unit
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(IconosLucide.EscanearDocumento, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         }
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {

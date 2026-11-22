@@ -569,9 +569,13 @@ fun PantallaPrincipal(
                         // entonces se cierra: así hay una sola transición (la de
                         // volver), en vez de esa más la de la lista al formulario
                         // encima.
-                        onGuardado = { id ->
+                        onGuardado = { id, aviso ->
                             scope.launch {
                                 activosViewModel.elegir(id).join()
+                                // Si se cargó (o no) el gafete PRAIND del QR.
+                                aviso?.let {
+                                    avisosBreves.mostrar(it.texto, if (it.esError) TipoEstado.AVISO else TipoEstado.EXITO)
+                                }
                                 pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.CONTRATISTAS)
                                 panel = PanelPrincipal.PESTANAS
                             }

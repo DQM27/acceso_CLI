@@ -11,13 +11,41 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.DatosAltaDesdeGafete
 import uniffi.control_acceso_mobile.DatosContratista
 import uniffi.control_acceso_mobile.Empresa
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.PreviaGafeteParaAlta
 import uniffi.control_acceso_mobile.TipoIngreso
 import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
+
+/// Lo que el alta por QR necesita del núcleo y de la nube (en las pruebas,
+/// un doble para lo que sale a internet).
+interface FuenteGafeteAlta {
+    /// Si la nube deja cargar gafetes PRAIND desde este teléfono; `false`
+    /// también sin conexión.
+    fun puedeCargar(): Boolean
+    fun previsualizar(enlace: String): PreviaGafeteParaAlta
+    fun datos(textoOcr: String, nombreEnOrigen: String?): DatosAltaDesdeGafete
+    fun cargar(contratistaId: Long, enlace: String)
+}
+
+private class FuenteGafeteAltaNucleo(private val nucleo: Nucleo) : FuenteGafeteAlta {
+    override fun puedeCargar() = nucleo.permisosCarnePraind().puedeCargar
+    override fun previsualizar(enlace: String) = nucleo.previsualizarGafetePraindParaAlta(enlace)
+    override fun datos(textoOcr: String, nombreEnOrigen: String?) =
+        nucleo.datosAltaDesdeGafetePraind(textoOcr, nombreEnOrigen)
+    override fun cargar(contratistaId: Long, enlace: String) {
+        nucleo.cargarGafetePraindDeAlta(contratistaId, enlace)
+    }
+}
+
+/// Lo que se avisa al volver a la lista tras guardar: si el gafete PRAIND
+/// del QR quedó cargado o no.
+data class AvisoAlta(val texto: String, val esError: Boolean)
 
 /// Dueño del estado y de las llamadas a [Nucleo] del formulario "Nuevo
 /// contratista" (punto M1 de
@@ -37,7 +65,30 @@ class NuevoContratistaViewModel(
     // Inyectable para tests con un dispatcher de tiempo controlado, mismo
     // motivo que en `ActivosViewModel`.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
+    private val fuenteGafete: FuenteGafeteAlta = FuenteGafeteAltaNucleo(nucleo),
+    private val lector: LectorTextoImagen = LectorTextoMlKit(),
 ) : ViewModel() {
+    /// Si se ofrece "Escanear QR del gafete PRAIND" (la nube lo permite para
+    /// este teléfono y hay conexión).
+    var puedeLeerQr by mutableStateOf(false)
+        private set
+
+    /// Bajando y leyendo el gafete del QR.
+    var leyendoQr by mutableStateOf(false)
+        private set
+
+    /// El enlace del QR leído: al guardar, el gafete se carga solo.
+    private var enlaceGafete by mutableStateOf<String?>(null)
+
+    /// La cédula que dice ese gafete: si la corrigen a otra, el gafete ya no
+    /// es de esta persona y no se carga.
+    private var cedulaGafete by mutableStateOf<String?>(null)
+
+    /// Si al guardar se cargará el gafete PRAIND del QR (la pantalla lo dice).
+    val cargaraGafete: Boolean get() = enlaceGafete != null && gafeteEsDeEstaCedula()
+
+    private fun gafeteEsDeEstaCedula(): Boolean = cedulaGafete.let { it == null || it == cedula }
+
     var empresas by mutableStateOf<List<Empresa>>(emptyList())
         private set
     var cedula by mutableStateOf("")
@@ -92,6 +143,11 @@ class NuevoContratistaViewModel(
                 empresas = withContext(dispatcherIO) { medirNucleo("listarEmpresas") { nucleo.listarEmpresas() } }
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
+            }
+        }
+        viewModelScope.launch {
+            puedeLeerQr = withContext(dispatcherIO) {
+                runCatching { fuenteGafete.puedeCargar() }.getOrDefault(false)
             }
         }
     }
@@ -153,6 +209,55 @@ class NuevoContratistaViewModel(
         fechaPraind = ""
         error = null
         mensaje = null
+        enlaceGafete = null
+        cedulaGafete = null
+    }
+
+    private var lecturaQr: Job? = null
+
+    /// Con el enlace del QR del gafete PRAIND: baja la imagen (sin guardar
+    /// nada), la lee con OCR y rellena el formulario. El gafete se carga
+    /// recién al guardar el contratista.
+    fun aplicarQrGafete(enlace: String) {
+        limpiarParaEscanear()
+        lecturaQr?.cancel()
+        leyendoQr = true
+        lecturaQr = viewModelScope.launch {
+            try {
+                val previa = withContext(dispatcherIO) { fuenteGafete.previsualizar(enlace) }
+                // Sin texto (falló el OCR) igual sirve el nombre de la página.
+                val texto = runCatching { lector.leer(previa.imagen) }.getOrNull().orEmpty()
+                val datos = withContext(dispatcherIO) { fuenteGafete.datos(texto, previa.nombreEnOrigen) }
+                aplicarDatosGafete(datos)
+                enlaceGafete = enlace
+                cedulaGafete = datos.cedula
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado() ?: "No se pudo leer el gafete PRAIND."
+            } finally {
+                leyendoQr = false
+            }
+        }
+    }
+
+    private fun aplicarDatosGafete(datos: DatosAltaDesdeGafete) {
+        datos.cedula?.let(::cambiarCedula)
+        datos.nombre?.let(::cambiarNombre)
+        tipoIngreso = TipoIngreso.PRAIND
+        datos.vencimiento?.let { fechaPraind = it.split('-').reversed().joinToString("-") }
+        val catalogo = datos.empresaCatalogo?.let { propuesta -> empresas.firstOrNull { it.id == propuesta.id } }
+        if (catalogo != null) {
+            elegirEmpresa(catalogo)
+        } else {
+            empresaSugeridaTexto = datos.empresa
+        }
+        val vence = datos.vencimiento
+        when {
+            datos.vencido && vence != null ->
+                error = "El gafete PRAIND venció el ${fechaIsoComoTexto(vence)}: pida a la persona el gafete actualizado."
+            datos.cedula == null || vence == null ->
+                mensaje = "Gafete PRAIND leído: complete lo que falta. Al guardar se carga el gafete."
+            else -> mensaje = "Gafete PRAIND leído: revise los datos. Al guardar se carga el gafete."
+        }
     }
 
     /// Sólo el carnet PRAIND rellena el formulario: es el único documento
@@ -184,7 +289,7 @@ class NuevoContratistaViewModel(
     /// (la pantalla pasa a darle el ingreso). Corre en
     /// `viewModelScope`: salir de la pantalla a mitad de camino ya no
     /// cancela el aviso a la nube (antes hacía falta `NonCancellable`).
-    fun guardar(onGuardado: (contratistaId: Long) -> Unit) {
+    fun guardar(onGuardado: (contratistaId: Long, aviso: AvisoAlta?) -> Unit) {
         error = null
         mensaje = null
         // Sin empresa no hay `empresa_id` que mandar; el resto (cédula,
@@ -194,7 +299,7 @@ class NuevoContratistaViewModel(
             error = "Elija la empresa"
             return
         }
-        if (enviando) return
+        if (enviando || leyendoQr) return
         enviando = true
         viewModelScope.launch {
             try {
@@ -211,11 +316,32 @@ class NuevoContratistaViewModel(
                     ) }
                 }
                 CambiosNube.cambioLocal()
-                onGuardado(id)
+                onGuardado(id, cargarGafeteDe(id))
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 enviando = false
+            }
+        }
+    }
+
+    /// El gafete del QR, ya con el contratista guardado. Si falla, el alta
+    /// queda igual: se avisa y se puede cargar desde su ingreso.
+    private suspend fun cargarGafeteDe(contratistaId: Long): AvisoAlta? {
+        val enlace = enlaceGafete ?: return null
+        if (!gafeteEsDeEstaCedula()) {
+            return AvisoAlta("La cédula no es la del gafete PRAIND escaneado: el gafete no se cargó.", esError = true)
+        }
+        return withContext(dispatcherIO) {
+            try {
+                fuenteGafete.cargar(contratistaId, enlace)
+                AvisoAlta("Gafete PRAIND de $nombre guardado.", esError = false)
+            } catch (excepcion: Exception) {
+                val motivo = excepcion.mensajeDeErrorEsperado()?.trimEnd('.', ' ')?.let { ": $it" }.orEmpty()
+                AvisoAlta(
+                    "Contratista guardado, pero el gafete PRAIND no se cargó$motivo. Cárguelo desde su ingreso.",
+                    esError = true,
+                )
             }
         }
     }

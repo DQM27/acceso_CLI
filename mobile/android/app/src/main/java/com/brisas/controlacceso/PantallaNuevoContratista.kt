@@ -2,6 +2,8 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -76,7 +80,7 @@ private val TIPOS_CONTRATISTA = TipoIngreso.entries.filter { it != TipoIngreso.P
 fun PantallaNuevoContratista(
     nucleo: Nucleo,
     onVolver: () -> Unit,
-    onGuardado: (contratistaId: Long) -> Unit,
+    onGuardado: (contratistaId: Long, aviso: AvisoAlta?) -> Unit,
     textoInicial: String = "",
 ) {
     RegistrarPantalla("nuevo_contratista")
@@ -92,6 +96,29 @@ fun PantallaNuevoContratista(
     var buscandoEmpresa by remember { mutableStateOf(false) }
     var textoEmpresa by remember { mutableStateOf("") }
     var eligiendoFecha by remember { mutableStateOf(false) }
+    // La cámara del QR del gafete PRAIND (alta en un paso: datos y gafete).
+    // Va encima de la otra cámara: su X vuelve a donde estaba.
+    var camaraQr by rememberSaveable { mutableStateOf(false) }
+
+    if (camaraQr) {
+        EscanerConPermisoCamara(
+            mensajePermiso = "Se necesita permiso de cámara para leer el QR del gafete PRAIND.",
+            onCerrar = { camaraQr = false },
+        ) {
+            EscanerQr(
+                textoGuia = "Apunte al código QR del gafete PRAIND",
+                interpretar = EnlaceQrPraind::desdeQr,
+                onLeido = { enlace ->
+                    camaraQr = false
+                    escaneando = false
+                    escaneoDirecto = false
+                    vm.aplicarQrGafete(enlace)
+                },
+                onCerrar = { camaraQr = false },
+            )
+        }
+        return
+    }
 
     if (escaneando) {
         PantallaEscanearCedula(
@@ -110,6 +137,11 @@ fun PantallaNuevoContratista(
                     escaneando = false
                     escaneoDirecto = false
                 }
+            } else {
+                null
+            },
+            onLeerQr = if (vm.puedeLeerQr) {
+                { camaraQr = true }
             } else {
                 null
             },
@@ -132,8 +164,19 @@ fun PantallaNuevoContratista(
     ) {
         EncabezadoPantalla(titulo = "Nuevo contratista", onVolver = onVolver)
 
+        // Con el QR (hace falta internet y el permiso del panel) se llenan
+        // los datos y, al guardar, queda cargado el gafete PRAIND.
+        if (vm.puedeLeerQr) {
+            TarjetaEscaner(
+                "Escanear QR del gafete PRAIND",
+                "Llena los datos y guarda el gafete.",
+                onClick = { camaraQr = true },
+                icono = IconosLucide.EscanearQr,
+            )
+        }
+
         TarjetaEscaner(
-            "Escanear gafete PRAIND",
+            if (vm.puedeLeerQr) "Leer el gafete con la cámara" else "Escanear gafete PRAIND",
             "Llena cédula, nombre, empresa y vencimiento.",
             onClick = {
                 // Un solo escaneo llena TODOS los campos, así que se parte de
@@ -218,6 +261,17 @@ fun PantallaNuevoContratista(
             }
         }
 
+        if (vm.leyendoQr) {
+            Row(
+                modifier = Modifier.padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("Leyendo el gafete PRAIND…")
+            }
+        }
+
         val mensajeError = vm.error
         if (mensajeError != null) {
             FranjaEstado(mensajeError, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
@@ -229,7 +283,7 @@ fun PantallaNuevoContratista(
 
         BotonBrisas(
             onClick = { vm.guardar(onGuardado = onGuardado) },
-            enabled = !vm.enviando && !praindVencido,
+            enabled = !vm.enviando && !vm.leyendoQr && !praindVencido,
             // Sin padding inferior: sumado al `imePadding()` del teclado dejaba
             // un hueco de más entre el botón y el teclado (reportado 2026-09-20).
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),

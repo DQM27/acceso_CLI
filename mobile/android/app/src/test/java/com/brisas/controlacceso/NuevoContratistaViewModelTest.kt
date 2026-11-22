@@ -16,6 +16,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.PreviaGafeteParaAlta
 import uniffi.control_acceso_mobile.TipoIngreso
 
 /// Mismo criterio que `RutasViewModelTest`: un `StandardTestDispatcher`
@@ -49,7 +51,35 @@ class NuevoContratistaViewModelTest {
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
     }
 
-    private fun viewModel() = NuevoContratistaViewModel(nucleo, dispatcherIO = dispatcher)
+    /// Lo que sale a internet, simulado; la lectura de los datos del gafete
+    /// es la del núcleo real.
+    private inner class FuenteFalsa : FuenteGafeteAlta {
+        var puede = true
+        var previa = PreviaGafeteParaAlta("Ana Rojas Vega", byteArrayOf(1, 2, 3))
+        var errorPrevia: String? = null
+        var errorCarga: String? = null
+        val cargados = mutableListOf<Pair<Long, String>>()
+        override fun puedeCargar() = puede
+        override fun previsualizar(enlace: String): PreviaGafeteParaAlta {
+            errorPrevia?.let { throw NucleoException.Rechazado(it) }
+            return previa
+        }
+        override fun datos(textoOcr: String, nombreEnOrigen: String?) =
+            nucleo.datosAltaDesdeGafetePraind(textoOcr, nombreEnOrigen)
+        override fun cargar(contratistaId: Long, enlace: String) {
+            errorCarga?.let { throw NucleoException.Rechazado(it) }
+            cargados += contratistaId to enlace
+        }
+    }
+
+    private val fuente by lazy { FuenteFalsa() }
+
+    private fun textoGafete(vence: String = "19/06/2099", induccion: String = "19/06/2098") =
+        "CARNET DE INDUCCIÓN EN NORMAS DE SEGURIDAD\nNombre: Ana Rojas Vega\nNo. de cédula: 701000000\n" +
+            "Empresa: Sodexo S.A.\nFecha de inducción: $induccion\nFecha de vencimiento de\ninducción: $vence"
+
+    private fun viewModel(lector: LectorTextoImagen = LectorTextoImagen { textoGafete() }) =
+        NuevoContratistaViewModel(nucleo, dispatcherIO = dispatcher, fuenteGafete = fuente, lector = lector)
 
     private fun praind(empresa: String?, vence: FechaDocumento?) = DocumentoDetectado(
         tipo = TipoDocumento.CARNET_INDUCCION_PRAIND,
@@ -113,7 +143,7 @@ class NuevoContratistaViewModelTest {
         vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(1, 1, 2000)))
         assertTrue(vm.praindVencido)
         var guardado = false
-        vm.guardar { guardado = true }
+        vm.guardar { _, _ -> guardado = true }
         advanceUntilIdle()
         assertFalse(guardado)
         assertEquals("El PRAIND está vencido — ingrese una fecha vigente", vm.error)
@@ -126,7 +156,7 @@ class NuevoContratistaViewModelTest {
         advanceUntilIdle()
         vm.cambiarCedula("7-0100-0000")
         vm.cambiarNombre("ana")
-        vm.guardar { }
+        vm.guardar { _, _ -> }
         assertEquals("Elija la empresa", vm.error)
         assertEquals("701000000", vm.cedula)
     }
@@ -140,7 +170,7 @@ class NuevoContratistaViewModelTest {
         vm.cambiarTipoIngreso(TipoIngreso.SWAT)
         vm.cambiarNombre("ana")
         var guardado = false
-        vm.guardar { guardado = true }
+        vm.guardar { _, _ -> guardado = true }
         advanceUntilIdle()
         assertFalse(guardado)
         assertEquals("La cédula es obligatoria", vm.error)
@@ -169,7 +199,7 @@ class NuevoContratistaViewModelTest {
         advanceUntilIdle()
         vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(3, 8, 2099)))
         var guardado: Long? = null
-        vm.guardar { id -> guardado = id }
+        vm.guardar { id, _ -> guardado = id }
         advanceUntilIdle()
         assertNull(vm.error)
         assertFalse(vm.enviando)
@@ -195,5 +225,123 @@ class NuevoContratistaViewModelTest {
         nombre.cambiarNombre("ANA ROJAS VEGA")
         nombre.prellenar("ana rojas")
         assertEquals("ANA ROJAS VEGA", nombre.nombre)
+    }
+
+    @Test
+    fun `el QR del gafete rellena todo y al guardar carga el gafete`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertTrue(vm.puedeLeerQr)
+
+        vm.aplicarQrGafete(ENLACE)
+        assertTrue(vm.leyendoQr)
+        advanceUntilIdle()
+        assertFalse(vm.leyendoQr)
+        assertEquals("701000000", vm.cedula)
+        assertEquals("ANA ROJAS VEGA", vm.nombre)
+        assertEquals("Sodexo", vm.empresaSeleccionada?.nombre)
+        assertEquals("19-06-2099", vm.fechaPraind)
+        assertTrue(vm.cargaraGafete)
+        assertNull(vm.error)
+
+        var aviso: AvisoAlta? = null
+        vm.guardar { _, a -> aviso = a }
+        advanceUntilIdle()
+        val creado = nucleo.buscarContratistas("701000000").single()
+        assertEquals(listOf(creado.id to ENLACE), fuente.cargados)
+        assertEquals(AvisoAlta("Gafete PRAIND de ANA ROJAS VEGA guardado.", esError = false), aviso)
+    }
+
+    @Test
+    fun `un gafete del QR vencido avisa y bloquea el guardado`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel(lector = LectorTextoImagen { textoGafete(vence = "19/06/2025", induccion = "19/06/2024") })
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        assertTrue(vm.praindVencido)
+        assertEquals(
+            "El gafete PRAIND venció el 19/06/2025: pida a la persona el gafete actualizado.",
+            vm.error,
+        )
+    }
+
+    @Test
+    fun `si el OCR falla queda el nombre de la pagina del QR`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel(lector = LectorTextoImagen { null })
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        assertEquals("ANA ROJAS VEGA", vm.nombre)
+        assertEquals("", vm.cedula)
+        assertEquals("Gafete PRAIND leído: complete lo que falta. Al guardar se carga el gafete.", vm.mensaje)
+    }
+
+    @Test
+    fun `si la nube no encuentra el gafete lo dice y no deja gafete pendiente`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        advanceUntilIdle()
+        fuente.errorPrevia = "Ese gafete PRAIND ya no existe en el sistema PRAIND."
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        assertEquals("Ese gafete PRAIND ya no existe en el sistema PRAIND.", vm.error)
+        assertFalse(vm.cargaraGafete)
+    }
+
+    @Test
+    fun `con otra cedula el gafete no se carga`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        vm.cambiarCedula("702000000")
+        assertFalse(vm.cargaraGafete)
+        var aviso: AvisoAlta? = null
+        vm.guardar { _, a -> aviso = a }
+        advanceUntilIdle()
+        assertTrue(fuente.cargados.isEmpty())
+        assertEquals(true, aviso?.esError)
+    }
+
+    @Test
+    fun `si falla la carga del gafete el alta queda y se avisa`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        fuente.errorCarga = "Revise la conexión."
+        var guardado: Long? = null
+        var aviso: AvisoAlta? = null
+        vm.guardar { id, a ->
+            guardado = id
+            aviso = a
+        }
+        advanceUntilIdle()
+        assertEquals(nucleo.buscarContratistas("701000000").single().id, guardado)
+        assertEquals(
+            AvisoAlta(
+                "Contratista guardado, pero el gafete PRAIND no se cargó: Revise la conexión. Cárguelo desde su ingreso.",
+                esError = true,
+            ),
+            aviso,
+        )
+    }
+
+    @Test
+    fun `sin permiso del panel no se ofrece el QR`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        fuente.puede = false
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertFalse(vm.puedeLeerQr)
+    }
+
+    private companion object {
+        const val ENLACE = "https://prd.pw/abc"
     }
 }
