@@ -26,7 +26,7 @@ teléfono desde el panel para cargar gafetes PRAIND. Sin eso, la opción no
 aparece: use la cámara (más abajo).
 
 1. En la cámara que se abre, toque **Leer el QR del gafete** (o, en el
-   formulario, **Escanear QR del gafete PRAIND**).
+   formulario, **Escanear QR del gafete**).
 2. Apunte al **código QR** del gafete PRAIND. Se lee solo.
 3. La app baja el gafete, lo lee y llena cédula, nombre, empresa y
    vencimiento. Dice **"Gafete PRAIND leído: revise los datos. Al guardar se
@@ -72,8 +72,8 @@ cancela sin registrar a nadie.
    el calendario, cuando el tipo lo pide.
 5. Toque **Guardar**. Pasa directo a su ingreso.
 
-**Escanear gafete PRAIND** (o **Leer el gafete con la cámara**, cuando
-también está la opción del QR), arriba del formulario, vuelve a abrir la
+**Escanear gafete PRAIND** (o **Leer con la cámara**, al lado de
+**Escanear QR del gafete** cuando está la opción del QR), arriba del formulario, vuelve a abrir la
 cámara (borra lo escrito). **‹ Volver** cancela sin guardar.
 
 ## Mensajes que pueden aparecer

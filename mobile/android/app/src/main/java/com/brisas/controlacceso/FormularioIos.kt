@@ -82,6 +82,43 @@ internal fun SeccionFormulario(
     }
 }
 
+/// Versión angosta de [TarjetaEscaner] para poner dos lado a lado (QR y
+/// cámara en Nuevo contratista): ícono arriba y el título debajo, centrado.
+@Composable
+internal fun TarjetaEscanerCompacta(
+    titulo: String,
+    icono: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(RADIO_CONTROL))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(RADIO_CONTROL))
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            titulo,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
 /// El escáner como primera pieza del formulario: casi siempre los datos los
 /// llena la cámara (OCR), así que va arriba, grande y tocable entera, en el
 /// color suave de la sección. No es un botón relleno: la acción principal del

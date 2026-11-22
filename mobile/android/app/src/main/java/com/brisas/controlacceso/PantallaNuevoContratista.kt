@@ -2,7 +2,10 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -166,26 +169,37 @@ fun PantallaNuevoContratista(
 
         // Con el QR (hace falta internet y el permiso del panel) se llenan
         // los datos y, al guardar, queda cargado el gafete PRAIND.
+        // Un solo escaneo llena TODOS los campos, así que se parte de cero
+        // (a diferencia de Proveedores/Rutas, donde cada escáner llena un
+        // solo dato).
+        val abrirCamara = {
+            vm.limpiarParaEscanear()
+            escaneando = true
+        }
         if (vm.puedeLeerQr) {
+            // Las dos vías lado a lado, para no ocupar media pantalla
+            // (pedido del usuario 2026-11-21).
+            Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TarjetaEscanerCompacta(
+                    "Escanear QR del gafete",
+                    IconosLucide.EscanearQr,
+                    onClick = { camaraQr = true },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+                TarjetaEscanerCompacta(
+                    "Leer con la cámara",
+                    IconosLucide.EscanearDocumento,
+                    onClick = abrirCamara,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+            }
+        } else {
             TarjetaEscaner(
-                "Escanear QR del gafete PRAIND",
-                "Llena los datos y guarda el gafete.",
-                onClick = { camaraQr = true },
-                icono = IconosLucide.EscanearQr,
+                "Escanear gafete PRAIND",
+                "Llena cédula, nombre, empresa y vencimiento.",
+                onClick = abrirCamara,
             )
         }
-
-        TarjetaEscaner(
-            if (vm.puedeLeerQr) "Leer el gafete con la cámara" else "Escanear gafete PRAIND",
-            "Llena cédula, nombre, empresa y vencimiento.",
-            onClick = {
-                // Un solo escaneo llena TODOS los campos, así que se parte de
-                // cero (a diferencia de Proveedores/Rutas, donde cada escáner
-                // llena un solo dato).
-                vm.limpiarParaEscanear()
-                escaneando = true
-            },
-        )
 
         SeccionFormulario("Persona") {
             CampoAgrupado(
