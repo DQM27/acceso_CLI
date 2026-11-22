@@ -76,14 +76,24 @@ aparece **Cargar gafete PRAIND**. Hace falta internet.
 1. Toque **Cargar gafete PRAIND**. Se abre la cámara.
 2. Apunte al **código QR del gafete PRAIND** que trae la persona. Se lee solo,
    sin escribir nada.
-3. Aparece de quién es el gafete PRAIND:
-   - En verde, si el nombre coincide con el del contratista: toque
-     **Guardar**.
-   - En amarillo, si **no** coincide: revise que sea el gafete PRAIND correcto
-     de esta persona antes de tocar **Guardar igual**.
+3. El teléfono lee el gafete y lo compara con la ficha del contratista. Aparece
+   una línea por dato, en verde si está bien, en amarillo si hay que revisarlo
+   y en rojo si hay un problema:
+   - **Cédula**: si no coincide, **no se puede guardar**: puede ser el gafete
+     de otra persona.
+   - **Nombre** y **empresa**: si no coinciden, dice qué dice el gafete y qué
+     dice la ficha. Igual se puede guardar.
+   - **Vencimiento**:
+     - Si el gafete es **más nuevo** que la ficha, al guardar se actualiza la
+       fecha de la ficha.
+     - Si el gafete está **vencido**, se guarda sólo como imagen ilustrativa:
+       pida a la persona el gafete actualizado. El botón dice **Guardar como
+       imagen**.
+     - Si es **más viejo** que la ficha, la ficha no cambia.
    - **Escanear otra vez** vuelve a la cámara; **Cancelar** no guarda nada.
-4. Al guardar aparece **"Gafete PRAIND de … guardado."** y el botón pasa a
-   **Ver gafete PRAIND**. El escritorio y el panel lo ven también.
+4. Al guardar aparece **"Gafete PRAIND de … guardado."** (y la fecha nueva, si
+   se actualizó) y el botón pasa a **Ver gafete PRAIND**. El escritorio y el
+   panel lo ven también.
 
 Para cambiar uno que ya está cargado: **Ver gafete PRAIND** → **Reemplazar
 gafete PRAIND**, y los mismos pasos.
