@@ -344,6 +344,31 @@ class NuevoContratistaViewModelTest {
     }
 
     @Test
+    fun `si la cedula del QR ya tiene ficha se ofrece actualizarla`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (id, nombre) VALUES (1, 'Sodexo');",
+            "INSERT INTO contratistas (cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, " +
+                "es_personal_ruta, tiene_acceso) VALUES ('701000000', 'ANA ROJAS VEGA', 1, 'PRAIND', '2020-01-01', 0, 1);",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        assertEquals("ANA ROJAS VEGA", vm.yaRegistrado?.nombre)
+        assertEquals(ENLACE, vm.enlaceGafeteLeido)
+        assertEquals(
+            "Esta cédula ya está registrada (ANA ROJAS VEGA): actualice su ficha con este gafete.",
+            vm.mensaje,
+        )
+        // Con otra cédula ya no es esa persona.
+        vm.cambiarCedula("702000000")
+        assertNull(vm.yaRegistrado)
+    }
+
+    @Test
     fun `sin permiso del panel no se ofrece el QR`() = runTest(dispatcher) {
         abrirConEmpresas()
         fuente.puede = false

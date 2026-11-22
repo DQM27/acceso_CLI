@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.ContratistaYaRegistrado
 import uniffi.control_acceso_mobile.DatosAltaDesdeGafete
 import uniffi.control_acceso_mobile.DatosContratista
 import uniffi.control_acceso_mobile.Empresa
@@ -86,6 +87,17 @@ class NuevoContratistaViewModel(
 
     /// Si al guardar se cargará el gafete PRAIND del QR (la pantalla lo dice).
     val cargaraGafete: Boolean get() = enlaceGafete != null && gafeteEsDeEstaCedula()
+
+    private var registradoLeido by mutableStateOf<ContratistaYaRegistrado?>(null)
+
+    /// La cédula del gafete del QR ya tiene ficha: no es un alta. La
+    /// pantalla ofrece actualizar esa ficha con el gafete (sólo por QR).
+    /// Si se cambia la cédula a mano deja de valer.
+    val yaRegistrado: ContratistaYaRegistrado? get() = registradoLeido.takeIf { cedulaGafete == cedula }
+
+    /// El enlace del QR leído, para revisar el gafete contra la ficha que ya
+    /// existe.
+    val enlaceGafeteLeido: String? get() = enlaceGafete
 
     private fun gafeteEsDeEstaCedula(): Boolean = cedulaGafete.let { it == null || it == cedula }
 
@@ -211,6 +223,7 @@ class NuevoContratistaViewModel(
         mensaje = null
         enlaceGafete = null
         cedulaGafete = null
+        registradoLeido = null
     }
 
     private var lecturaQr: Job? = null
@@ -231,6 +244,7 @@ class NuevoContratistaViewModel(
                 aplicarDatosGafete(datos)
                 enlaceGafete = enlace
                 cedulaGafete = datos.cedula
+                registradoLeido = datos.yaRegistrado
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado() ?: "No se pudo leer el gafete PRAIND."
             } finally {
@@ -251,9 +265,12 @@ class NuevoContratistaViewModel(
             empresaSugeridaTexto = datos.empresa
         }
         val vence = datos.vencimiento
+        val registrado = datos.yaRegistrado
         when {
             datos.vencido && vence != null ->
                 error = "El gafete PRAIND venció el ${fechaIsoComoTexto(vence)}: pida a la persona el gafete actualizado."
+            registrado != null ->
+                mensaje = "Esta cédula ya está registrada (${registrado.nombre}): actualice su ficha con este gafete."
             datos.cedula == null || vence == null ->
                 mensaje = "Gafete PRAIND leído: complete lo que falta. Al guardar se carga el gafete."
             else -> mensaje = "Gafete PRAIND leído: revise los datos. Al guardar se carga el gafete."

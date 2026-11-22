@@ -7669,6 +7669,44 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
 
 
 
+data class ContratistaYaRegistrado (
+    var `id`: kotlin.Long
+    , 
+    var `nombre`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeContratistaYaRegistrado: FfiConverterRustBuffer<ContratistaYaRegistrado> {
+    override fun read(buf: ByteBuffer): ContratistaYaRegistrado {
+        return ContratistaYaRegistrado(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ContratistaYaRegistrado) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`nombre`)
+    )
+
+    override fun write(value: ContratistaYaRegistrado, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+    }
+}
+
+
+
 /**
  * Una sustitución de carácter aplicada para que un campo pasara su
  * checksum -- pensado para loguearse a Sentry del lado Kotlin (que ya
@@ -7752,6 +7790,12 @@ data class DatosAltaDesdeGafete (
     var `vencimiento`: kotlin.String?
     , 
     var `vencido`: kotlin.Boolean
+    , 
+    /**
+     * Esa cédula ya tiene ficha: se ofrece actualizarla con el gafete en
+     * vez de darla de alta otra vez.
+     */
+    var `yaRegistrado`: ContratistaYaRegistrado?
     
 ){
     
@@ -7774,6 +7818,7 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalTypeEmpresaParaFicha.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeContratistaYaRegistrado.read(buf),
         )
     }
 
@@ -7783,7 +7828,8 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalString.allocationSize(value.`empresa`) +
             FfiConverterOptionalTypeEmpresaParaFicha.allocationSize(value.`empresaCatalogo`) +
             FfiConverterOptionalString.allocationSize(value.`vencimiento`) +
-            FfiConverterBoolean.allocationSize(value.`vencido`)
+            FfiConverterBoolean.allocationSize(value.`vencido`) +
+            FfiConverterOptionalTypeContratistaYaRegistrado.allocationSize(value.`yaRegistrado`)
     )
 
     override fun write(value: DatosAltaDesdeGafete, buf: ByteBuffer) {
@@ -7793,6 +7839,7 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalTypeEmpresaParaFicha.write(value.`empresaCatalogo`, buf)
             FfiConverterOptionalString.write(value.`vencimiento`, buf)
             FfiConverterBoolean.write(value.`vencido`, buf)
+            FfiConverterOptionalTypeContratistaYaRegistrado.write(value.`yaRegistrado`, buf)
     }
 }
 
@@ -9550,6 +9597,13 @@ data class PreparacionIngreso (
     var `mensajeBloqueo`: kotlin.String?
     , 
     /**
+     * El bloqueo es el PRAIND (vencido o sin fecha): se ofrece actualizar
+     * la ficha con el QR del gafete nuevo
+     * (`BloqueoIngreso::se_resuelve_con_gafete_praind`).
+     */
+    var `seResuelveConGafetePraind`: kotlin.Boolean
+    , 
+    /**
      * Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
      * vence en 3 días (15-09-2026)"), con el reloj del núcleo. Reemplaza
      * `mensajeVencimientoPraind` de Kotlin.
@@ -9583,6 +9637,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceLong.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
         )
     }
@@ -9600,6 +9655,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterOptionalString.allocationSize(value.`activoEnOtroSitio`) +
             FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`) +
             FfiConverterOptionalString.allocationSize(value.`mensajeBloqueo`) +
+            FfiConverterBoolean.allocationSize(value.`seResuelveConGafetePraind`) +
             FfiConverterOptionalString.allocationSize(value.`avisoPraind`)
     )
 
@@ -9616,6 +9672,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterOptionalString.write(value.`activoEnOtroSitio`, buf)
             FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
             FfiConverterOptionalString.write(value.`mensajeBloqueo`, buf)
+            FfiConverterBoolean.write(value.`seResuelveConGafetePraind`, buf)
             FfiConverterOptionalString.write(value.`avisoPraind`, buf)
     }
 }
@@ -13822,6 +13879,38 @@ public object FfiConverterOptionalTypeContenidoTemaManual: FfiConverterRustBuffe
         } else {
             buf.put(1)
             FfiConverterTypeContenidoTemaManual.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeContratistaYaRegistrado: FfiConverterRustBuffer<ContratistaYaRegistrado?> {
+    override fun read(buf: ByteBuffer): ContratistaYaRegistrado? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeContratistaYaRegistrado.read(buf)
+    }
+
+    override fun allocationSize(value: ContratistaYaRegistrado?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeContratistaYaRegistrado.allocationSize(value)
+        }
+    }
+
+    override fun write(value: ContratistaYaRegistrado?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeContratistaYaRegistrado.write(value, buf)
         }
     }
 }

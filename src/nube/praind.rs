@@ -339,7 +339,15 @@ pub fn cargar_carne_desde_qr(
         .uuid
         .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
     let carga = token()
-        .and_then(|token| cargar_desde_qr(&token, Some(&uuid), enlace.trim(), solo_previsualizar, false))
+        .and_then(|token| {
+            cargar_desde_qr(
+                &token,
+                Some(&uuid),
+                enlace.trim(),
+                solo_previsualizar,
+                false,
+            )
+        })
         .map_err(|error| error.to_string())?;
     if let Some(clave) = carga.clave.as_deref() {
         anotar_clave(connection, contratista_id, clave)?;

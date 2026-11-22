@@ -108,6 +108,15 @@ pub struct DatosAltaDesdeGafete {
     /// `AAAA-MM-DD`; `None` si no se leyó o la lectura no es coherente.
     pub vencimiento: Option<String>,
     pub vencido: bool,
+    /// Esa cédula ya tiene ficha: se ofrece actualizarla con el gafete en
+    /// vez de darla de alta otra vez.
+    pub ya_registrado: Option<ContratistaYaRegistrado>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ContratistaYaRegistrado {
+    pub id: i64,
+    pub nombre: String,
 }
 
 fn fecha_de_ocr(fecha: crate::lectura_documentos::FechaOcr) -> Option<chrono::NaiveDate> {
@@ -298,6 +307,12 @@ impl Nucleo {
                 .vencimiento
                 .map(|fecha| fecha.format("%Y-%m-%d").to_string()),
             vencido: datos.vencido,
+            ya_registrado: datos
+                .ya_registrado
+                .map(|registrado| ContratistaYaRegistrado {
+                    id: registrado.id,
+                    nombre: registrado.nombre,
+                }),
         })
     }
 

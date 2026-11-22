@@ -199,6 +199,16 @@ pub struct DatosAltaDesdeGafete {
     pub vencimiento: Option<NaiveDate>,
     /// Si ese vencimiento ya pasó: el formulario no deja guardar.
     pub vencido: bool,
+    /// Si esa cédula ya tiene ficha: no es un alta sino actualizarla con el
+    /// gafete. La completa el núcleo, que tiene la base.
+    pub ya_registrado: Option<ContratistaRegistrado>,
+}
+
+/// La ficha que ya existe con la cédula del gafete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContratistaRegistrado {
+    pub id: i64,
+    pub nombre: String,
 }
 
 /// Los datos del gafete para el alta (el nombre de la página del QR ya
@@ -223,6 +233,7 @@ pub fn datos_alta_desde_gafete(leido: &DatosGafeteLeido, hoy: NaiveDate) -> Dato
             .filter(|empresa| !empresa.is_empty())
             .map(str::to_string),
         empresa_catalogo: None,
+        ya_registrado: None,
         vencido: vencimiento.is_some_and(|vence| vence < hoy),
         vencimiento,
     }
@@ -583,7 +594,10 @@ mod tests {
         };
         let datos = datos_alta_desde_gafete(&leido, hoy());
         assert_eq!(datos.cedula.as_deref(), Some("305450949"));
-        assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
+        assert_eq!(
+            datos.nombre.as_deref(),
+            Some("HAZEL JOHANNA ANGULO AGUILAR")
+        );
         assert_eq!(datos.empresa.as_deref(), Some("Sodexo"));
         assert_eq!(datos.vencimiento, Some(fecha("2027-06-19")));
         assert!(!datos.vencido);
@@ -629,6 +643,9 @@ mod tests {
 
         // Sin nombre en la página queda el del OCR.
         let sin_pagina = gafete_hazel().con_nombre_de_pagina(Some("  "));
-        assert_eq!(sin_pagina.nombre.as_deref(), Some("Hazel Johanna Angulo Aguilar"));
+        assert_eq!(
+            sin_pagina.nombre.as_deref(),
+            Some("Hazel Johanna Angulo Aguilar")
+        );
     }
 }

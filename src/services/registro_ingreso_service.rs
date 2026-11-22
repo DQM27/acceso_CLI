@@ -111,6 +111,24 @@ pub enum BloqueoIngreso {
     SinVerificarEnLaNube,
 }
 
+impl BloqueoIngreso {
+    /// Si se resuelve con un gafete PRAIND vigente: el PRAIND de la ficha
+    /// venció o nunca se cargó. El teléfono ofrece leer el QR del gafete
+    /// nuevo, que actualiza la ficha (sólo por QR: la imagen se baja del
+    /// sistema PRAIND, así no puede ser una falsificación, y queda guardada;
+    /// pedido del usuario 2026-11-21).
+    #[must_use]
+    pub fn se_resuelve_con_gafete_praind(&self) -> bool {
+        use crate::domain::resultado_acceso::MotivoDenegacion;
+        matches!(
+            self,
+            Self::AccesoDenegado {
+                motivo: MotivoDenegacion::PraindVencido | MotivoDenegacion::PraindNoRegistrado
+            }
+        )
+    }
+}
+
 impl PreparacionIngreso {
     /// `None` si se puede continuar con este contratista. Lee únicamente
     /// los tres campos que esta misma struct ya trae -- no hace ninguna
@@ -574,6 +592,17 @@ mod tests_bloqueo {
     #[test]
     fn sin_ningun_bloqueo_puede_continuar() {
         assert_eq!(preparacion_sin_bloqueo().bloqueo(), None);
+    }
+
+    /// Sólo el PRAIND vencido o sin fecha se resuelven con un gafete nuevo.
+    #[test]
+    fn se_resuelve_con_gafete_praind_solo_por_el_praind() {
+        let con = |motivo| BloqueoIngreso::AccesoDenegado { motivo };
+        assert!(con(MotivoDenegacion::PraindVencido).se_resuelve_con_gafete_praind());
+        assert!(con(MotivoDenegacion::PraindNoRegistrado).se_resuelve_con_gafete_praind());
+        assert!(!con(MotivoDenegacion::SinAcceso).se_resuelve_con_gafete_praind());
+        assert!(!con(MotivoDenegacion::EmpresaInactiva).se_resuelve_con_gafete_praind());
+        assert!(!BloqueoIngreso::IngresoActivo.se_resuelve_con_gafete_praind());
     }
 
     /// `tiene_ingreso_activo` gana aunque los otros dos campos también

@@ -319,6 +319,17 @@ impl AppCore {
         if let Some(empresa) = datos.empresa.as_deref() {
             datos.empresa_catalogo = self.empresa_del_gafete(empresa)?;
         }
+        if let Some(cedula) = datos.cedula.as_deref() {
+            use crate::application::puertos::contratistas::ContratistaRepository as _;
+            datos.ya_registrado = SqliteContratistaRepository::new(&self.connection)
+                .buscar_por_cedula(cedula)?
+                .map(
+                    |contratista| crate::domain::gafete_praind::ContratistaRegistrado {
+                        id: contratista.id,
+                        nombre: contratista.nombre,
+                    },
+                );
+        }
         Ok(datos)
     }
 

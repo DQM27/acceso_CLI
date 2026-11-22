@@ -38,6 +38,12 @@ aparece: use la cámara (más abajo).
    queda cargado su gafete PRAIND**: en el formulario de ingreso ya aparece
    **Ver gafete PRAIND**, y arriba se ve **"Gafete PRAIND de … guardado."**
 
+**Si la persona ya está registrada** (por ejemplo, alguien que no viene
+hace tiempo y tiene la ficha vieja), en vez de **Guardar** aparece
+**Actualizar su ficha con este gafete**: abre su ingreso con la revisión del
+gafete, que actualiza la fecha (y, si lo marca, el nombre o la empresa).
+Así no se intenta darla de alta otra vez.
+
 Si cambia la cédula por otra, el gafete no se carga (sería de otra
 persona). Si la carga del gafete falla (por ejemplo, se cortó internet), el
 contratista queda registrado igual y se avisa: cárguelo desde su ingreso con

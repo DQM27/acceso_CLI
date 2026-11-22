@@ -206,7 +206,10 @@ fn alta_desde_gafete_encuentra_la_empresa_del_catalogo() {
     };
     let datos = core.datos_alta_desde_gafete(&leido, None).unwrap();
     assert_eq!(datos.cedula.as_deref(), Some("305450949"));
-    assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
+    assert_eq!(
+        datos.nombre.as_deref(),
+        Some("HAZEL JOHANNA ANGULO AGUILAR")
+    );
     assert_eq!(
         datos.empresa_catalogo,
         Some(EmpresaPropuesta {
@@ -227,4 +230,32 @@ fn alta_desde_gafete_sin_empresa_conocida_la_deja_como_texto() {
     let datos = core.datos_alta_desde_gafete(&leido, None).unwrap();
     assert_eq!(datos.empresa.as_deref(), Some("Empresa Que No Existe"));
     assert_eq!(datos.empresa_catalogo, None);
+}
+
+#[test]
+fn alta_desde_gafete_avisa_si_la_cedula_ya_tiene_ficha() {
+    let core = base();
+    let datos = core
+        .datos_alta_desde_gafete(&gafete("2026-06-19", "2028-06-19"), None)
+        .unwrap();
+    assert_eq!(
+        datos.ya_registrado,
+        Some(
+            control_acceso::domain::gafete_praind::ContratistaRegistrado {
+                id: 1,
+                nombre: "HAZEL JOHANNA ANGULO AGUILAR".into()
+            }
+        )
+    );
+
+    let otra = DatosGafeteLeido {
+        cedula: Some("701000000".into()),
+        ..gafete("2026-06-19", "2028-06-19")
+    };
+    assert_eq!(
+        core.datos_alta_desde_gafete(&otra, None)
+            .unwrap()
+            .ya_registrado,
+        None
+    );
 }
