@@ -6,9 +6,11 @@ use chrono::NaiveDate;
 use rusqlite::Connection;
 
 use control_acceso::{
-    application::AppCore,
+    application::{AppCore, CorreccionDesdeGafete},
     database::{queries::contratistas::FiltroContratistas, schema::initialize_database},
-    domain::gafete_praind::{Comparacion, DatosGafeteLeido, FechaContraFicha, VencimientoGafete},
+    domain::gafete_praind::{
+        Comparacion, DatosGafeteLeido, EmpresaPropuesta, FechaContraFicha, VencimientoGafete,
+    },
     models::usuario::RolUsuario,
     services::{autenticacion_service::UsuarioSesion, error::ContratistaServiceError},
 };
@@ -35,7 +37,8 @@ fn base() -> AppCore {
         .execute_batch(
             "INSERT INTO usuarios(id,cedula,nombre,password_hash,rol,activo) VALUES
                 (1,'U1','Operador','hash','ADMINISTRADOR',1);
-             INSERT INTO empresas(id,nombre,activo) VALUES (1,'SODEXO',1);
+             INSERT INTO empresas(id,nombre,activo) VALUES (1,'SODEXO',1),
+                (2,'MULTISERVICIOS DE ALDAMA DE SAN RAFAEL',1);
              INSERT INTO contratistas(
                 id,cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
                 es_personal_ruta,tiene_acceso
@@ -119,4 +122,77 @@ fn no_deja_poner_un_vencimiento_ya_pasado() {
         "se esperaba el rechazo de la regla del contratista, llegó {error:?}"
     );
     assert_eq!(ficha(&core).0, Some(fecha("2030-05-30")));
+}
+
+#[test]
+fn propone_corregir_el_nombre_y_la_empresa_que_difieren() {
+    let core = base();
+    let leido = DatosGafeteLeido {
+        nombre: Some("Hazel Johana Angulo Aguilar".into()),
+        empresa: Some("Multiservicios de Aldama de San Rafael".into()),
+        ..gafete("2030-06-07", "2032-06-06")
+    };
+    let revision = core.revisar_gafete_praind(1, &leido).unwrap();
+    assert_eq!(
+        revision.nombre_para_ficha.as_deref(),
+        Some("HAZEL JOHANA ANGULO AGUILAR")
+    );
+    assert_eq!(
+        revision.empresa_para_ficha,
+        Some(EmpresaPropuesta {
+            id: 2,
+            nombre: "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL".into()
+        })
+    );
+
+    // Lo que coincide no propone nada.
+    let igual = core
+        .revisar_gafete_praind(1, &gafete("2030-06-07", "2032-06-06"))
+        .unwrap();
+    assert_eq!(igual.nombre_para_ficha, None);
+    assert_eq!(igual.empresa_para_ficha, None);
+}
+
+#[test]
+fn una_empresa_que_no_esta_en_el_catalogo_no_se_propone() {
+    let core = base();
+    let leido = DatosGafeteLeido {
+        empresa: Some("Empresa Desconocida S.A.".into()),
+        ..gafete("2030-06-07", "2032-06-06")
+    };
+    let revision = core.revisar_gafete_praind(1, &leido).unwrap();
+    assert!(matches!(revision.empresa, Comparacion::Difiere { .. }));
+    assert_eq!(revision.empresa_para_ficha, None);
+}
+
+#[test]
+fn corregir_la_ficha_cambia_solo_lo_elegido_en_una_edicion() {
+    let core = base();
+    core.corregir_ficha_desde_gafete(
+        &operador(),
+        1,
+        CorreccionDesdeGafete {
+            nombre: Some("HAZEL JOHANA ANGULO AGUILAR".into()),
+            empresa_id: Some(2),
+            vencimiento: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        ficha(&core),
+        (
+            Some(fecha("2030-05-30")),
+            true,
+            "HAZEL JOHANA ANGULO AGUILAR".into()
+        )
+    );
+    let empresa = core
+        .buscar_contratistas(&FiltroContratistas::default())
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|c| c.id == 1)
+        .unwrap()
+        .empresa_nombre;
+    assert_eq!(empresa, "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL");
 }

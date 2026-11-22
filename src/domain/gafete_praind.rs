@@ -16,6 +16,7 @@
 
 use chrono::{Months, NaiveDate};
 
+use crate::domain::contratista::normalizar_nombre;
 use crate::texto::plegar_diacriticos;
 
 /// Lo que el OCR sacó del gafete. Cualquier dato puede faltar.
@@ -87,6 +88,20 @@ pub struct RevisionGafetePraind {
     /// Vencimiento a 1 o 2 años de la inducción: así son todos los gafetes
     /// revisados; si no cuadra, la fecha pudo leerse mal.
     pub lectura_coherente: bool,
+    /// El nombre del gafete como lo guardaría la ficha, si difiere: el
+    /// portero puede elegir corregir la ficha con él.
+    pub nombre_para_ficha: Option<String>,
+    /// La empresa del catálogo que corresponde a la del gafete, si difiere de
+    /// la ficha y hay exactamente una. La completa el núcleo, que tiene el
+    /// catálogo (`AppCore::revisar_gafete_praind`).
+    pub empresa_para_ficha: Option<EmpresaPropuesta>,
+}
+
+/// Una empresa del catálogo propuesta para la ficha.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmpresaPropuesta {
+    pub id: i64,
+    pub nombre: String,
 }
 
 impl RevisionGafetePraind {
@@ -136,13 +151,18 @@ pub fn revisar_gafete_praind(
     };
     RevisionGafetePraind {
         cedula,
-        nombre,
         empresa,
         vencimiento,
         vencimiento_ficha: ficha.vencimiento,
         contra_ficha,
         fecha_para_ficha,
         lectura_coherente,
+        nombre_para_ficha: match (&nombre, leido.nombre.as_deref()) {
+            (Comparacion::Difiere { .. }, Some(en_gafete)) => normalizar_nombre(en_gafete),
+            _ => None,
+        },
+        empresa_para_ficha: None,
+        nombre,
     }
 }
 
@@ -213,7 +233,8 @@ const PALABRAS_DE_RELLENO: &[&str] = &[
 /// Misma empresa si, sin forma jurídica ni artículos, todas las palabras de
 /// la más corta están en la otra ("SODEXO" y "Sodexo S.A.";
 /// "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL" escrito como en el gafete).
-fn empresas_coinciden(en_gafete: &str, ficha: &str) -> bool {
+#[must_use]
+pub fn empresas_coinciden(en_gafete: &str, ficha: &str) -> bool {
     let utiles = |texto: &str| -> Vec<String> {
         palabras(texto, true)
             .into_iter()

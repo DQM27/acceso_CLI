@@ -29,6 +29,15 @@ use crate::tiempo::fecha_costa_rica;
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
+/// Lo que se corrige en la ficha con lo que dice el gafete PRAIND
+/// ([`AppCore::corregir_ficha_desde_gafete`]). `None`: queda como estaba.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CorreccionDesdeGafete {
+    pub vencimiento: Option<NaiveDate>,
+    pub nombre: Option<String>,
+    pub empresa_id: Option<i64>,
+}
+
 /// Núcleo de [`AppCore::buscar_auditoria`] sobre una `Connection` cualquiera
 /// — mismo motivo que `buscar_historial_con_conexion`
 /// (`src/application/historial.rs`): un comando Tauri puede abrir su propia
@@ -247,7 +256,7 @@ impl AppCore {
             .buscar_por_id(contratista.empresa_id)?
             .map(|empresa| empresa.nombre)
             .unwrap_or_default();
-        Ok(revisar_gafete_praind(
+        let mut revision = revisar_gafete_praind(
             leido,
             DatosFicha {
                 cedula: &contratista.cedula,
@@ -256,18 +265,41 @@ impl AppCore {
                 vencimiento: contratista.fecha_vencimiento_praind,
             },
             hoy,
-        ))
+        );
+        // La empresa del gafete, si corresponde a exactamente una del
+        // catálogo (activa): se propone para corregir la ficha.
+        if let crate::domain::gafete_praind::Comparacion::Difiere { gafete, .. } = &revision.empresa
+        {
+            let candidatas: Vec<_> = EmpresaService::new(&empresas)
+                .listar_seleccionables()
+                .map_err(|_| ContratistaServiceError::EmpresaNoEncontrada)?
+                .into_iter()
+                .filter(|candidata| {
+                    crate::domain::gafete_praind::empresas_coinciden(gafete, &candidata.nombre)
+                })
+                .collect();
+            if let [unica] = candidatas.as_slice() {
+                revision.empresa_para_ficha =
+                    Some(crate::domain::gafete_praind::EmpresaPropuesta {
+                        id: unica.id,
+                        nombre: unica.nombre.clone(),
+                    });
+            }
+        }
+        Ok(revision)
     }
 
-    /// Deja en la ficha el vencimiento PRAIND de un gafete más nuevo. Va por
-    /// la misma edición que el formulario ([`Self::actualizar_datos_contratista`]):
-    /// mismas reglas (no acepta un PRAIND vencido), auditoría y subida a la
-    /// nube. El resto de la ficha y el acceso quedan como estaban.
-    pub fn actualizar_vencimiento_praind(
+    /// Corrige la ficha con lo que dice el gafete PRAIND: el vencimiento de un
+    /// gafete más nuevo y, si el portero lo eligió, el nombre y la empresa.
+    /// Una sola edición por la misma vía que el formulario
+    /// ([`Self::actualizar_datos_contratista`]): mismas reglas (no acepta un
+    /// PRAIND vencido), auditoría y subida a la nube. Lo que no se pasa y el
+    /// acceso quedan como estaban.
+    pub fn corregir_ficha_desde_gafete(
         &self,
         actor: &UsuarioSesion,
         id: i64,
-        vencimiento: NaiveDate,
+        cambios: CorreccionDesdeGafete,
     ) -> Result<(), ContratistaServiceError> {
         let actual = ContratistaService::con_hoy(
             &SqliteContratistaRepository::new(&self.connection),
@@ -280,12 +312,29 @@ impl AppCore {
             id,
             DatosActualizacionContratista {
                 cedula: actual.cedula,
-                nombre: actual.nombre,
-                empresa_id: actual.empresa_id,
+                nombre: cambios.nombre.unwrap_or(actual.nombre),
+                empresa_id: cambios.empresa_id.unwrap_or(actual.empresa_id),
                 tipo_ingreso: actual.tipo_ingreso,
-                fecha_vencimiento_praind: Some(vencimiento),
+                fecha_vencimiento_praind: cambios.vencimiento.or(actual.fecha_vencimiento_praind),
                 es_personal_ruta: actual.es_personal_ruta,
                 tiene_acceso: actual.tiene_acceso,
+            },
+        )
+    }
+
+    /// Sólo el vencimiento ([`Self::corregir_ficha_desde_gafete`]).
+    pub fn actualizar_vencimiento_praind(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        vencimiento: NaiveDate,
+    ) -> Result<(), ContratistaServiceError> {
+        self.corregir_ficha_desde_gafete(
+            actor,
+            id,
+            CorreccionDesdeGafete {
+                vencimiento: Some(vencimiento),
+                ..CorreccionDesdeGafete::default()
             },
         )
     }
