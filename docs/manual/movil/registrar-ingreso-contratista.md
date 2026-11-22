@@ -81,8 +81,11 @@ aparece **Cargar gafete PRAIND**. Hace falta internet.
    y en rojo si hay un problema:
    - **Cédula**: si no coincide, **no se puede guardar**: puede ser el gafete
      de otra persona.
-   - **Nombre** y **empresa**: si no coinciden, dice qué dice el gafete y qué
-     dice la ficha. Igual se puede guardar.
+   - **Nombre** y **empresa**: si no coinciden, señala la palabra que difiere
+     (por ejemplo, **«JOHANNA» en el gafete, «JOHANA» en la ficha**). Igual se
+     puede guardar. Debajo aparece **Corregir el nombre de la ficha** (o la
+     empresa): márquelo si la ficha está mal escrita y debe quedar como dice
+     el gafete. La empresa sólo se ofrece si existe en el catálogo.
    - **Vencimiento**:
      - Si el gafete es **más nuevo** que la ficha, al guardar se actualiza la
        fecha de la ficha.

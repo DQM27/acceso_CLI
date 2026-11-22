@@ -73,6 +73,17 @@ pub struct RevisionGafetePraind {
     pub lineas: Vec<LineaRevisionGafete>,
     pub bloquea_guardar: bool,
     pub fecha_para_ficha: Option<String>,
+    /// Si el nombre difiere: como quedaría la ficha si el portero elige
+    /// corregirla con el del gafete.
+    pub nombre_para_ficha: Option<String>,
+    /// Si la empresa difiere y la del gafete es una del catálogo.
+    pub empresa_para_ficha: Option<EmpresaParaFicha>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EmpresaParaFicha {
+    pub id: i64,
+    pub nombre: String,
 }
 
 fn fecha_de_ocr(fecha: crate::lectura_documentos::FechaOcr) -> Option<chrono::NaiveDate> {
@@ -251,22 +262,41 @@ impl Nucleo {
             fecha_para_ficha: revision
                 .fecha_para_ficha
                 .map(|fecha| fecha.format("%Y-%m-%d").to_string()),
+            nombre_para_ficha: revision.nombre_para_ficha,
+            empresa_para_ficha: revision.empresa_para_ficha.map(|empresa| EmpresaParaFicha {
+                id: empresa.id,
+                nombre: empresa.nombre,
+            }),
         })
     }
 
-    /// Deja en la ficha el vencimiento PRAIND de un gafete más nuevo
-    /// (`AAAA-MM-DD`), con las mismas reglas que editar la ficha.
-    pub fn actualizar_vencimiento_praind(
+    /// Corrige la ficha con lo que dice el gafete PRAIND, en una sola
+    /// edición con las mismas reglas que el formulario: el vencimiento de un
+    /// gafete más nuevo (`AAAA-MM-DD`) y, si el portero lo eligió, el nombre y
+    /// la empresa. `None`: queda como estaba.
+    pub fn corregir_ficha_desde_gafete(
         &self,
         contratista_id: i64,
-        fecha: String,
+        vencimiento: Option<String>,
+        nombre: Option<String>,
+        empresa_id: Option<i64>,
     ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
-        let vencimiento = fecha
-            .parse()
-            .map_err(|_| NucleoError::FechaInvalida { mensaje: fecha })?;
-        Ok(self
-            .core_lock()
-            .actualizar_vencimiento_praind(&actor, contratista_id, vencimiento)?)
+        let vencimiento = vencimiento
+            .map(|texto| {
+                texto
+                    .parse()
+                    .map_err(|_| NucleoError::FechaInvalida { mensaje: texto })
+            })
+            .transpose()?;
+        Ok(self.core_lock().corregir_ficha_desde_gafete(
+            &actor,
+            contratista_id,
+            control_acceso::application::CorreccionDesdeGafete {
+                vencimiento,
+                nombre,
+                empresa_id,
+            },
+        )?)
     }
 }

@@ -18,6 +18,7 @@ import uniffi.control_acceso_mobile.CargaCarnePraind
 import uniffi.control_acceso_mobile.CarnePraind
 import uniffi.control_acceso_mobile.EstadoCarnePraind
 import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.EmpresaParaFicha
 import uniffi.control_acceso_mobile.LineaRevisionGafete
 import uniffi.control_acceso_mobile.NivelRevisionGafete
 import uniffi.control_acceso_mobile.PermisosCarnePraind
@@ -51,7 +52,7 @@ class CarnePraindViewModelTest {
         var consultasPermisos = 0
         val guardados = mutableListOf<Pair<Long, String>>()
         val textosRevisados = mutableListOf<String>()
-        val fechasActualizadas = mutableListOf<Pair<Long, String>>()
+        val correcciones = mutableListOf<Correccion>()
 
         override fun previsualizarConImagen(contratistaId: Long, enlace: String): PreviaGafetePraind {
             errorCarga?.let { throw NucleoException.Rechazado(it) }
@@ -63,9 +64,9 @@ class CarnePraindViewModelTest {
             return revision ?: throw NucleoException.Rechazado("sin revisión")
         }
 
-        override fun actualizarVencimiento(contratistaId: Long, fecha: String) {
+        override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) {
             errorFecha?.let { throw NucleoException.Rechazado(it) }
-            fechasActualizadas += contratistaId to fecha
+            correcciones += Correccion(contratistaId, vencimiento, nombre, empresaId)
         }
 
         override fun estado(contratistaId: Long) =
@@ -102,15 +103,69 @@ class CarnePraindViewModelTest {
     private fun nuevoVm(fuente: FuenteFalsa, lector: LectorTextoImagen = LectorTextoImagen { null }) =
         CarnePraindViewModel(fuente, dispatcher, lector)
 
+    private data class Correccion(val id: Long, val fecha: String?, val nombre: String?, val empresaId: Long?)
+
     private fun revision(
         vararg lineas: Pair<NivelRevisionGafete, String>,
         bloquea: Boolean = false,
         fecha: String? = null,
+        nombre: String? = null,
+        empresa: EmpresaParaFicha? = null,
     ) = RevisionGafetePraind(
         lineas = lineas.map { (nivel, texto) -> LineaRevisionGafete(nivel, texto) },
         bloqueaGuardar = bloquea,
         fechaParaFicha = fecha,
+        nombreParaFicha = nombre,
+        empresaParaFicha = empresa,
     )
+
+    @Test
+    fun laFichaSeCorrigeConElNombreYLaEmpresaSoloSiSeMarca() = runTest(dispatcher) {
+        val propuesta = revision(
+            NivelRevisionGafete.AVISO to "Nombre distinto",
+            nombre = "HAZEL JOHANNA ANGULO AGUILAR",
+            empresa = EmpresaParaFicha(7L, "SODEXO"),
+        )
+        // Sin marcar: el gafete se guarda y la ficha no cambia.
+        val sinMarcar = FuenteFalsa(revision = propuesta)
+        val vm1 = nuevoVm(sinMarcar, leeTexto)
+        vm1.previsualizar(2L, "HAZEL JOHANA ANGULO AGUILAR", enlace)
+        advanceUntilIdle()
+        vm1.guardar()
+        advanceUntilIdle()
+        assertTrue(sinMarcar.correcciones.isEmpty())
+
+        // Marcando las dos: una sola corrección con el nombre y la empresa.
+        val marcando = FuenteFalsa(revision = propuesta)
+        val vm2 = nuevoVm(marcando, leeTexto)
+        vm2.previsualizar(2L, "HAZEL JOHANA ANGULO AGUILAR", enlace)
+        advanceUntilIdle()
+        vm2.alternarCorregirNombre()
+        vm2.alternarCorregirEmpresa()
+        assertTrue((vm2.carga.value as CargaCarne.Previa).corregirNombre)
+        vm2.guardar()
+        advanceUntilIdle()
+        assertEquals(
+            listOf(Correccion(2L, null, "HAZEL JOHANNA ANGULO AGUILAR", 7L)),
+            marcando.correcciones,
+        )
+        assertEquals(
+            "Gafete PRAIND de HAZEL JOHANNA ANGULO AGUILAR guardado; ficha corregida.",
+            vm2.guardado.value,
+        )
+    }
+
+    @Test
+    fun sinPropuestaNoSePuedeMarcar() = runTest(dispatcher) {
+        val vm = nuevoVm(FuenteFalsa(revision = revision(NivelRevisionGafete.BIEN to "ok")), leeTexto)
+        vm.previsualizar(2L, "BETO SOLIS", enlace)
+        advanceUntilIdle()
+        vm.alternarCorregirNombre()
+        vm.alternarCorregirEmpresa()
+        val previa = vm.carga.value as CargaCarne.Previa
+        assertFalse(previa.corregirNombre)
+        assertFalse(previa.corregirEmpresa)
+    }
 
     private val leeTexto = LectorTextoImagen { "texto del gafete" }
 
@@ -134,7 +189,7 @@ class CarnePraindViewModelTest {
         vm.guardar()
         advanceUntilIdle()
         assertEquals(listOf(2L to enlace), fuente.guardados)
-        assertEquals(listOf(2L to "2028-06-06"), fuente.fechasActualizadas)
+        assertEquals(listOf(Correccion(2L, "2028-06-06", null, null)), fuente.correcciones)
         assertEquals("Gafete PRAIND de BETO SOLIS guardado; vence el 06/06/2028.", vm.guardado.value)
     }
 
@@ -169,7 +224,7 @@ class CarnePraindViewModelTest {
         vm.guardar()
         advanceUntilIdle()
         assertEquals(listOf(2L to enlace), fuente.guardados)
-        assertTrue(fuente.fechasActualizadas.isEmpty())
+        assertTrue(fuente.correcciones.isEmpty())
         assertEquals("Gafete PRAIND de BETO SOLIS guardado.", vm.guardado.value)
     }
 
@@ -188,7 +243,7 @@ class CarnePraindViewModelTest {
         assertEquals(
             CargaCarne.Error(
                 "BETO SOLIS",
-                "El gafete PRAIND se guardó, pero no se pudo actualizar el vencimiento: El PRAIND está vencido",
+                "El gafete PRAIND se guardó, pero no se pudo corregir la ficha: El PRAIND está vencido",
             ),
             vm.carga.value,
         )

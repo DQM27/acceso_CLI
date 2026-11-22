@@ -352,6 +352,8 @@ fun PantallaActivos(
                     escanerCarneAbierto = true
                 },
                 onCancelar = carneViewModel::cancelarCarga,
+                onCorregirNombre = carneViewModel::alternarCorregirNombre,
+                onCorregirEmpresa = carneViewModel::alternarCorregirEmpresa,
             )
 
             }

@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -106,6 +109,8 @@ internal fun DialogoCargaCarnePraind(
     onGuardar: () -> Unit,
     onEscanearOtraVez: () -> Unit,
     onCancelar: () -> Unit,
+    onCorregirNombre: () -> Unit = {},
+    onCorregirEmpresa: () -> Unit = {},
 ) {
     val nombre = when (carga) {
         CargaCarne.Inactiva -> return
@@ -146,6 +151,24 @@ internal fun DialogoCargaCarnePraind(
                         revision.lineas.forEach { linea ->
                             FranjaEstado(linea.texto, tipoDeLinea(linea.nivel), modifier = Modifier.fillMaxWidth())
                         }
+                        // Corregir la ficha con lo que dice el gafete: sólo si
+                        // el portero lo marca (pedido del usuario 2026-11-21).
+                        revision.nombreParaFicha?.let { nuevo ->
+                            OpcionCorregir(
+                                texto = "Corregir el nombre de la ficha: $nuevo",
+                                marcada = carga.corregirNombre,
+                                habilitada = !guardando,
+                                onCambiar = onCorregirNombre,
+                            )
+                        }
+                        revision.empresaParaFicha?.let { empresa ->
+                            OpcionCorregir(
+                                texto = "Corregir la empresa de la ficha: ${empresa.nombre}",
+                                marcada = carga.corregirEmpresa,
+                                habilitada = !guardando,
+                                onCambiar = onCorregirEmpresa,
+                            )
+                        }
                     } else {
                         FranjaEstado(
                             textoPrevia(carga),
@@ -175,6 +198,21 @@ internal fun DialogoCargaCarnePraind(
                 Text("Cancelar")
             }
         }
+    }
+}
+
+/// Una casilla con su texto; toda la fila se puede tocar.
+@Composable
+private fun OpcionCorregir(texto: String, marcada: Boolean, habilitada: Boolean, onCambiar: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = marcada, enabled = habilitada, role = Role.Checkbox, onValueChange = { onCambiar() }),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = marcada, onCheckedChange = null, enabled = habilitada)
+        Text(texto, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

@@ -30,7 +30,7 @@ interface FuenteCarnes {
     fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean): CargaCarnePraind
     fun previsualizarConImagen(contratistaId: Long, enlace: String): PreviaGafetePraind
     fun revisar(contratistaId: Long, textoOcr: String): RevisionGafetePraind
-    fun actualizarVencimiento(contratistaId: Long, fecha: String)
+    fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?)
 }
 
 private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
@@ -42,8 +42,8 @@ private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
     override fun previsualizarConImagen(contratistaId: Long, enlace: String) =
         nucleo.previsualizarCarnePraindConImagen(contratistaId, enlace)
     override fun revisar(contratistaId: Long, textoOcr: String) = nucleo.revisarGafetePraind(contratistaId, textoOcr)
-    override fun actualizarVencimiento(contratistaId: Long, fecha: String) =
-        nucleo.actualizarVencimientoPraind(contratistaId, fecha)
+    override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) =
+        nucleo.corregirFichaDesdeGafete(contratistaId, vencimiento, nombre, empresaId)
 }
 
 /// `AAAA-MM-DD` como se lee en pantalla (`DD/MM/AAAA`).
@@ -82,6 +82,11 @@ sealed interface CargaCarne {
         val coincide: Boolean,
         val guardando: Boolean = false,
         val revision: RevisionGafetePraind? = null,
+        /// Si el portero eligió corregir la ficha con el nombre o la empresa
+        /// del gafete (sólo si difieren). El vencimiento de un gafete más
+        /// nuevo se corrige siempre.
+        val corregirNombre: Boolean = false,
+        val corregirEmpresa: Boolean = false,
     ) : CargaCarne {
         val sePuedeGuardar: Boolean get() = revision?.bloqueaGuardar != true
     }
@@ -253,31 +258,51 @@ class CarnePraindViewModel(
             }
             if (contratistaHoja == previa.contratistaId) _disponible.value = true
             val fecha = previa.revision?.fechaParaFicha
-            val errorFecha = fecha?.let {
+            val nombre = previa.revision?.nombreParaFicha?.takeIf { previa.corregirNombre }
+            val empresa = previa.revision?.empresaParaFicha?.takeIf { previa.corregirEmpresa }
+            val corrige = fecha != null || nombre != null || empresa != null
+            val errorFicha = if (!corrige) {
+                null
+            } else {
                 withContext(dispatcherIO) {
                     try {
-                        fuente.actualizarVencimiento(previa.contratistaId, it)
+                        fuente.corregirFicha(previa.contratistaId, fecha, nombre, empresa?.id)
                         null
                     } catch (excepcion: Exception) {
-                        excepcion.mensajeDeErrorEsperado() ?: "No se pudo actualizar el vencimiento."
+                        excepcion.mensajeDeErrorEsperado() ?: "No se pudo corregir la ficha."
                     }
                 }
             }
-            if (errorFecha != null) {
-                // El gafete ya quedó guardado; sólo falló la fecha.
+            if (errorFicha != null) {
+                // El gafete ya quedó guardado; sólo falló la corrección.
                 _carga.value = CargaCarne.Error(
                     previa.nombre,
-                    "El gafete PRAIND se guardó, pero no se pudo actualizar el vencimiento: $errorFecha",
+                    "El gafete PRAIND se guardó, pero no se pudo corregir la ficha: $errorFicha",
                 )
                 return@launch
             }
             _carga.value = CargaCarne.Inactiva
-            _guardado.value = if (fecha != null) {
-                "Gafete PRAIND de ${previa.nombre} guardado; vence el ${fechaIsoComoTexto(fecha)}."
-            } else {
-                "Gafete PRAIND de ${previa.nombre} guardado."
+            _guardado.value = buildString {
+                append("Gafete PRAIND de ${nombre ?: previa.nombre} guardado")
+                if (fecha != null) append("; vence el ${fechaIsoComoTexto(fecha)}")
+                if (nombre != null || empresa != null) append("; ficha corregida")
+                append('.')
             }
         }
+    }
+
+    /// Marcar o desmarcar "corregir la ficha" con el nombre del gafete.
+    fun alternarCorregirNombre() {
+        val previa = _carga.value as? CargaCarne.Previa ?: return
+        if (previa.guardando || previa.revision?.nombreParaFicha == null) return
+        _carga.value = previa.copy(corregirNombre = !previa.corregirNombre)
+    }
+
+    /// Marcar o desmarcar "corregir la ficha" con la empresa del gafete.
+    fun alternarCorregirEmpresa() {
+        val previa = _carga.value as? CargaCarne.Previa ?: return
+        if (previa.guardando || previa.revision?.empresaParaFicha == null) return
+        _carga.value = previa.copy(corregirEmpresa = !previa.corregirEmpresa)
     }
 
     fun cancelarCarga() {
