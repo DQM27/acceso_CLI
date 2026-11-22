@@ -1071,7 +1071,11 @@ pub fn mensaje_gafete_guardado(
     let vence = ficha_vence
         .map(|vence| format!("; la ficha vence el {}", vence.format("%d/%m/%Y")))
         .unwrap_or_default();
-    let corregida = if ficha_corregida { "; ficha corregida" } else { "" };
+    let corregida = if ficha_corregida {
+        "; ficha corregida"
+    } else {
+        ""
+    };
     format!("Gafete PRAIND de {nombre} guardado{vence}{corregida}.")
 }
 
