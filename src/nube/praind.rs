@@ -237,28 +237,10 @@ fn ahora() -> String {
     crate::tiempo::serializar_utc(chrono::Utc::now())
 }
 
-/// Si el nombre de la página del QR corresponde al contratista: todas las
-/// palabras del nombre más corto están en el otro (puede sobrar un segundo
-/// nombre o apellido), con al menos dos en común, sin tildes ni mayúsculas.
-/// Mismo criterio que el escritorio y el panel (`nombresCoinciden` en TS).
-pub fn nombres_coinciden(en_origen: Option<&str>, contratista: &str) -> bool {
-    fn palabras(nombre: &str) -> Vec<String> {
-        crate::texto::plegar_diacriticos(nombre)
-            .to_uppercase()
-            .split(|c: char| !c.is_ascii_alphabetic())
-            .filter(|p| !p.is_empty())
-            .map(str::to_string)
-            .collect()
-    }
-    let Some(en_origen) = en_origen else {
-        return false;
-    };
-    let a = palabras(en_origen);
-    let b = palabras(contratista);
-    let (corto, largo) = if a.len() <= b.len() { (a, b) } else { (b, a) };
-    let comunes = corto.iter().filter(|p| largo.contains(p)).count();
-    comunes == corto.len() && comunes >= 2
-}
+/// Si el nombre de la página del QR corresponde al contratista. La regla
+/// vive en el dominio ([`crate::domain::gafete_praind::nombres_coinciden`]),
+/// la misma que compara el nombre leído del gafete.
+pub use crate::domain::gafete_praind::nombres_coinciden;
 
 fn carne_de(
     connection: &rusqlite::Connection,
