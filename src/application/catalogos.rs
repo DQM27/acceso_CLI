@@ -270,23 +270,54 @@ impl AppCore {
         // catálogo (activa): se propone para corregir la ficha.
         if let crate::domain::gafete_praind::Comparacion::Difiere { gafete, .. } = &revision.empresa
         {
-            let candidatas: Vec<_> = EmpresaService::new(&empresas)
-                .listar_seleccionables()
-                .map_err(|_| ContratistaServiceError::EmpresaNoEncontrada)?
-                .into_iter()
-                .filter(|candidata| {
-                    crate::domain::gafete_praind::empresas_coinciden(gafete, &candidata.nombre)
-                })
-                .collect();
-            if let [unica] = candidatas.as_slice() {
-                revision.empresa_para_ficha =
-                    Some(crate::domain::gafete_praind::EmpresaPropuesta {
-                        id: unica.id,
-                        nombre: unica.nombre.clone(),
-                    });
-            }
+            revision.empresa_para_ficha = self.empresa_del_gafete(gafete)?;
         }
         Ok(revision)
+    }
+
+    /// La empresa del catálogo (de las que se pueden elegir) que corresponde
+    /// a la que dice el gafete, si hay exactamente una
+    /// (`domain::gafete_praind::empresas_coinciden`).
+    pub fn empresa_del_gafete(
+        &self,
+        en_gafete: &str,
+    ) -> Result<Option<crate::domain::gafete_praind::EmpresaPropuesta>, ContratistaServiceError>
+    {
+        let empresas = SqliteEmpresaRepository::new(&self.connection);
+        let candidatas: Vec<_> = EmpresaService::new(&empresas)
+            .listar_seleccionables()
+            .map_err(|_| ContratistaServiceError::EmpresaNoEncontrada)?
+            .into_iter()
+            .filter(|candidata| {
+                crate::domain::gafete_praind::empresas_coinciden(en_gafete, &candidata.nombre)
+            })
+            .collect();
+        Ok(match candidatas.as_slice() {
+            [unica] => Some(crate::domain::gafete_praind::EmpresaPropuesta {
+                id: unica.id,
+                nombre: unica.nombre.clone(),
+            }),
+            _ => None,
+        })
+    }
+
+    /// Los datos del gafete PRAIND leído (OCR de su imagen) para dar de alta
+    /// a un contratista nuevo, con la empresa del catálogo si corresponde y
+    /// el "hoy" del reloj del núcleo. Sólo lee.
+    pub fn datos_alta_desde_gafete(
+        &self,
+        leido: &crate::domain::gafete_praind::DatosGafeteLeido,
+        nombre_en_origen: Option<&str>,
+    ) -> Result<crate::domain::gafete_praind::DatosAltaDesdeGafete, ContratistaServiceError> {
+        let mut datos = crate::domain::gafete_praind::datos_alta_desde_gafete(
+            leido,
+            nombre_en_origen,
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        );
+        if let Some(empresa) = datos.empresa.as_deref() {
+            datos.empresa_catalogo = self.empresa_del_gafete(empresa)?;
+        }
+        Ok(datos)
     }
 
     /// Corrige la ficha con lo que dice el gafete PRAIND: el vencimiento de un

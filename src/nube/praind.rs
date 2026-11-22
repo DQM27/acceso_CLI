@@ -180,22 +180,28 @@ pub fn descargar(token: &str, clave: &str) -> Result<CarneDescargado, ErrorPrain
 /// Pide al Worker que baje el carné del enlace del QR. Con
 /// `solo_previsualizar` no guarda nada y devuelve el nombre de la página,
 /// para compararlo con el contratista antes de confirmar.
+///
+/// Sin `contratista_uuid` sólo sirve para previsualizar: es el alta de un
+/// contratista nuevo, que todavía no existe en la nube.
 pub fn cargar_desde_qr(
     token: &str,
-    contratista_uuid: &str,
+    contratista_uuid: Option<&str>,
     enlace: &str,
     solo_previsualizar: bool,
     incluir_imagen: bool,
 ) -> Result<CargaPraind, ErrorPraind> {
+    let mut cuerpo = serde_json::json!({
+        "enlace": enlace,
+        "solo_previsualizar": solo_previsualizar,
+        "incluir_imagen": incluir_imagen,
+    });
+    if let Some(uuid) = contratista_uuid {
+        cuerpo["contratista_id"] = serde_json::Value::from(uuid);
+    }
     let respuesta = CLIENTE
         .post(format!("{}/cargar-desde-qr", praind_url()))
         .bearer_auth(token)
-        .json(&serde_json::json!({
-            "contratista_id": contratista_uuid,
-            "enlace": enlace,
-            "solo_previsualizar": solo_previsualizar,
-            "incluir_imagen": incluir_imagen,
-        }))
+        .json(&cuerpo)
         .send()
         .map_err(|error| error_de_red(&error))?;
     if !respuesta.status().is_success() {
@@ -333,7 +339,7 @@ pub fn cargar_carne_desde_qr(
         .uuid
         .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
     let carga = token()
-        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), solo_previsualizar, false))
+        .and_then(|token| cargar_desde_qr(&token, Some(&uuid), enlace.trim(), solo_previsualizar, false))
         .map_err(|error| error.to_string())?;
     if let Some(clave) = carga.clave.as_deref() {
         anotar_clave(connection, contratista_id, clave)?;
@@ -349,13 +355,31 @@ pub fn previsualizar_carne_con_imagen(
     enlace: &str,
     token: impl FnOnce() -> Result<String, ErrorPraind>,
 ) -> Result<(CargaPraind, Vec<u8>), String> {
-    use base64::Engine as _;
-
     let uuid = carne_de(connection, contratista_id)?
         .uuid
         .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
+    previsualizar_con_imagen(Some(&uuid), enlace, token)
+}
+
+/// Vista previa del gafete del QR con su imagen para dar de alta a un
+/// contratista nuevo: todavía no existe, ni en el equipo ni en la nube. No
+/// guarda nada.
+pub fn previsualizar_gafete_para_alta(
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    previsualizar_con_imagen(None, enlace, token)
+}
+
+fn previsualizar_con_imagen(
+    uuid: Option<&str>,
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    use base64::Engine as _;
+
     let mut carga = token()
-        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), true, true))
+        .and_then(|token| cargar_desde_qr(&token, uuid, enlace.trim(), true, true))
         .map_err(|error| error.to_string())?;
     let imagen = carga
         .imagen_base64

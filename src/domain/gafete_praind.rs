@@ -166,6 +166,61 @@ pub fn revisar_gafete_praind(
     }
 }
 
+/// Lo que se usa del gafete para dar de alta a un contratista nuevo: los
+/// datos para rellenar el formulario, ya en la forma en que se guardan.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DatosAltaDesdeGafete {
+    /// Sólo dígitos.
+    pub cedula: Option<String>,
+    /// Como lo guarda la ficha (mayúscula, sin espacios de más).
+    pub nombre: Option<String>,
+    /// La empresa tal como la dice el gafete.
+    pub empresa: Option<String>,
+    /// La del catálogo que le corresponde, si hay exactamente una. La
+    /// completa el núcleo, que tiene el catálogo.
+    pub empresa_catalogo: Option<EmpresaPropuesta>,
+    /// Sólo con una lectura coherente (o sin fecha de inducción para
+    /// contrastar): una fecha mal leída no se propone.
+    pub vencimiento: Option<NaiveDate>,
+    /// Si ese vencimiento ya pasó: el formulario no deja guardar.
+    pub vencido: bool,
+}
+
+/// Los datos del gafete para el alta. Si el OCR no leyó el nombre, sirve el
+/// de la página del QR (`nombre_en_origen`).
+#[must_use]
+pub fn datos_alta_desde_gafete(
+    leido: &DatosGafeteLeido,
+    nombre_en_origen: Option<&str>,
+    hoy: NaiveDate,
+) -> DatosAltaDesdeGafete {
+    let vencimiento = match (leido.induccion, leido.vencimiento) {
+        (Some(induccion), Some(vence)) if !vencimiento_coherente(induccion, vence) => None,
+        (_, vence) => vence,
+    };
+    DatosAltaDesdeGafete {
+        cedula: leido
+            .cedula
+            .as_deref()
+            .map(solo_digitos)
+            .filter(|cedula| !cedula.is_empty()),
+        nombre: leido
+            .nombre
+            .as_deref()
+            .and_then(normalizar_nombre)
+            .or_else(|| nombre_en_origen.and_then(normalizar_nombre)),
+        empresa: leido
+            .empresa
+            .as_deref()
+            .map(str::trim)
+            .filter(|empresa| !empresa.is_empty())
+            .map(str::to_string),
+        empresa_catalogo: None,
+        vencido: vencimiento.is_some_and(|vence| vence < hoy),
+        vencimiento,
+    }
+}
+
 fn comparar(
     gafete: Option<&str>,
     ficha: &str,
@@ -509,5 +564,57 @@ mod tests {
         assert!(!nombres_coinciden(Some("Johnny"), "JOHNNY MORALES"));
         assert!(!nombres_coinciden(Some("Ana Perez"), "JOHNNY MORALES"));
         assert!(!nombres_coinciden(None, "JOHNNY MORALES"));
+    }
+
+    #[test]
+    fn alta_desde_gafete_deja_los_datos_como_los_guarda_la_ficha() {
+        let leido = DatosGafeteLeido {
+            cedula: Some("3-0545-0949".into()),
+            induccion: Some(fecha("2026-06-19")),
+            vencimiento: Some(fecha("2027-06-19")),
+            ..gafete_hazel()
+        };
+        let datos = datos_alta_desde_gafete(&leido, None, hoy());
+        assert_eq!(datos.cedula.as_deref(), Some("305450949"));
+        assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
+        assert_eq!(datos.empresa.as_deref(), Some("Sodexo"));
+        assert_eq!(datos.vencimiento, Some(fecha("2027-06-19")));
+        assert!(!datos.vencido);
+    }
+
+    #[test]
+    fn alta_desde_gafete_vencido_lo_marca() {
+        let datos = datos_alta_desde_gafete(&gafete_hazel(), None, hoy());
+        assert_eq!(datos.vencimiento, Some(fecha("2026-06-19")));
+        assert!(datos.vencido);
+    }
+
+    #[test]
+    fn alta_desde_gafete_no_propone_una_fecha_mal_leida() {
+        let leido = DatosGafeteLeido {
+            vencimiento: Some(fecha("2027-01-19")),
+            ..gafete_hazel()
+        };
+        assert_eq!(datos_alta_desde_gafete(&leido, None, hoy()).vencimiento, None);
+        // Sin fecha de inducción no hay con qué contrastar: se propone.
+        let sin_induccion = DatosGafeteLeido {
+            induccion: None,
+            vencimiento: Some(fecha("2027-01-19")),
+            ..gafete_hazel()
+        };
+        assert_eq!(
+            datos_alta_desde_gafete(&sin_induccion, None, hoy()).vencimiento,
+            Some(fecha("2027-01-19"))
+        );
+    }
+
+    #[test]
+    fn alta_desde_gafete_sin_nombre_leido_usa_el_de_la_pagina() {
+        let leido = DatosGafeteLeido {
+            nombre: None,
+            ..gafete_hazel()
+        };
+        let datos = datos_alta_desde_gafete(&leido, Some("Hazel Johanna Angulo Aguilar"), hoy());
+        assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
     }
 }

@@ -196,3 +196,35 @@ fn corregir_la_ficha_cambia_solo_lo_elegido_en_una_edicion() {
         .empresa_nombre;
     assert_eq!(empresa, "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL");
 }
+
+#[test]
+fn alta_desde_gafete_encuentra_la_empresa_del_catalogo() {
+    let core = base();
+    let leido = DatosGafeteLeido {
+        empresa: Some("Multiservicios de Aldama de San Rafael S.A.".into()),
+        ..gafete("2026-06-19", "2028-06-19")
+    };
+    let datos = core.datos_alta_desde_gafete(&leido, None).unwrap();
+    assert_eq!(datos.cedula.as_deref(), Some("305450949"));
+    assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
+    assert_eq!(
+        datos.empresa_catalogo,
+        Some(EmpresaPropuesta {
+            id: 2,
+            nombre: "MULTISERVICIOS DE ALDAMA DE SAN RAFAEL".into()
+        })
+    );
+    assert_eq!(datos.vencimiento, Some(fecha("2028-06-19")));
+}
+
+#[test]
+fn alta_desde_gafete_sin_empresa_conocida_la_deja_como_texto() {
+    let core = base();
+    let leido = DatosGafeteLeido {
+        empresa: Some("Empresa Que No Existe".into()),
+        ..gafete("2026-06-19", "2028-06-19")
+    };
+    let datos = core.datos_alta_desde_gafete(&leido, None).unwrap();
+    assert_eq!(datos.empresa.as_deref(), Some("Empresa Que No Existe"));
+    assert_eq!(datos.empresa_catalogo, None);
+}

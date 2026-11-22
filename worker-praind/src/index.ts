@@ -174,13 +174,17 @@ async function cargarDesdeQr(request: Request, env: Env, deps: Dependencias): Pr
     throw new ErrorHttp(400, "dato_invalido", "El pedido no es JSON.");
   }
   const contratistaId = typeof cuerpo.contratista_id === "string" ? cuerpo.contratista_id.toLowerCase() : "";
-  if (!RE_UUID.test(contratistaId)) throw new ErrorHttp(400, "dato_invalido", "Falta el contratista.");
+  // La vista previa no toca al contratista: el teléfono la pide sin él al
+  // dar de alta a uno nuevo con el QR (todavía no existe en la nube).
+  const soloPrevisualizar = cuerpo.solo_previsualizar === true;
+  const contratistaValido = contratistaId ? RE_UUID.test(contratistaId) : soloPrevisualizar;
+  if (!contratistaValido) throw new ErrorHttp(400, "dato_invalido", "Falta el contratista.");
   const enlace = validarEnlace(cuerpo.enlace);
 
   await exigirCarga(env, deps, token);
   const carne = await descargarCarne(deps, enlace);
   const resumen = { nombre_en_origen: carne.nombre, bytes: carne.bytes.byteLength, tipo_mime: carne.tipo };
-  if (cuerpo.solo_previsualizar === true) {
+  if (soloPrevisualizar) {
     // El teléfono lee la imagen con OCR antes de guardar (cédula, fechas):
     // la pide con `incluir_imagen`. El escritorio y el panel no la piden.
     if (cuerpo.incluir_imagen === true) return json({ ...resumen, imagen_base64: aBase64(carne.bytes) });

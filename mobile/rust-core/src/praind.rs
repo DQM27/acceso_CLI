@@ -86,8 +86,44 @@ pub struct EmpresaParaFicha {
     pub nombre: String,
 }
 
+/// Vista previa del gafete del QR para dar de alta a un contratista nuevo:
+/// todavía no hay ficha con qué compararlo.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PreviaGafeteParaAlta {
+    pub nombre_en_origen: Option<String>,
+    /// La imagen del gafete (PNG o JPEG) para el OCR.
+    pub imagen: Vec<u8>,
+}
+
+/// Lo que el gafete leído aporta al formulario de alta, ya como lo guarda
+/// la ficha (`control_acceso::domain::gafete_praind::datos_alta_desde_gafete`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DatosAltaDesdeGafete {
+    pub cedula: Option<String>,
+    pub nombre: Option<String>,
+    /// La empresa tal como la dice el gafete.
+    pub empresa: Option<String>,
+    /// La del catálogo que le corresponde, si hay exactamente una.
+    pub empresa_catalogo: Option<EmpresaParaFicha>,
+    /// `AAAA-MM-DD`; `None` si no se leyó o la lectura no es coherente.
+    pub vencimiento: Option<String>,
+    pub vencido: bool,
+}
+
 fn fecha_de_ocr(fecha: crate::lectura_documentos::FechaOcr) -> Option<chrono::NaiveDate> {
     chrono::NaiveDate::from_ymd_opt(fecha.anio, u32::from(fecha.mes), u32::from(fecha.dia))
+}
+
+/// El texto del OCR, partido en los datos del gafete.
+fn gafete_leido(texto_ocr: &str) -> control_acceso::domain::gafete_praind::DatosGafeteLeido {
+    let leido = crate::lectura_documentos::leer_gafete_praind(texto_ocr);
+    control_acceso::domain::gafete_praind::DatosGafeteLeido {
+        cedula: leido.cedula,
+        nombre: leido.nombre,
+        empresa: leido.empresa,
+        induccion: leido.induccion.and_then(fecha_de_ocr),
+        vencimiento: leido.vencimiento.and_then(fecha_de_ocr),
+    }
 }
 
 fn rechazo(mensaje: String) -> NucleoError {
@@ -223,6 +259,68 @@ impl Nucleo {
         })
     }
 
+    /// Vista previa del gafete del QR con su imagen para dar de alta a un
+    /// contratista nuevo (todavía no existe). No guarda nada.
+    pub fn previsualizar_gafete_praind_para_alta(
+        &self,
+        enlace: String,
+    ) -> Result<PreviaGafeteParaAlta, NucleoError> {
+        self.actor_autenticado()?;
+        let (carga, imagen) =
+            praind::previsualizar_gafete_para_alta(&enlace, || self.token_praind())
+                .map_err(rechazo)?;
+        Ok(PreviaGafeteParaAlta {
+            nombre_en_origen: carga.nombre_en_origen,
+            imagen,
+        })
+    }
+
+    /// Los datos del gafete leído con OCR para rellenar el formulario de
+    /// alta. Si el OCR no encontró el nombre, sirve el de la página del QR.
+    /// Sólo lee.
+    pub fn datos_alta_desde_gafete_praind(
+        &self,
+        texto_ocr: String,
+        nombre_en_origen: Option<String>,
+    ) -> Result<DatosAltaDesdeGafete, NucleoError> {
+        let datos = self
+            .core_lock()
+            .datos_alta_desde_gafete(&gafete_leido(&texto_ocr), nombre_en_origen.as_deref())?;
+        Ok(DatosAltaDesdeGafete {
+            cedula: datos.cedula,
+            nombre: datos.nombre,
+            empresa: datos.empresa,
+            empresa_catalogo: datos.empresa_catalogo.map(|empresa| EmpresaParaFicha {
+                id: empresa.id,
+                nombre: empresa.nombre,
+            }),
+            vencimiento: datos
+                .vencimiento
+                .map(|fecha| fecha.format("%Y-%m-%d").to_string()),
+            vencido: datos.vencido,
+        })
+    }
+
+    /// Guarda el gafete del QR de un contratista recién dado de alta. Si
+    /// todavía no llegó a la nube, primero sube los cambios pendientes de
+    /// este teléfono (el alta) y recién después carga el gafete.
+    pub fn cargar_gafete_praind_de_alta(
+        &self,
+        contratista_id: i64,
+        enlace: String,
+    ) -> Result<CargaCarnePraind, NucleoError> {
+        self.actor_autenticado()?;
+        let sin_subir = praind::estado_carne(&self.conexion_secundaria()?, contratista_id)
+            .map_err(rechazo)?
+            .uuid
+            .is_none();
+        if sin_subir {
+            // Si falla, la carga de abajo avisa que todavía no llegó a la nube.
+            let _ = self.enviar_cambios();
+        }
+        self.cargar_carne_praind_desde_qr(contratista_id, enlace, false)
+    }
+
     /// Revisa el texto que el OCR leyó del gafete contra la ficha del
     /// contratista (`control_acceso::domain::gafete_praind`). Sólo lee.
     pub fn revisar_gafete_praind(
@@ -230,22 +328,13 @@ impl Nucleo {
         contratista_id: i64,
         texto_ocr: String,
     ) -> Result<RevisionGafetePraind, NucleoError> {
-        use control_acceso::domain::gafete_praind::DatosGafeteLeido;
         use control_acceso::mensajes::{
             NivelRevisionGafete as Nivel, lineas_revision_gafete_praind,
         };
 
-        let leido = crate::lectura_documentos::leer_gafete_praind(&texto_ocr);
-        let datos = DatosGafeteLeido {
-            cedula: leido.cedula,
-            nombre: leido.nombre,
-            empresa: leido.empresa,
-            induccion: leido.induccion.and_then(fecha_de_ocr),
-            vencimiento: leido.vencimiento.and_then(fecha_de_ocr),
-        };
         let revision = self
             .core_lock()
-            .revisar_gafete_praind(contratista_id, &datos)?;
+            .revisar_gafete_praind(contratista_id, &gafete_leido(&texto_ocr))?;
         Ok(RevisionGafetePraind {
             lineas: lineas_revision_gafete_praind(&revision)
                 .into_iter()

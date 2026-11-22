@@ -200,6 +200,35 @@ describe("POST /cargar-desde-qr", () => {
     expect((await ENV.FOTOS.list({ prefix: `contratistas/${contratista}/` })).objects).toHaveLength(0);
   });
 
+  it("la vista previa sin contratista sirve para dar de alta a uno nuevo", async () => {
+    const s = simular({ ...permisosRpc(true, true), ...origenNormal });
+    const r = await manejar(
+      pedido("POST", "/cargar-desde-qr", {
+        cuerpo: JSON.stringify({ enlace: ENLACE, solo_previsualizar: true, incluir_imagen: true }),
+      }),
+      ENV,
+      s.deps,
+    );
+    expect(r.status).toBe(200);
+    const datos = (await r.json()) as Record<string, unknown>;
+    expect(datos.nombre_en_origen).toBe("Persona De Prueba Muñoz");
+    expect(datos).toHaveProperty("imagen_base64");
+    expect(s.rpc("praind_registrar")).toBe(0);
+  });
+
+  it("guardar sin contratista (o con uno mal formado) se rechaza sin salir a internet", async () => {
+    for (const extra of [{}, { contratista_id: "no-es-uuid", solo_previsualizar: true }]) {
+      const s = simular({});
+      const r = await manejar(
+        pedido("POST", "/cargar-desde-qr", { cuerpo: JSON.stringify({ enlace: ENLACE, ...extra }) }),
+        ENV,
+        s.deps,
+      );
+      expect(r.status).toBe(400);
+      expect(s.llamadas).toEqual([]);
+    }
+  });
+
   it("rechaza enlaces que no son de gafetes PRAIND sin salir a internet", async () => {
     const contratista = nuevoContratista();
     for (const enlace of [
