@@ -224,6 +224,72 @@ impl AppCore {
         self.actualizar_contratista_con(actor, id, datos, true)
     }
 
+    /// Revisa el gafete PRAIND leído (OCR de su imagen) contra la ficha del
+    /// contratista, con el "hoy" del reloj del núcleo
+    /// (`domain::gafete_praind`). Sólo lee.
+    pub fn revisar_gafete_praind(
+        &self,
+        id: i64,
+        leido: &crate::domain::gafete_praind::DatosGafeteLeido,
+    ) -> Result<crate::domain::gafete_praind::RevisionGafetePraind, ContratistaServiceError> {
+        use crate::database::repositories::empresa_repository::EmpresaRepository as _;
+        use crate::domain::gafete_praind::{DatosFicha, revisar_gafete_praind};
+
+        let empresas = SqliteEmpresaRepository::new(&self.connection);
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        let contratista = ContratistaService::con_hoy(
+            &SqliteContratistaRepository::new(&self.connection),
+            &empresas,
+            hoy,
+        )
+        .buscar_por_id(id)?;
+        let empresa = empresas
+            .buscar_por_id(contratista.empresa_id)?
+            .map(|empresa| empresa.nombre)
+            .unwrap_or_default();
+        Ok(revisar_gafete_praind(
+            leido,
+            DatosFicha {
+                cedula: &contratista.cedula,
+                nombre: &contratista.nombre,
+                empresa: &empresa,
+                vencimiento: contratista.fecha_vencimiento_praind,
+            },
+            hoy,
+        ))
+    }
+
+    /// Deja en la ficha el vencimiento PRAIND de un gafete más nuevo. Va por
+    /// la misma edición que el formulario ([`Self::actualizar_datos_contratista`]):
+    /// mismas reglas (no acepta un PRAIND vencido), auditoría y subida a la
+    /// nube. El resto de la ficha y el acceso quedan como estaban.
+    pub fn actualizar_vencimiento_praind(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        vencimiento: NaiveDate,
+    ) -> Result<(), ContratistaServiceError> {
+        let actual = ContratistaService::con_hoy(
+            &SqliteContratistaRepository::new(&self.connection),
+            &SqliteEmpresaRepository::new(&self.connection),
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        )
+        .buscar_por_id(id)?;
+        self.actualizar_datos_contratista(
+            actor,
+            id,
+            DatosActualizacionContratista {
+                cedula: actual.cedula,
+                nombre: actual.nombre,
+                empresa_id: actual.empresa_id,
+                tipo_ingreso: actual.tipo_ingreso,
+                fecha_vencimiento_praind: Some(vencimiento),
+                es_personal_ruta: actual.es_personal_ruta,
+                tiene_acceso: actual.tiene_acceso,
+            },
+        )
+    }
+
     fn actualizar_contratista_con(
         &self,
         actor: &UsuarioSesion,
