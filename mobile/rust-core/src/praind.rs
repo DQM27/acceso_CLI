@@ -41,6 +41,44 @@ pub struct CargaCarnePraind {
     pub nombre_coincide: bool,
 }
 
+/// Vista previa del gafete del QR con su imagen, sin guardar nada: el
+/// teléfono la lee con OCR y la revisa contra la ficha antes de guardar.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PreviaGafetePraind {
+    pub nombre_en_origen: Option<String>,
+    pub nombre_coincide: bool,
+    /// La imagen del gafete (PNG o JPEG) para el OCR.
+    pub imagen: Vec<u8>,
+}
+
+/// Cómo se ve una línea de la revisión.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum NivelRevisionGafete {
+    Bien,
+    Aviso,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct LineaRevisionGafete {
+    pub nivel: NivelRevisionGafete,
+    pub texto: String,
+}
+
+/// El gafete leído con OCR contra la ficha: las líneas para mostrar (cédula,
+/// nombre, empresa, vencimiento), si se puede guardar y, si el gafete es
+/// más nuevo, la fecha que se deja en la ficha al guardar (`AAAA-MM-DD`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RevisionGafetePraind {
+    pub lineas: Vec<LineaRevisionGafete>,
+    pub bloquea_guardar: bool,
+    pub fecha_para_ficha: Option<String>,
+}
+
+fn fecha_de_ocr(fecha: crate::lectura_documentos::FechaOcr) -> Option<chrono::NaiveDate> {
+    chrono::NaiveDate::from_ymd_opt(fecha.anio, u32::from(fecha.mes), u32::from(fecha.dia))
+}
+
 fn rechazo(mensaje: String) -> NucleoError {
     NucleoError::Rechazado { mensaje }
 }
@@ -150,5 +188,85 @@ impl Nucleo {
             clave: carga.clave,
             nombre_en_origen: carga.nombre_en_origen,
         })
+    }
+
+    /// Vista previa del gafete del QR **con su imagen** (para el OCR), sin
+    /// guardar nada.
+    pub fn previsualizar_carne_praind_con_imagen(
+        &self,
+        contratista_id: i64,
+        enlace: String,
+    ) -> Result<PreviaGafetePraind, NucleoError> {
+        self.actor_autenticado()?;
+        let conexion = self.conexion_secundaria()?;
+        let nombre = nombre_contratista(&conexion, contratista_id)?;
+        let (carga, imagen) =
+            praind::previsualizar_carne_con_imagen(&conexion, contratista_id, &enlace, || {
+                self.token_praind()
+            })
+            .map_err(rechazo)?;
+        Ok(PreviaGafetePraind {
+            nombre_coincide: nombres_coinciden(carga.nombre_en_origen.as_deref(), &nombre),
+            nombre_en_origen: carga.nombre_en_origen,
+            imagen,
+        })
+    }
+
+    /// Revisa el texto que el OCR leyó del gafete contra la ficha del
+    /// contratista (`control_acceso::domain::gafete_praind`). Sólo lee.
+    pub fn revisar_gafete_praind(
+        &self,
+        contratista_id: i64,
+        texto_ocr: String,
+    ) -> Result<RevisionGafetePraind, NucleoError> {
+        use control_acceso::domain::gafete_praind::DatosGafeteLeido;
+        use control_acceso::mensajes::{
+            NivelRevisionGafete as Nivel, lineas_revision_gafete_praind,
+        };
+
+        let leido = crate::lectura_documentos::leer_gafete_praind(&texto_ocr);
+        let datos = DatosGafeteLeido {
+            cedula: leido.cedula,
+            nombre: leido.nombre,
+            empresa: leido.empresa,
+            induccion: leido.induccion.and_then(fecha_de_ocr),
+            vencimiento: leido.vencimiento.and_then(fecha_de_ocr),
+        };
+        let revision = self
+            .core_lock()
+            .revisar_gafete_praind(contratista_id, &datos)?;
+        Ok(RevisionGafetePraind {
+            lineas: lineas_revision_gafete_praind(&revision)
+                .into_iter()
+                .map(|linea| LineaRevisionGafete {
+                    nivel: match linea.nivel {
+                        Nivel::Bien => NivelRevisionGafete::Bien,
+                        Nivel::Aviso => NivelRevisionGafete::Aviso,
+                        Nivel::Error => NivelRevisionGafete::Error,
+                    },
+                    texto: linea.texto,
+                })
+                .collect(),
+            bloquea_guardar: revision.bloquea_guardar(),
+            fecha_para_ficha: revision
+                .fecha_para_ficha
+                .map(|fecha| fecha.format("%Y-%m-%d").to_string()),
+        })
+    }
+
+    /// Deja en la ficha el vencimiento PRAIND de un gafete más nuevo
+    /// (`AAAA-MM-DD`), con las mismas reglas que editar la ficha.
+    pub fn actualizar_vencimiento_praind(
+        &self,
+        contratista_id: i64,
+        fecha: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        let vencimiento = fecha
+            .parse()
+            .map_err(|_| NucleoError::FechaInvalida { mensaje: fecha })?;
+        Ok(self
+            .core_lock()
+            .actualizar_vencimiento_praind(&actor, contratista_id, vencimiento)?)
     }
 }

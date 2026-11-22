@@ -492,6 +492,38 @@ static PRAIND_FECHA_VENCIMIENTO: LazyLock<Regex> = LazyLock::new(|| {
     )
 });
 
+static PRAIND_FECHA_INDUCCION: LazyLock<Regex> = LazyLock::new(|| {
+    patron(r"(?i)Fecha\s+de\s+inducci[oó]n:?\s*([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})")
+});
+
+/// Todo lo que trae la imagen de un gafete PRAIND, cada dato por su cuenta:
+/// la revisión contra la ficha usa lo que se haya leído aunque falte algo
+/// (a diferencia de [`extraer_praind`], que sin cédula no es un documento).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GafetePraindLeido {
+    pub cedula: Option<String>,
+    pub nombre: Option<String>,
+    pub empresa: Option<String>,
+    pub induccion: Option<FechaOcr>,
+    pub vencimiento: Option<FechaOcr>,
+}
+
+pub fn leer_gafete_praind(texto: &str) -> GafetePraindLeido {
+    let texto_de = |regex: &Regex| regex.captures(texto).map(|c| c[1].trim().to_owned());
+    let fecha_de = |regex: &Regex| {
+        regex
+            .captures(texto)
+            .and_then(|c| fecha_de_grupos(&c[1], &c[2], &c[3]))
+    };
+    GafetePraindLeido {
+        cedula: texto_de(&PRAIND_CEDULA),
+        nombre: texto_de(&PRAIND_NOMBRE),
+        empresa: texto_de(&PRAIND_EMPRESA),
+        induccion: fecha_de(&PRAIND_FECHA_INDUCCION),
+        vencimiento: fecha_de(&PRAIND_FECHA_VENCIMIENTO),
+    }
+}
+
 pub fn extraer_praind(texto: &str) -> Option<DocumentoLeido> {
     let numero = PRAIND_CEDULA.captures(texto)?[1].to_owned();
     let mut documento = DocumentoLeido::nuevo(TipoDocumento::CarnetInduccionPraind, numero);
@@ -677,6 +709,47 @@ mod tests {
                 anio: 2026
             })
         );
+    }
+
+    /// Texto como el que da el OCR de la imagen del gafete de Hazel
+    /// (producción, 2026-11-21): etiquetas y valores en líneas mezcladas.
+    #[test]
+    fn leer_gafete_praind_trae_tambien_la_fecha_de_induccion() {
+        let texto = "CARNET DE INDUCCIÓN EN NORMAS DE SEGURIDAD\nNombre: Hazel Johanna Angulo Aguilar\n\
+                     No. de cédula: 305450949\nEmpresa: Sodexo\nFecha de inducción: 19/06/2025\n\
+                     Fecha de vencimiento de\ninducción: 19/06/2026\nCOCA COLA FEMSA COSTA RICA";
+        let leido = leer_gafete_praind(texto);
+        assert_eq!(leido.cedula.as_deref(), Some("305450949"));
+        assert_eq!(
+            leido.nombre.as_deref(),
+            Some("Hazel Johanna Angulo Aguilar")
+        );
+        assert_eq!(leido.empresa.as_deref(), Some("Sodexo"));
+        assert_eq!(
+            leido.induccion,
+            Some(FechaOcr {
+                dia: 19,
+                mes: 6,
+                anio: 2025
+            })
+        );
+        assert_eq!(
+            leido.vencimiento,
+            Some(FechaOcr {
+                dia: 19,
+                mes: 6,
+                anio: 2026
+            })
+        );
+    }
+
+    #[test]
+    fn leer_gafete_praind_sin_cedula_igual_trae_lo_demas() {
+        let leido = leer_gafete_praind("Nombre: Ana Perez\nFecha de inducción: 01/02/2026");
+        assert_eq!(leido.cedula, None);
+        assert_eq!(leido.nombre.as_deref(), Some("Ana Perez"));
+        assert!(leido.induccion.is_some());
+        assert_eq!(leido.vencimiento, None);
     }
 
     #[test]

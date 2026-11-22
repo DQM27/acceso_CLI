@@ -26,6 +26,7 @@ mod renglones_visuales;
 mod texto;
 mod vehiculo;
 
+pub use campos_identidad::{GafetePraindLeido, leer_gafete_praind};
 pub use carnet_kof::{CarnetKofDetectado, es_carnet_kof, extraer_carnet_kof};
 pub use cedula::extraer_cedula_de_texto;
 pub use comprobante::{
