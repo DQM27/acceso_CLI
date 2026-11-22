@@ -1188,7 +1188,7 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_previsualizar_gafete_praind_para_alta(`ptr`: Long,`enlace`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_revisar_gafete_praind(`ptr`: Long,`contratistaId`: Long,`textoOcr`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_revisar_gafete_praind(`ptr`: Long,`contratistaId`: Long,`textoOcr`: RustBuffer.ByValue,`nombreEnOrigen`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_ver_carne_praind(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1822,7 +1822,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_previsualizar_gafete_praind_para_alta() and 0xFFFF) != 63351) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_revisar_gafete_praind() and 0xFFFF) != 165) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_revisar_gafete_praind() and 0xFFFF) != 33486) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_ver_carne_praind() and 0xFFFF) != 3532) {
@@ -4323,9 +4323,11 @@ public interface NucleoInterface {
     
     /**
      * Revisa el texto que el OCR leyó del gafete contra la ficha del
-     * contratista (`control_acceso::domain::gafete_praind`). Sólo lee.
+     * contratista (`control_acceso::domain::gafete_praind`). El nombre que
+     * se compara es el de la página del QR si la trajo (más confiable que
+     * el OCR). Sólo lee.
      */
-    fun `revisarGafetePraind`(`contratistaId`: kotlin.Long, `textoOcr`: kotlin.String): RevisionGafetePraind
+    fun `revisarGafetePraind`(`contratistaId`: kotlin.Long, `textoOcr`: kotlin.String, `nombreEnOrigen`: kotlin.String?): RevisionGafetePraind
     
     /**
      * El carné: del teléfono si ya se vio; si no, de la nube (y queda
@@ -5951,9 +5953,11 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
     /**
      * Revisa el texto que el OCR leyó del gafete contra la ficha del
-     * contratista (`control_acceso::domain::gafete_praind`). Sólo lee.
+     * contratista (`control_acceso::domain::gafete_praind`). El nombre que
+     * se compara es el de la página del QR si la trajo (más confiable que
+     * el OCR). Sólo lee.
      */
-    @Throws(NucleoException::class)override fun `revisarGafetePraind`(`contratistaId`: kotlin.Long, `textoOcr`: kotlin.String): RevisionGafetePraind {
+    @Throws(NucleoException::class)override fun `revisarGafetePraind`(`contratistaId`: kotlin.Long, `textoOcr`: kotlin.String, `nombreEnOrigen`: kotlin.String?): RevisionGafetePraind {
             return FfiConverterTypeRevisionGafetePraind.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -5961,7 +5965,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterLong.lower(`contratistaId`),
-        FfiConverterString.lower(`textoOcr`),_status)
+        FfiConverterString.lower(`textoOcr`),
+        FfiConverterOptionalString.lower(`nombreEnOrigen`),_status)
 }
     }
     )

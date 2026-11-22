@@ -29,6 +29,21 @@ pub struct DatosGafeteLeido {
     pub vencimiento: Option<NaiveDate>,
 }
 
+impl DatosGafeteLeido {
+    /// El nombre de la página del QR (lo da el sistema PRAIND, sin OCR)
+    /// manda sobre el leído de la imagen: el OCR del teléfono puede ordenar
+    /// los bloques de texto de otra forma y poner otra cosa después de
+    /// "Nombre:" (en un gafete real leyó "FEMSA", el logo, 2026-11-21). El
+    /// del OCR queda sólo si la página no trajo nombre.
+    #[must_use]
+    pub fn con_nombre_de_pagina(mut self, nombre_en_origen: Option<&str>) -> Self {
+        if let Some(nombre) = nombre_en_origen.map(str::trim).filter(|n| !n.is_empty()) {
+            self.nombre = Some(nombre.to_string());
+        }
+        self
+    }
+}
+
 /// Lo que dice la ficha del contratista.
 #[derive(Debug, Clone, Copy)]
 pub struct DatosFicha<'a> {
@@ -186,14 +201,10 @@ pub struct DatosAltaDesdeGafete {
     pub vencido: bool,
 }
 
-/// Los datos del gafete para el alta. Si el OCR no leyó el nombre, sirve el
-/// de la página del QR (`nombre_en_origen`).
+/// Los datos del gafete para el alta (el nombre de la página del QR ya
+/// aplicado con [`DatosGafeteLeido::con_nombre_de_pagina`]).
 #[must_use]
-pub fn datos_alta_desde_gafete(
-    leido: &DatosGafeteLeido,
-    nombre_en_origen: Option<&str>,
-    hoy: NaiveDate,
-) -> DatosAltaDesdeGafete {
+pub fn datos_alta_desde_gafete(leido: &DatosGafeteLeido, hoy: NaiveDate) -> DatosAltaDesdeGafete {
     let vencimiento = match (leido.induccion, leido.vencimiento) {
         (Some(induccion), Some(vence)) if !vencimiento_coherente(induccion, vence) => None,
         (_, vence) => vence,
@@ -204,11 +215,7 @@ pub fn datos_alta_desde_gafete(
             .as_deref()
             .map(solo_digitos)
             .filter(|cedula| !cedula.is_empty()),
-        nombre: leido
-            .nombre
-            .as_deref()
-            .and_then(normalizar_nombre)
-            .or_else(|| nombre_en_origen.and_then(normalizar_nombre)),
+        nombre: leido.nombre.as_deref().and_then(normalizar_nombre),
         empresa: leido
             .empresa
             .as_deref()
@@ -574,7 +581,7 @@ mod tests {
             vencimiento: Some(fecha("2027-06-19")),
             ..gafete_hazel()
         };
-        let datos = datos_alta_desde_gafete(&leido, None, hoy());
+        let datos = datos_alta_desde_gafete(&leido, hoy());
         assert_eq!(datos.cedula.as_deref(), Some("305450949"));
         assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
         assert_eq!(datos.empresa.as_deref(), Some("Sodexo"));
@@ -584,7 +591,7 @@ mod tests {
 
     #[test]
     fn alta_desde_gafete_vencido_lo_marca() {
-        let datos = datos_alta_desde_gafete(&gafete_hazel(), None, hoy());
+        let datos = datos_alta_desde_gafete(&gafete_hazel(), hoy());
         assert_eq!(datos.vencimiento, Some(fecha("2026-06-19")));
         assert!(datos.vencido);
     }
@@ -595,7 +602,7 @@ mod tests {
             vencimiento: Some(fecha("2027-01-19")),
             ..gafete_hazel()
         };
-        assert_eq!(datos_alta_desde_gafete(&leido, None, hoy()).vencimiento, None);
+        assert_eq!(datos_alta_desde_gafete(&leido, hoy()).vencimiento, None);
         // Sin fecha de inducción no hay con qué contrastar: se propone.
         let sin_induccion = DatosGafeteLeido {
             induccion: None,
@@ -603,18 +610,25 @@ mod tests {
             ..gafete_hazel()
         };
         assert_eq!(
-            datos_alta_desde_gafete(&sin_induccion, None, hoy()).vencimiento,
+            datos_alta_desde_gafete(&sin_induccion, hoy()).vencimiento,
             Some(fecha("2027-01-19"))
         );
     }
 
     #[test]
-    fn alta_desde_gafete_sin_nombre_leido_usa_el_de_la_pagina() {
+    fn el_nombre_de_la_pagina_manda_sobre_el_del_ocr() {
+        // Caso real (2026-11-21): el OCR del teléfono puso "FEMSA" (el logo)
+        // como nombre; la página del QR trae el correcto.
         let leido = DatosGafeteLeido {
-            nombre: None,
+            nombre: Some("FEMSA".into()),
             ..gafete_hazel()
-        };
-        let datos = datos_alta_desde_gafete(&leido, Some("Hazel Johanna Angulo Aguilar"), hoy());
-        assert_eq!(datos.nombre.as_deref(), Some("HAZEL JOHANNA ANGULO AGUILAR"));
+        }
+        .con_nombre_de_pagina(Some("Menfi Bosetto Mora Navarro"));
+        let datos = datos_alta_desde_gafete(&leido, hoy());
+        assert_eq!(datos.nombre.as_deref(), Some("MENFI BOSETTO MORA NAVARRO"));
+
+        // Sin nombre en la página queda el del OCR.
+        let sin_pagina = gafete_hazel().con_nombre_de_pagina(Some("  "));
+        assert_eq!(sin_pagina.nombre.as_deref(), Some("Hazel Johanna Angulo Aguilar"));
     }
 }

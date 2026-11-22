@@ -303,15 +303,17 @@ impl AppCore {
 
     /// Los datos del gafete PRAIND leído (OCR de su imagen) para dar de alta
     /// a un contratista nuevo, con la empresa del catálogo si corresponde y
-    /// el "hoy" del reloj del núcleo. Sólo lee.
+    /// el "hoy" del reloj del núcleo. El nombre es el de la página del QR
+    /// si la trajo ([`DatosGafeteLeido::con_nombre_de_pagina`]). Sólo lee.
+    ///
+    /// [`DatosGafeteLeido::con_nombre_de_pagina`]: crate::domain::gafete_praind::DatosGafeteLeido::con_nombre_de_pagina
     pub fn datos_alta_desde_gafete(
         &self,
         leido: &crate::domain::gafete_praind::DatosGafeteLeido,
         nombre_en_origen: Option<&str>,
     ) -> Result<crate::domain::gafete_praind::DatosAltaDesdeGafete, ContratistaServiceError> {
         let mut datos = crate::domain::gafete_praind::datos_alta_desde_gafete(
-            leido,
-            nombre_en_origen,
+            &leido.clone().con_nombre_de_pagina(nombre_en_origen),
             fecha_costa_rica(self.reloj.ahora_utc()),
         );
         if let Some(empresa) = datos.empresa.as_deref() {

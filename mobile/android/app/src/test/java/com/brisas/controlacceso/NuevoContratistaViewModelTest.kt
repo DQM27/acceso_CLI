@@ -333,6 +333,17 @@ class NuevoContratistaViewModelTest {
     }
 
     @Test
+    fun `el nombre es el de la pagina del QR aunque el OCR lea otra cosa`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        // Caso real (2026-11-21): ML Kit puso el logo "FEMSA" después de "Nombre:".
+        val vm = viewModel(lector = LectorTextoImagen { textoGafete().replace("Ana Rojas Vega", "FEMSA") })
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        assertEquals("ANA ROJAS VEGA", vm.nombre)
+    }
+
+    @Test
     fun `sin permiso del panel no se ofrece el QR`() = runTest(dispatcher) {
         abrirConEmpresas()
         fuente.puede = false

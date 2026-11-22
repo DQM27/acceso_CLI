@@ -29,7 +29,7 @@ interface FuenteCarnes {
     fun permisos(): PermisosCarnePraind
     fun cargarDesdeQr(contratistaId: Long, enlace: String, soloPrevisualizar: Boolean): CargaCarnePraind
     fun previsualizarConImagen(contratistaId: Long, enlace: String): PreviaGafetePraind
-    fun revisar(contratistaId: Long, textoOcr: String): RevisionGafetePraind
+    fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?): RevisionGafetePraind
     fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?)
 }
 
@@ -41,7 +41,8 @@ private class FuenteCarnesNucleo(private val nucleo: Nucleo) : FuenteCarnes {
         nucleo.cargarCarnePraindDesdeQr(contratistaId, enlace, soloPrevisualizar)
     override fun previsualizarConImagen(contratistaId: Long, enlace: String) =
         nucleo.previsualizarCarnePraindConImagen(contratistaId, enlace)
-    override fun revisar(contratistaId: Long, textoOcr: String) = nucleo.revisarGafetePraind(contratistaId, textoOcr)
+    override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?) =
+        nucleo.revisarGafetePraind(contratistaId, textoOcr, nombreEnOrigen)
     override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) =
         nucleo.corregirFichaDesdeGafete(contratistaId, vencimiento, nombre, empresaId)
 }
@@ -219,7 +220,7 @@ class CarnePraindViewModel(
             val revision = texto?.let {
                 withContext(dispatcherIO) {
                     try {
-                        fuente.revisar(contratistaId, it)
+                        fuente.revisar(contratistaId, it, previa.nombreEnOrigen)
                     } catch (excepcion: Exception) {
                         excepcion.mensajeDeErrorEsperado()
                         null

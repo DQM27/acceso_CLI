@@ -322,19 +322,23 @@ impl Nucleo {
     }
 
     /// Revisa el texto que el OCR leyó del gafete contra la ficha del
-    /// contratista (`control_acceso::domain::gafete_praind`). Sólo lee.
+    /// contratista (`control_acceso::domain::gafete_praind`). El nombre que
+    /// se compara es el de la página del QR si la trajo (más confiable que
+    /// el OCR). Sólo lee.
     pub fn revisar_gafete_praind(
         &self,
         contratista_id: i64,
         texto_ocr: String,
+        nombre_en_origen: Option<String>,
     ) -> Result<RevisionGafetePraind, NucleoError> {
         use control_acceso::mensajes::{
             NivelRevisionGafete as Nivel, lineas_revision_gafete_praind,
         };
 
+        let leido = gafete_leido(&texto_ocr).con_nombre_de_pagina(nombre_en_origen.as_deref());
         let revision = self
             .core_lock()
-            .revisar_gafete_praind(contratista_id, &gafete_leido(&texto_ocr))?;
+            .revisar_gafete_praind(contratista_id, &leido)?;
         Ok(RevisionGafetePraind {
             lineas: lineas_revision_gafete_praind(&revision)
                 .into_iter()

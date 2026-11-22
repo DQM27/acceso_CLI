@@ -59,7 +59,7 @@ class CarnePraindViewModelTest {
             return PreviaGafetePraind(nombreEnOrigen = nombreEnOrigen, nombreCoincide = coincide, imagen = byteArrayOf(9))
         }
 
-        override fun revisar(contratistaId: Long, textoOcr: String): RevisionGafetePraind {
+        override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?): RevisionGafetePraind {
             textosRevisados += textoOcr
             return revision ?: throw NucleoException.Rechazado("sin revisión")
         }
