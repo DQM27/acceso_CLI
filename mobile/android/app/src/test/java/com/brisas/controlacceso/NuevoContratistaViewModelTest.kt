@@ -71,6 +71,10 @@ class NuevoContratistaViewModelTest {
             errorCarga?.let { throw NucleoException.Rechazado(it) }
             cargados += contratistaId to enlace
         }
+        override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?) =
+            nucleo.revisarGafetePraind(contratistaId, textoOcr, nombreEnOrigen)
+        override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) =
+            nucleo.corregirFichaDesdeGafete(contratistaId, vencimiento, nombre, empresaId)
     }
 
     private val fuente by lazy { FuenteFalsa() }
@@ -367,6 +371,62 @@ class NuevoContratistaViewModelTest {
         // Con otra cédula ya no es esa persona.
         vm.cambiarCedula("702000000")
         assertNull(vm.yaRegistrado)
+    }
+
+    @Test
+    fun `actualizar la ficha ya registrada guarda el gafete y la fecha nueva, directo`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (id, nombre) VALUES (1, 'Sodexo');",
+            "INSERT INTO contratistas (cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, " +
+                "es_personal_ruta, tiene_acceso) VALUES ('701000000', 'ANA ROJAS VEGA', 1, 'PRAIND', '2020-01-01', 0, 1);",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        val id = vm.yaRegistrado!!.id
+
+        var aviso: AvisoAlta? = null
+        var abierto: Long? = null
+        vm.actualizarRegistrado { contratista, a ->
+            abierto = contratista
+            aviso = a
+        }
+        advanceUntilIdle()
+        assertNull(vm.error)
+        assertEquals(id, abierto)
+        assertEquals(listOf(id to ENLACE), fuente.cargados)
+        assertEquals("2099-06-19", nucleo.buscarContratistas("701000000").single().fechaVencimientoPraind)
+        assertEquals(
+            AvisoAlta("Gafete PRAIND de ANA ROJAS VEGA guardado; la ficha vence el 19/06/2099.", esError = false),
+            aviso,
+        )
+    }
+
+    @Test
+    fun `si el gafete no se puede guardar la ficha no cambia`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (id, nombre) VALUES (1, 'Sodexo');",
+            "INSERT INTO contratistas (cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, " +
+                "es_personal_ruta, tiene_acceso) VALUES ('701000000', 'ANA ROJAS VEGA', 1, 'PRAIND', '2020-01-01', 0, 1);",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.aplicarQrGafete(ENLACE)
+        advanceUntilIdle()
+        fuente.errorCarga = "Revise la conexión."
+        var abierto = false
+        vm.actualizarRegistrado { _, _ -> abierto = true }
+        advanceUntilIdle()
+        assertFalse(abierto)
+        assertEquals("Revise la conexión.", vm.error)
+        assertEquals("2020-01-01", nucleo.buscarContratistas("701000000").single().fechaVencimientoPraind)
     }
 
     @Test

@@ -359,7 +359,17 @@ impl AppCore {
                 nombre: cambios.nombre.unwrap_or(actual.nombre),
                 empresa_id: cambios.empresa_id.unwrap_or(actual.empresa_id),
                 tipo_ingreso: actual.tipo_ingreso,
-                fecha_vencimiento_praind: cambios.vencimiento.or(actual.fecha_vencimiento_praind),
+                // Sólo avanza: si mientras se revisaba el gafete la ficha
+                // recibió una fecha más nueva (otro equipo, el panel), no se
+                // la pisa con una más vieja. Se compara con la ficha de este
+                // momento, no con la de la revisión.
+                fecha_vencimiento_praind: match (
+                    cambios.vencimiento,
+                    actual.fecha_vencimiento_praind,
+                ) {
+                    (Some(nueva), Some(en_ficha)) if nueva <= en_ficha => Some(en_ficha),
+                    (nueva, en_ficha) => nueva.or(en_ficha),
+                },
                 es_personal_ruta: actual.es_personal_ruta,
                 tiene_acceso: actual.tiene_acceso,
             },

@@ -31,10 +31,14 @@ fn fecha(texto: &str) -> NaiveDate {
 /// Un contratista PRAIND de Sodexo que vence el 30/05/2030 (lejos de hoy:
 /// la prueba no depende del día en que corre).
 fn base() -> AppCore {
+    base_con_vencimiento("2030-05-30")
+}
+
+fn base_con_vencimiento(vence: &str) -> AppCore {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     connection
-        .execute_batch(
+        .execute_batch(&format!(
             "INSERT INTO usuarios(id,cedula,nombre,password_hash,rol,activo) VALUES
                 (1,'U1','Operador','hash','ADMINISTRADOR',1);
              INSERT INTO empresas(id,nombre,activo) VALUES (1,'SODEXO',1),
@@ -42,8 +46,8 @@ fn base() -> AppCore {
              INSERT INTO contratistas(
                 id,cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
                 es_personal_ruta,tiene_acceso
-             ) VALUES (1,'305450949','HAZEL JOHANNA ANGULO AGUILAR',1,'PRAIND','2030-05-30',0,1);",
-        )
+             ) VALUES (1,'305450949','HAZEL JOHANNA ANGULO AGUILAR',1,'PRAIND','{vence}',0,1);",
+        ))
         .unwrap();
     AppCore::new(connection)
 }
@@ -113,7 +117,7 @@ fn actualizar_el_vencimiento_deja_el_resto_de_la_ficha_igual() {
 
 #[test]
 fn no_deja_poner_un_vencimiento_ya_pasado() {
-    let core = base();
+    let core = base_con_vencimiento("2019-01-01");
     let error = core
         .actualizar_vencimiento_praind(&operador(), 1, fecha("2020-06-19"))
         .unwrap_err();
@@ -121,6 +125,16 @@ fn no_deja_poner_un_vencimiento_ya_pasado() {
         matches!(error, ContratistaServiceError::PraindVencido),
         "se esperaba el rechazo de la regla del contratista, llegó {error:?}"
     );
+    assert_eq!(ficha(&core).0, Some(fecha("2019-01-01")));
+}
+
+/// Carrera: mientras se revisaba el gafete, otro equipo dejó en la ficha
+/// una fecha más nueva. La corrección no la pisa con la del gafete.
+#[test]
+fn una_fecha_mas_vieja_que_la_ficha_no_la_pisa() {
+    let core = base();
+    core.actualizar_vencimiento_praind(&operador(), 1, fecha("2029-06-19"))
+        .unwrap();
     assert_eq!(ficha(&core).0, Some(fecha("2030-05-30")));
 }
 

@@ -85,10 +85,6 @@ fun PantallaNuevoContratista(
     onVolver: () -> Unit,
     onGuardado: (contratistaId: Long, aviso: AvisoAlta?) -> Unit,
     textoInicial: String = "",
-    // La cédula del gafete del QR ya tiene ficha: en vez de darla de alta
-    // otra vez, se abre su ingreso con la revisión de ese gafete, que
-    // actualiza la ficha (sólo por QR; pedido del usuario 2026-11-21).
-    onActualizarRegistrado: (contratistaId: Long, nombre: String, enlace: String) -> Unit = { _, _, _ -> },
 ) {
     RegistrarPantalla("nuevo_contratista")
     val claveFormulario = rememberSaveable { "nuevo-contratista-${UUID.randomUUID()}" }
@@ -357,15 +353,16 @@ fun PantallaNuevoContratista(
             FranjaEstado(mensajeExito, TipoEstado.EXITO, modifier = Modifier.padding(top = 16.dp))
         }
 
-        val registrado = vm.yaRegistrado
-        val enlace = vm.enlaceGafeteLeido
-        if (registrado != null && enlace != null) {
+        // La cédula del gafete del QR ya tiene ficha: en vez de darla de alta
+        // otra vez se actualiza directo y pasa a su ingreso (sólo por QR;
+        // pedidos del usuario 2026-11-21 y 22).
+        if (vm.yaRegistrado != null && vm.enlaceGafeteLeido != null) {
             BotonBrisas(
-                onClick = { onActualizarRegistrado(registrado.id, registrado.nombre, enlace) },
-                enabled = !vm.leyendoQr && !praindVencido,
+                onClick = { vm.actualizarRegistrado(onActualizado = onGuardado) },
+                enabled = !vm.enviando && !vm.leyendoQr && !praindVencido,
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
-                Text("Actualizar su ficha con este gafete")
+                Text(if (vm.enviando) "Actualizando…" else "Actualizar su ficha con este gafete")
             }
         } else {
             BotonBrisas(

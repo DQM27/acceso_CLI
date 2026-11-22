@@ -326,9 +326,6 @@ fun PantallaPrincipal(
     // abajo. Son los mismos ViewModels que usan las pantallas (los guarda la
     // Activity), así que los números se mueven solos con cada registro.
     val activosViewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
-    // El mismo de Contratistas (misma clave): "Nuevo contratista" le pasa el
-    // gafete del QR de alguien ya registrado para revisarlo en su ingreso.
-    val carneViewModel: CarnePraindViewModel = viewModel(factory = CarnePraindViewModel.factory(nucleo))
     val gafetesViewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
     val proveedoresViewModel: ProveedoresViewModel = viewModel(factory = ProveedoresViewModel.factory(nucleo))
@@ -572,14 +569,6 @@ fun PantallaPrincipal(
                         // entonces se cierra: así hay una sola transición (la de
                         // volver), en vez de esa más la de la lista al formulario
                         // encima.
-                        onActualizarRegistrado = { id, nombre, enlace ->
-                            scope.launch {
-                                activosViewModel.elegir(id).join()
-                                pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.CONTRATISTAS)
-                                panel = PanelPrincipal.PESTANAS
-                                carneViewModel.previsualizar(id, nombre, enlace)
-                            }
-                        },
                         onGuardado = { id, aviso ->
                             scope.launch {
                                 activosViewModel.elegir(id).join()

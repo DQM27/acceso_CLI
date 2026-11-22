@@ -21,6 +21,7 @@ import uniffi.control_acceso_mobile.DatosContratista
 import uniffi.control_acceso_mobile.Empresa
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PreviaGafeteParaAlta
+import uniffi.control_acceso_mobile.RevisionGafetePraind
 import uniffi.control_acceso_mobile.TipoIngreso
 import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
@@ -33,6 +34,8 @@ interface FuenteGafeteAlta {
     fun previsualizar(enlace: String): PreviaGafeteParaAlta
     fun datos(textoOcr: String, nombreEnOrigen: String?): DatosAltaDesdeGafete
     fun cargar(contratistaId: Long, enlace: String)
+    fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?): RevisionGafetePraind
+    fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?)
 }
 
 private class FuenteGafeteAltaNucleo(private val nucleo: Nucleo) : FuenteGafeteAlta {
@@ -43,6 +46,10 @@ private class FuenteGafeteAltaNucleo(private val nucleo: Nucleo) : FuenteGafeteA
     override fun cargar(contratistaId: Long, enlace: String) {
         nucleo.cargarGafetePraindDeAlta(contratistaId, enlace)
     }
+    override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?) =
+        nucleo.revisarGafetePraind(contratistaId, textoOcr, nombreEnOrigen)
+    override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) =
+        nucleo.corregirFichaDesdeGafete(contratistaId, vencimiento, nombre, empresaId)
 }
 
 /// Lo que se avisa al volver a la lista tras guardar: si el gafete PRAIND
@@ -96,6 +103,11 @@ class NuevoContratistaViewModel(
     val cargaraGafete: Boolean get() = enlaceGafete != null && gafeteEsDeEstaCedula()
 
     private var registradoLeido by mutableStateOf<ContratistaYaRegistrado?>(null)
+
+    /// Lo leído del gafete (texto del OCR y nombre de la página del QR),
+    /// para revisarlo contra la ficha que ya existe al actualizarla.
+    private var textoGafete: String = ""
+    private var nombreEnOrigenGafete: String? = null
 
     /// La cédula del gafete del QR ya tiene ficha: no es un alta. La
     /// pantalla ofrece actualizar esa ficha con el gafete (sólo por QR).
@@ -236,6 +248,8 @@ class NuevoContratistaViewModel(
         enlaceGafete = null
         cedulaGafete = null
         registradoLeido = null
+        textoGafete = ""
+        nombreEnOrigenGafete = null
     }
 
     private var lecturaQr: Job? = null
@@ -244,6 +258,9 @@ class NuevoContratistaViewModel(
     /// nada), la lee con OCR y rellena el formulario. El gafete se carga
     /// recién al guardar el contratista.
     fun aplicarQrGafete(enlace: String) {
+        // Con un guardado o una actualización en curso no se cambian los
+        // datos debajo: se terminaría guardando una mezcla de dos gafetes.
+        if (enviando) return
         limpiarParaEscanear()
         lecturaQr?.cancel()
         leyendoQr = true
@@ -257,6 +274,8 @@ class NuevoContratistaViewModel(
                 enlaceGafete = enlace
                 cedulaGafete = datos.cedula
                 registradoLeido = datos.yaRegistrado
+                textoGafete = texto
+                nombreEnOrigenGafete = previa.nombreEnOrigen
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado() ?: "No se pudo leer el gafete PRAIND."
             } finally {
@@ -348,6 +367,61 @@ class NuevoContratistaViewModel(
                 onGuardado(id, cargarGafeteDe(id))
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                enviando = false
+            }
+        }
+    }
+
+    /// La cédula del gafete del QR ya tiene ficha: se actualiza directo, sin
+    /// otra ventana (pedido del usuario 2026-11-22). Se guarda el gafete y
+    /// la ficha toma su vencimiento si es más nuevo (lo decide la revisión
+    /// del núcleo) y el nombre y la empresa que muestra el formulario si
+    /// difieren de la ficha. Después [onActualizado] abre su ingreso.
+    ///
+    /// Primero el gafete: si no se puede guardar (sin conexión), la ficha
+    /// no cambia y se puede reintentar. La fecha sólo avanza aunque otro
+    /// equipo haya cambiado la ficha mientras tanto (lo cuida el núcleo).
+    fun actualizarRegistrado(onActualizado: (contratistaId: Long, aviso: AvisoAlta?) -> Unit) {
+        val registrado = yaRegistrado ?: return
+        val enlace = enlaceGafete ?: return
+        if (enviando || leyendoQr) return
+        enviando = true
+        error = null
+        mensaje = null
+        val id = registrado.id
+        val nombreFormulario = nombre
+        val empresaFormulario = empresaSeleccionada
+        viewModelScope.launch {
+            try {
+                val revision = withContext(dispatcherIO) {
+                    fuenteGafete.revisar(id, textoGafete, nombreEnOrigenGafete)
+                }
+                if (revision.bloqueaGuardar) {
+                    error = "La cédula del gafete no coincide con la ficha: no se actualizó."
+                    return@launch
+                }
+                withContext(dispatcherIO) { fuenteGafete.cargar(id, enlace) }
+                val fecha = revision.fechaParaFicha
+                val nombreNuevo = nombreFormulario.takeIf { revision.nombreParaFicha != null && it.isNotBlank() }
+                val empresaNueva = empresaFormulario?.id?.takeIf { revision.empresaParaFicha != null }
+                if (fecha != null || nombreNuevo != null || empresaNueva != null) {
+                    withContext(dispatcherIO) { fuenteGafete.corregirFicha(id, fecha, nombreNuevo, empresaNueva) }
+                    CambiosNube.cambioLocal()
+                }
+                val quien = nombreNuevo ?: registrado.nombre
+                val texto = buildString {
+                    append("Gafete PRAIND de $quien guardado")
+                    when {
+                        fecha != null -> append("; la ficha vence el ${fechaIsoComoTexto(fecha)}")
+                        nombreNuevo != null || empresaNueva != null -> append("; ficha corregida")
+                        else -> append("; la ficha ya estaba al día")
+                    }
+                    append('.')
+                }
+                onActualizado(id, AvisoAlta(texto, esError = false))
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado() ?: "No se pudo actualizar la ficha."
             } finally {
                 enviando = false
             }

@@ -41,9 +41,12 @@ abre al entrar. Sin eso, se abre la cámara del gafete (más abajo).
 
 **Si la persona ya está registrada** (por ejemplo, alguien que no viene
 hace tiempo y tiene la ficha vieja), en vez de **Guardar** aparece
-**Actualizar su ficha con este gafete**: abre su ingreso con la revisión del
-gafete, que actualiza la fecha (y, si lo marca, el nombre o la empresa).
-Así no se intenta darla de alta otra vez.
+**Actualizar su ficha con este gafete**. Al tocarlo, sin más ventanas:
+guarda el gafete, la ficha toma su fecha si es más nueva (y el nombre y la
+empresa del formulario, si eran distintos) y pasa directo a su ingreso.
+Arriba se ve, por ejemplo, **"Gafete PRAIND de … guardado; la ficha vence el
+…"**. Si el gafete no se pudo guardar (sin internet), la ficha no cambia y
+puede volver a tocar el botón. Así no se intenta darla de alta otra vez.
 
 Si cambia la cédula por otra, el gafete no se carga (sería de otra
 persona). Si la carga del gafete falla (por ejemplo, se cortó internet), el
