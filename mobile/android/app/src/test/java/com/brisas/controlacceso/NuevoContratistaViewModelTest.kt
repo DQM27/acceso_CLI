@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -366,6 +367,16 @@ class NuevoContratistaViewModelTest {
         // Con otra cédula ya no es esa persona.
         vm.cambiarCedula("702000000")
         assertNull(vm.yaRegistrado)
+    }
+
+    @Test
+    fun `el permiso del QR se resuelve al responder la nube`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        assertFalse(vm.permisoQrResuelto)
+        runCurrent()
+        assertTrue(vm.permisoQrResuelto)
+        assertTrue(vm.puedeLeerQr)
     }
 
     @Test

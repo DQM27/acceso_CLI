@@ -106,22 +106,80 @@ fun PantallaNuevoContratista(
     // La cámara del QR del gafete PRAIND (alta en un paso: datos y gafete).
     // Va encima de la otra cámara: su X vuelve a donde estaba.
     var camaraQr by rememberSaveable { mutableStateOf(false) }
+    // El lector QR es la cámara que se abre al entrar si el teléfono puede
+    // cargar gafetes (pedido del usuario 2026-11-22); el OCR queda como
+    // opción. Entonces su X cancela todo, como la otra cámara directa.
+    var qrDirecto by rememberSaveable { mutableStateOf(false) }
+    var inicioDecidido by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(vm.permisoQrResuelto) {
+        if (vm.permisoQrResuelto && !inicioDecidido) {
+            inicioDecidido = true
+            if (vm.puedeLeerQr && escaneando && escaneoDirecto) {
+                camaraQr = true
+                qrDirecto = true
+            }
+        }
+    }
+    // Un instante, mientras se sabe qué cámara abrir: así no se abre una y
+    // enseguida se cambia por la otra.
+    if (escaneando && escaneoDirecto && !inicioDecidido) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     if (camaraQr) {
+        val cerrarQr = {
+            camaraQr = false
+            if (qrDirecto) {
+                qrDirecto = false
+                escaneando = false
+                onVolver()
+            }
+        }
         EscanerConPermisoCamara(
             mensajePermiso = "Se necesita permiso de cámara para leer el QR del gafete PRAIND.",
-            onCerrar = { camaraQr = false },
+            onCerrar = cerrarQr,
         ) {
             EscanerQr(
                 textoGuia = "Apunte al código QR del gafete PRAIND",
                 interpretar = EnlaceQrPraind::desdeQr,
                 onLeido = { enlace ->
                     camaraQr = false
+                    qrDirecto = false
                     escaneando = false
                     escaneoDirecto = false
                     vm.aplicarQrGafete(enlace)
                 },
-                onCerrar = { camaraQr = false },
+                onCerrar = cerrarQr,
+                accionSecundaria = if (qrDirecto) {
+                    {
+                        Column(
+                            modifier = Modifier.padding(top = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            // El OCR como opción: la cámara de siempre.
+                            BotonSobreCamara(
+                                "Lector OCR",
+                                IconosLucide.EscanearDocumento,
+                                onClick = {
+                                    camaraQr = false
+                                    qrDirecto = false
+                                },
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                            BotonLlenarAManoCamara(onClick = {
+                                camaraQr = false
+                                qrDirecto = false
+                                escaneando = false
+                                escaneoDirecto = false
+                            })
+                        }
+                    }
+                } else {
+                    null
+                },
             )
         }
         return

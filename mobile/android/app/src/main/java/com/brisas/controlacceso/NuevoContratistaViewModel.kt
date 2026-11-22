@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.ContratistaYaRegistrado
@@ -72,6 +73,12 @@ class NuevoContratistaViewModel(
     /// Si se ofrece "Escanear QR del gafete PRAIND" (la nube lo permite para
     /// este teléfono y hay conexión).
     var puedeLeerQr by mutableStateOf(false)
+        private set
+
+    /// Ya se sabe si se ofrece el QR, o pasó [ESPERA_PERMISO_QR_MS] sin
+    /// respuesta (sin conexión la consulta puede tardar): la pantalla decide
+    /// entonces qué cámara abrir primero.
+    var permisoQrResuelto by mutableStateOf(false)
         private set
 
     /// Bajando y leyendo el gafete del QR.
@@ -161,6 +168,11 @@ class NuevoContratistaViewModel(
             puedeLeerQr = withContext(dispatcherIO) {
                 runCatching { fuenteGafete.puedeCargar() }.getOrDefault(false)
             }
+            permisoQrResuelto = true
+        }
+        viewModelScope.launch {
+            delay(ESPERA_PERMISO_QR_MS)
+            permisoQrResuelto = true
         }
     }
 
@@ -364,6 +376,10 @@ class NuevoContratistaViewModel(
     }
 
     companion object {
+        /// Cuánto se espera la respuesta del permiso antes de abrir la
+        /// cámara OCR en lugar del lector QR.
+        const val ESPERA_PERMISO_QR_MS = 1500L
+
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { NuevoContratistaViewModel(nucleo) }
         }

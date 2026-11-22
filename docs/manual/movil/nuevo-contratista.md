@@ -22,11 +22,12 @@ Cualquier usuario con sesión abierta.
 ## Pasos — con el QR del gafete PRAIND (datos y gafete en un paso)
 
 Hace falta internet y que un administrador le haya dado permiso a este
-teléfono desde el panel para cargar gafetes PRAIND. Sin eso, la opción no
-aparece: use la cámara (más abajo).
+teléfono desde el panel para cargar gafetes PRAIND. Con eso, es lo que se
+abre al entrar. Sin eso, se abre la cámara del gafete (más abajo).
 
-1. En la cámara que se abre, toque **Leer el QR del gafete** (o, en el
-   formulario, **Lector QR**).
+1. Se abre el **lector QR**. Debajo están **Lector OCR** (leer el gafete
+   con la cámara, sin QR) y **Llenar a mano**; la **X** cancela. En el
+   formulario, **Lector QR** lo vuelve a abrir.
 2. Apunte al **código QR** del gafete PRAIND. Se lee solo.
 3. La app baja el gafete, lo lee y llena cédula, nombre, empresa y
    vencimiento. Dice **"Gafete PRAIND leído: revise los datos. Al guardar se
@@ -51,7 +52,8 @@ contratista queda registrado igual y se avisa: cárguelo desde su ingreso con
 
 ## Pasos — escaneando el gafete PRAIND con la cámara
 
-1. Se abre directo la cámara: apunte al gafete PRAIND.
+1. Se abre directo la cámara (si se abrió el lector QR, toque **Lector
+   OCR**): apunte al gafete PRAIND.
 2. La app llena cédula, nombre, empresa y vencimiento, y dice **"Gafete
    PRAIND leído — revise los datos antes de guardar"**.
 3. **Revise todo** contra el gafete PRAIND. Si la empresa del gafete PRAIND no coincide
