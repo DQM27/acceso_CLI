@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import uniffi.control_acceso_mobile.ModoGuardadoGafete
 import uniffi.control_acceso_mobile.NivelRevisionGafete
 
 /// El carné PRAIND a pantalla completa, para comparar la foto con la persona
@@ -222,18 +223,19 @@ internal fun tipoDeLinea(nivel: NivelRevisionGafete): TipoEstado = when (nivel) 
     NivelRevisionGafete.ERROR -> TipoEstado.ERROR
 }
 
-/// El botón dice qué pasa al tocarlo: con la cédula distinta no se puede;
-/// un gafete vencido se guarda sólo como imagen; con algún dato distinto,
-/// "Guardar igual".
+/// El botón dice qué pasa al tocarlo, según el modo que decide el núcleo
+/// (`RevisionGafetePraind::modo_guardado`).
 internal fun textoBotonGuardar(previa: CargaCarne.Previa): String {
     val revision = previa.revision
     return when {
         previa.guardando -> "Guardando…"
         revision == null -> if (previa.coincide) "Guardar" else "Guardar igual"
-        revision.bloqueaGuardar -> "No se puede guardar"
-        revision.lineas.any { it.nivel == NivelRevisionGafete.ERROR } -> "Guardar como imagen"
-        revision.lineas.any { it.nivel == NivelRevisionGafete.AVISO } -> "Guardar igual"
-        else -> "Guardar"
+        else -> when (revision.modoGuardado) {
+            ModoGuardadoGafete.NO_SE_PUEDE -> "No se puede guardar"
+            ModoGuardadoGafete.SOLO_IMAGEN -> "Guardar como imagen"
+            ModoGuardadoGafete.CON_AVISOS -> "Guardar igual"
+            ModoGuardadoGafete.NORMAL -> "Guardar"
+        }
     }
 }
 

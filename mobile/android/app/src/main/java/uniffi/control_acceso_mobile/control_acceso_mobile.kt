@@ -803,6 +803,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_gafete_es_de_cedula(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_sin_portador(
@@ -917,13 +919,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_carne_praind_desde_qr(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_gafete_praind_de_alta(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_corregir_ficha_desde_gafete(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista_con_gafete(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_datos_alta_desde_gafete_praind(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_carne_praind(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_gafete_praind_revisado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_permisos_carne_praind(
     ): Int
@@ -1174,13 +1176,13 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_carne_praind_desde_qr(`ptr`: Long,`contratistaId`: Long,`enlace`: RustBuffer.ByValue,`soloPrevisualizar`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_gafete_praind_de_alta(`ptr`: Long,`contratistaId`: Long,`enlace`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista_con_gafete(`ptr`: Long,`datos`: RustBuffer.ByValue,`enlace`: RustBuffer.ByValue,`cedulaGafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_corregir_ficha_desde_gafete(`ptr`: Long,`contratistaId`: Long,`vencimiento`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_datos_alta_desde_gafete_praind(`ptr`: Long,`textoOcr`: RustBuffer.ByValue,`nombreEnOrigen`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_carne_praind(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_gafete_praind_revisado(`ptr`: Long,`contratistaId`: Long,`enlace`: RustBuffer.ByValue,`textoOcr`: RustBuffer.ByValue,`nombreEnOrigen`: RustBuffer.ByValue,`corregirNombre`: Byte,`corregirEmpresa`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_permisos_carne_praind(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1386,6 +1388,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_gafete_es_de_cedula(`cedulaGafete`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_func_revisar_password_nueva(`passwordTemporal`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,`confirmacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1630,6 +1634,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo() and 0xFFFF) != 65501) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_gafete_es_de_cedula() and 0xFFFF) != 1172) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva() and 0xFFFF) != 18904) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1801,16 +1808,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_carne_praind_desde_qr() and 0xFFFF) != 61636) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_gafete_praind_de_alta() and 0xFFFF) != 52447) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_corregir_ficha_desde_gafete() and 0xFFFF) != 25177) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista_con_gafete() and 0xFFFF) != 20777) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_datos_alta_desde_gafete_praind() and 0xFFFF) != 3017) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_estado_carne_praind() and 0xFFFF) != 3569) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_gafete_praind_revisado() and 0xFFFF) != 2695) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_permisos_carne_praind() and 0xFFFF) != 18769) {
@@ -4278,19 +4285,13 @@ public interface NucleoInterface {
     fun `cargarCarnePraindDesdeQr`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String, `soloPrevisualizar`: kotlin.Boolean): CargaCarnePraind
     
     /**
-     * Guarda el gafete del QR de un contratista recién dado de alta. Si
-     * todavía no llegó a la nube, primero sube los cambios pendientes de
-     * este teléfono (el alta) y recién después carga el gafete.
+     * Da de alta al contratista y, si se leyó el QR de su gafete, lo carga.
+     * El gafete sólo se carga si es de esa cédula
+     * (`domain::gafete_praind::gafete_es_de_cedula`): si la cambiaron a
+     * mano por otra, sería de otra persona. Si la carga falla, el alta
+     * queda igual y el aviso lo dice (se carga desde su ingreso).
      */
-    fun `cargarGafetePraindDeAlta`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String): CargaCarnePraind
-    
-    /**
-     * Corrige la ficha con lo que dice el gafete PRAIND, en una sola
-     * edición con las mismas reglas que el formulario: el vencimiento de un
-     * gafete más nuevo (`AAAA-MM-DD`) y, si el portero lo eligió, el nombre y
-     * la empresa. `None`: queda como estaba.
-     */
-    fun `corregirFichaDesdeGafete`(`contratistaId`: kotlin.Long, `vencimiento`: kotlin.String?, `nombre`: kotlin.String?, `empresaId`: kotlin.Long?)
+    fun `crearContratistaConGafete`(`datos`: DatosContratista, `enlace`: kotlin.String?, `cedulaGafete`: kotlin.String?): AltaConGafete
     
     /**
      * Los datos del gafete leído con OCR para rellenar el formulario de
@@ -4303,6 +4304,18 @@ public interface NucleoInterface {
      * Si el contratista tiene carné y si ya está en el teléfono. Sin red.
      */
     fun `estadoCarnePraind`(`contratistaId`: kotlin.Long): EstadoCarnePraind
+    
+    /**
+     * Guarda el gafete del QR y corrige la ficha con él, en este orden:
+     * primero el gafete (si no se puede, la ficha no cambia y se puede
+     * reintentar) y después la ficha, en una sola edición: el vencimiento
+     * si el gafete es más nuevo (lo decide la revisión) y, si se pidió, el
+     * nombre y la empresa del gafete. Vuelve a revisar el gafete contra la
+     * ficha de este momento: si la cédula no coincide no guarda nada. La
+     * usan "Cargar gafete PRAIND" (con las casillas) y la actualización
+     * desde el alta (con todo).
+     */
+    fun `guardarGafetePraindRevisado`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String, `textoOcr`: kotlin.String, `nombreEnOrigen`: kotlin.String?, `corregirNombre`: kotlin.Boolean, `corregirEmpresa`: kotlin.Boolean): GafeteGuardado
     
     /**
      * Si la nube deja cargar carnés desde este teléfono (lo decide el panel).
@@ -5814,46 +5827,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Guarda el gafete del QR de un contratista recién dado de alta. Si
-     * todavía no llegó a la nube, primero sube los cambios pendientes de
-     * este teléfono (el alta) y recién después carga el gafete.
+     * Da de alta al contratista y, si se leyó el QR de su gafete, lo carga.
+     * El gafete sólo se carga si es de esa cédula
+     * (`domain::gafete_praind::gafete_es_de_cedula`): si la cambiaron a
+     * mano por otra, sería de otra persona. Si la carga falla, el alta
+     * queda igual y el aviso lo dice (se carga desde su ingreso).
      */
-    @Throws(NucleoException::class)override fun `cargarGafetePraindDeAlta`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String): CargaCarnePraind {
-            return FfiConverterTypeCargaCarnePraind.lift(
+    @Throws(NucleoException::class)override fun `crearContratistaConGafete`(`datos`: DatosContratista, `enlace`: kotlin.String?, `cedulaGafete`: kotlin.String?): AltaConGafete {
+            return FfiConverterTypeAltaConGafete.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cargar_gafete_praind_de_alta(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista_con_gafete(
         it,
         
-        FfiConverterLong.lower(`contratistaId`),
-        FfiConverterString.lower(`enlace`),_status)
+        FfiConverterTypeDatosContratista.lower(`datos`),
+        FfiConverterOptionalString.lower(`enlace`),
+        FfiConverterOptionalString.lower(`cedulaGafete`),_status)
 }
     }
     )
     }
-    
-
-    
-    /**
-     * Corrige la ficha con lo que dice el gafete PRAIND, en una sola
-     * edición con las mismas reglas que el formulario: el vencimiento de un
-     * gafete más nuevo (`AAAA-MM-DD`) y, si el portero lo eligió, el nombre y
-     * la empresa. `None`: queda como estaba.
-     */
-    @Throws(NucleoException::class)override fun `corregirFichaDesdeGafete`(`contratistaId`: kotlin.Long, `vencimiento`: kotlin.String?, `nombre`: kotlin.String?, `empresaId`: kotlin.Long?)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_corregir_ficha_desde_gafete(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),
-        FfiConverterOptionalString.lower(`vencimiento`),
-        FfiConverterOptionalString.lower(`nombre`),
-        FfiConverterOptionalLong.lower(`empresaId`),_status)
-}
-    }
-    
     
 
     
@@ -5889,6 +5882,36 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterLong.lower(`contratistaId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Guarda el gafete del QR y corrige la ficha con él, en este orden:
+     * primero el gafete (si no se puede, la ficha no cambia y se puede
+     * reintentar) y después la ficha, en una sola edición: el vencimiento
+     * si el gafete es más nuevo (lo decide la revisión) y, si se pidió, el
+     * nombre y la empresa del gafete. Vuelve a revisar el gafete contra la
+     * ficha de este momento: si la cédula no coincide no guarda nada. La
+     * usan "Cargar gafete PRAIND" (con las casillas) y la actualización
+     * desde el alta (con todo).
+     */
+    @Throws(NucleoException::class)override fun `guardarGafetePraindRevisado`(`contratistaId`: kotlin.Long, `enlace`: kotlin.String, `textoOcr`: kotlin.String, `nombreEnOrigen`: kotlin.String?, `corregirNombre`: kotlin.Boolean, `corregirEmpresa`: kotlin.Boolean): GafeteGuardado {
+            return FfiConverterTypeGafeteGuardado.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_guardar_gafete_praind_revisado(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterString.lower(`enlace`),
+        FfiConverterString.lower(`textoOcr`),
+        FfiConverterOptionalString.lower(`nombreEnOrigen`),
+        FfiConverterBoolean.lower(`corregirNombre`),
+        FfiConverterBoolean.lower(`corregirEmpresa`),_status)
 }
     }
     )
@@ -6995,6 +7018,53 @@ public object FfiConverterTypeAccionAviso: FfiConverterRustBuffer<AccionAviso> {
 
 
 /**
+ * El alta quedó guardada; `aviso` dice si el gafete del QR se cargó o por
+ * qué no (`None` si no había gafete del QR).
+ */
+data class AltaConGafete (
+    var `contratistaId`: kotlin.Long
+    , 
+    var `aviso`: kotlin.String?
+    , 
+    var `avisoEsError`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAltaConGafete: FfiConverterRustBuffer<AltaConGafete> {
+    override fun read(buf: ByteBuffer): AltaConGafete {
+        return AltaConGafete(
+            FfiConverterLong.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AltaConGafete) = (
+            FfiConverterLong.allocationSize(value.`contratistaId`) +
+            FfiConverterOptionalString.allocationSize(value.`aviso`) +
+            FfiConverterBoolean.allocationSize(value.`avisoEsError`)
+    )
+
+    override fun write(value: AltaConGafete, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`contratistaId`, buf)
+            FfiConverterOptionalString.write(value.`aviso`, buf)
+            FfiConverterBoolean.write(value.`avisoEsError`, buf)
+    }
+}
+
+
+
+/**
  * Un aviso de la bandeja, listo para dibujar.
  */
 data class AvisoBandeja (
@@ -7796,6 +7866,14 @@ data class DatosAltaDesdeGafete (
      * vez de darla de alta otra vez.
      */
     var `yaRegistrado`: ContratistaYaRegistrado?
+    , 
+    /**
+     * Lo que dice el formulario después de leerlo
+     * (`mensajes::mensaje_alta_desde_gafete`), y si es un error.
+     */
+    var `mensaje`: kotlin.String
+    , 
+    var `mensajeEsError`: kotlin.Boolean
     
 ){
     
@@ -7819,6 +7897,8 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalTypeContratistaYaRegistrado.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -7829,7 +7909,9 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalTypeEmpresaParaFicha.allocationSize(value.`empresaCatalogo`) +
             FfiConverterOptionalString.allocationSize(value.`vencimiento`) +
             FfiConverterBoolean.allocationSize(value.`vencido`) +
-            FfiConverterOptionalTypeContratistaYaRegistrado.allocationSize(value.`yaRegistrado`)
+            FfiConverterOptionalTypeContratistaYaRegistrado.allocationSize(value.`yaRegistrado`) +
+            FfiConverterString.allocationSize(value.`mensaje`) +
+            FfiConverterBoolean.allocationSize(value.`mensajeEsError`)
     )
 
     override fun write(value: DatosAltaDesdeGafete, buf: ByteBuffer) {
@@ -7840,6 +7922,8 @@ public object FfiConverterTypeDatosAltaDesdeGafete: FfiConverterRustBuffer<Datos
             FfiConverterOptionalString.write(value.`vencimiento`, buf)
             FfiConverterBoolean.write(value.`vencido`, buf)
             FfiConverterOptionalTypeContratistaYaRegistrado.write(value.`yaRegistrado`, buf)
+            FfiConverterString.write(value.`mensaje`, buf)
+            FfiConverterBoolean.write(value.`mensajeEsError`, buf)
     }
 }
 
@@ -8664,6 +8748,54 @@ public object FfiConverterTypeFilaManual: FfiConverterRustBuffer<FilaManual> {
 
     override fun write(value: FilaManual, buf: ByteBuffer) {
             FfiConverterSequenceTypeCeldaManual.write(value.`celdas`, buf)
+    }
+}
+
+
+
+/**
+ * El gafete quedó guardado. `aviso` es lo que se muestra: con
+ * `aviso_es_error`, el gafete se guardó pero la ficha no se pudo corregir.
+ * Con `ficha_cambio` hay un cambio local para subir.
+ */
+data class GafeteGuardado (
+    var `aviso`: kotlin.String
+    , 
+    var `avisoEsError`: kotlin.Boolean
+    , 
+    var `fichaCambio`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGafeteGuardado: FfiConverterRustBuffer<GafeteGuardado> {
+    override fun read(buf: ByteBuffer): GafeteGuardado {
+        return GafeteGuardado(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: GafeteGuardado) = (
+            FfiConverterString.allocationSize(value.`aviso`) +
+            FfiConverterBoolean.allocationSize(value.`avisoEsError`) +
+            FfiConverterBoolean.allocationSize(value.`fichaCambio`)
+    )
+
+    override fun write(value: GafeteGuardado, buf: ByteBuffer) {
+            FfiConverterString.write(value.`aviso`, buf)
+            FfiConverterBoolean.write(value.`avisoEsError`, buf)
+            FfiConverterBoolean.write(value.`fichaCambio`, buf)
     }
 }
 
@@ -10557,6 +10689,12 @@ data class RevisionGafetePraind (
      * Si la empresa difiere y la del gafete es una del catálogo.
      */
     var `empresaParaFicha`: EmpresaParaFicha?
+    , 
+    /**
+     * Cómo se guarda: lo que dice el botón
+     * (`domain::gafete_praind::RevisionGafetePraind::modo_guardado`).
+     */
+    var `modoGuardado`: ModoGuardadoGafete
     
 ){
     
@@ -10578,6 +10716,7 @@ public object FfiConverterTypeRevisionGafetePraind: FfiConverterRustBuffer<Revis
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalTypeEmpresaParaFicha.read(buf),
+            FfiConverterTypeModoGuardadoGafete.read(buf),
         )
     }
 
@@ -10586,7 +10725,8 @@ public object FfiConverterTypeRevisionGafetePraind: FfiConverterRustBuffer<Revis
             FfiConverterBoolean.allocationSize(value.`bloqueaGuardar`) +
             FfiConverterOptionalString.allocationSize(value.`fechaParaFicha`) +
             FfiConverterOptionalString.allocationSize(value.`nombreParaFicha`) +
-            FfiConverterOptionalTypeEmpresaParaFicha.allocationSize(value.`empresaParaFicha`)
+            FfiConverterOptionalTypeEmpresaParaFicha.allocationSize(value.`empresaParaFicha`) +
+            FfiConverterTypeModoGuardadoGafete.allocationSize(value.`modoGuardado`)
     )
 
     override fun write(value: RevisionGafetePraind, buf: ByteBuffer) {
@@ -10595,6 +10735,7 @@ public object FfiConverterTypeRevisionGafetePraind: FfiConverterRustBuffer<Revis
             FfiConverterOptionalString.write(value.`fechaParaFicha`, buf)
             FfiConverterOptionalString.write(value.`nombreParaFicha`, buf)
             FfiConverterOptionalTypeEmpresaParaFicha.write(value.`empresaParaFicha`, buf)
+            FfiConverterTypeModoGuardadoGafete.write(value.`modoGuardado`, buf)
     }
 }
 
@@ -12108,6 +12249,51 @@ public object FfiConverterTypeModoEscaneoDocumento: FfiConverterRustBuffer<ModoE
     override fun allocationSize(value: ModoEscaneoDocumento) = 4UL
 
     override fun write(value: ModoEscaneoDocumento, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class ModoGuardadoGafete {
+    
+    /**
+     * Cédula distinta: no se puede guardar.
+     */
+    NO_SE_PUEDE,
+    /**
+     * Vencido: sólo como imagen ilustrativa.
+     */
+    SOLO_IMAGEN,
+    /**
+     * Algún dato no coincide o no se leyó: se guarda igual.
+     */
+    CON_AVISOS,
+    NORMAL;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModoGuardadoGafete: FfiConverterRustBuffer<ModoGuardadoGafete> {
+    override fun read(buf: ByteBuffer) = try {
+        ModoGuardadoGafete.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ModoGuardadoGafete) = 4UL
+
+    override fun write(value: ModoGuardadoGafete, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -16017,6 +16203,24 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterByteArray.lower(`prefijo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Si el gafete leído es de esta cédula (sólo cuentan los dígitos; sin
+         * cédula en el gafete no hay con qué contrastar). La regla es del dominio
+         * (`domain::gafete_praind::gafete_es_de_cedula`): el formulario de alta la
+         * usa para saber si la cédula escrita sigue siendo la del gafete.
+         */ fun `gafeteEsDeCedula`(`cedulaGafete`: kotlin.String?, `cedula`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_gafete_es_de_cedula(
+    
+        
+        FfiConverterOptionalString.lower(`cedulaGafete`),
+        FfiConverterString.lower(`cedula`),_status)
 }
     )
     }

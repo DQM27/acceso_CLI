@@ -18,7 +18,11 @@ import org.junit.Before
 import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.AltaConGafete
+import uniffi.control_acceso_mobile.DatosContratista
+import uniffi.control_acceso_mobile.GafeteGuardado
 import uniffi.control_acceso_mobile.PreviaGafeteParaAlta
+import uniffi.control_acceso_mobile.gafeteEsDeCedula
 import uniffi.control_acceso_mobile.TipoIngreso
 
 /// Mismo criterio que `RutasViewModelTest`: un `StandardTestDispatcher`
@@ -54,12 +58,16 @@ class NuevoContratistaViewModelTest {
 
     /// Lo que sale a internet, simulado; la lectura de los datos del gafete
     /// es la del núcleo real.
+    /// Lo que sale a internet, simulado. La lectura de los datos del gafete
+    /// y el alta son los del núcleo real; la carga del gafete (que necesita
+    /// la nube) se imita, con los textos de `mensajes`.
     private inner class FuenteFalsa : FuenteGafeteAlta {
         var puede = true
         var previa = PreviaGafeteParaAlta("Ana Rojas Vega", byteArrayOf(1, 2, 3))
         var errorPrevia: String? = null
         var errorCarga: String? = null
         val cargados = mutableListOf<Pair<Long, String>>()
+        val actualizados = mutableListOf<Pair<Long, String>>()
         override fun puedeCargar() = puede
         override fun previsualizar(enlace: String): PreviaGafeteParaAlta {
             errorPrevia?.let { throw NucleoException.Rechazado(it) }
@@ -67,14 +75,32 @@ class NuevoContratistaViewModelTest {
         }
         override fun datos(textoOcr: String, nombreEnOrigen: String?) =
             nucleo.datosAltaDesdeGafetePraind(textoOcr, nombreEnOrigen)
-        override fun cargar(contratistaId: Long, enlace: String) {
-            errorCarga?.let { throw NucleoException.Rechazado(it) }
-            cargados += contratistaId to enlace
+        override fun crearConGafete(datos: DatosContratista, enlace: String?, cedulaGafete: String?): AltaConGafete {
+            // Sin QR, o con la cédula cambiada, el núcleo real no sale a la nube.
+            if (enlace == null || !gafeteEsDeCedula(cedulaGafete, datos.cedula)) {
+                return nucleo.crearContratistaConGafete(datos, enlace, cedulaGafete)
+            }
+            val id = nucleo.crearContratistaConGafete(datos, null, null).contratistaId
+            errorCarga?.let {
+                return AltaConGafete(
+                    id,
+                    "Contratista guardado, pero el gafete PRAIND no se cargó: ${it.trimEnd('.')}. Cárguelo desde su ingreso.",
+                    avisoEsError = true,
+                )
+            }
+            cargados += id to enlace
+            return AltaConGafete(id, "Gafete PRAIND de ${datos.nombre} guardado.", avisoEsError = false)
         }
-        override fun revisar(contratistaId: Long, textoOcr: String, nombreEnOrigen: String?) =
-            nucleo.revisarGafetePraind(contratistaId, textoOcr, nombreEnOrigen)
-        override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) =
-            nucleo.corregirFichaDesdeGafete(contratistaId, vencimiento, nombre, empresaId)
+        override fun actualizarConGafete(
+            contratistaId: Long,
+            enlace: String,
+            textoOcr: String,
+            nombreEnOrigen: String?,
+        ): GafeteGuardado {
+            errorCarga?.let { throw NucleoException.Rechazado(it) }
+            actualizados += contratistaId to enlace
+            return GafeteGuardado("actualizado", avisoEsError = false, fichaCambio = true)
+        }
     }
 
     private val fuente by lazy { FuenteFalsa() }
@@ -374,7 +400,7 @@ class NuevoContratistaViewModelTest {
     }
 
     @Test
-    fun `actualizar la ficha ya registrada guarda el gafete y la fecha nueva, directo`() = runTest(dispatcher) {
+    fun `actualizar la ficha ya registrada es una sola llamada al nucleo y abre su ingreso`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(
             archivo,
             "INSERT INTO empresas (id, nombre) VALUES (1, 'Sodexo');",
@@ -398,12 +424,10 @@ class NuevoContratistaViewModelTest {
         advanceUntilIdle()
         assertNull(vm.error)
         assertEquals(id, abierto)
-        assertEquals(listOf(id to ENLACE), fuente.cargados)
-        assertEquals("2099-06-19", nucleo.buscarContratistas("701000000").single().fechaVencimientoPraind)
-        assertEquals(
-            AvisoAlta("Gafete PRAIND de ANA ROJAS VEGA guardado; la ficha vence el 19/06/2099.", esError = false),
-            aviso,
-        )
+        // Una sola llamada al núcleo, con lo leído; qué se corrige lo decide
+        // él (probado en `tests/gafete_praind_revision.rs`). El aviso es el suyo.
+        assertEquals(listOf(id to ENLACE), fuente.actualizados)
+        assertEquals(AvisoAlta("actualizado", esError = false), aviso)
     }
 
     @Test

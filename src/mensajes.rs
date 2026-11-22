@@ -1060,6 +1060,83 @@ pub fn lineas_revision_gafete_praind(
     lineas
 }
 
+/// El gafete PRAIND quedó guardado: con la fecha nueva de la ficha, si
+/// cambió, y si además se corrigió el nombre o la empresa.
+#[must_use]
+pub fn mensaje_gafete_guardado(
+    nombre: &str,
+    ficha_vence: Option<chrono::NaiveDate>,
+    ficha_corregida: bool,
+) -> String {
+    let vence = ficha_vence
+        .map(|vence| format!("; la ficha vence el {}", vence.format("%d/%m/%Y")))
+        .unwrap_or_default();
+    let corregida = if ficha_corregida { "; ficha corregida" } else { "" };
+    format!("Gafete PRAIND de {nombre} guardado{vence}{corregida}.")
+}
+
+/// El gafete se guardó pero la corrección de la ficha falló.
+#[must_use]
+pub fn mensaje_gafete_guardado_ficha_sin_corregir(motivo: &str) -> String {
+    format!(
+        "El gafete PRAIND se guardó, pero no se pudo corregir la ficha: {}",
+        motivo.trim()
+    )
+}
+
+/// El alta quedó, pero el gafete del QR no se pudo cargar.
+#[must_use]
+pub fn mensaje_alta_sin_gafete(motivo: Option<&str>) -> String {
+    let motivo = motivo
+        .map(|m| m.trim().trim_end_matches('.').trim())
+        .filter(|m| !m.is_empty())
+        .map(|m| format!(": {m}"))
+        .unwrap_or_default();
+    format!(
+        "Contratista guardado, pero el gafete PRAIND no se cargó{motivo}. Cárguelo desde su ingreso."
+    )
+}
+
+/// En el alta se cambió la cédula por otra que no es la del gafete leído.
+pub const MENSAJE_GAFETE_DE_OTRA_CEDULA: &str =
+    "La cédula no es la del gafete PRAIND escaneado: el gafete no se cargó.";
+
+/// Al actualizar la ficha con el gafete, la cédula no coincide.
+pub const MENSAJE_GAFETE_NO_ES_DE_LA_FICHA: &str =
+    "La cédula del gafete no coincide con la ficha: no se actualizó.";
+
+/// Lo que dice el formulario de alta después de leer el gafete del QR, y si
+/// es un error (el gafete vencido no deja guardar).
+#[must_use]
+pub fn mensaje_alta_desde_gafete(
+    datos: &crate::domain::gafete_praind::DatosAltaDesdeGafete,
+) -> (String, bool) {
+    match (&datos.vencimiento, &datos.ya_registrado) {
+        (Some(vence), _) if datos.vencido => (
+            format!(
+                "El gafete PRAIND venció el {}: pida a la persona el gafete actualizado.",
+                vence.format("%d/%m/%Y")
+            ),
+            true,
+        ),
+        (_, Some(registrado)) => (
+            format!(
+                "Esta cédula ya está registrada ({}): actualice su ficha con este gafete.",
+                registrado.nombre
+            ),
+            false,
+        ),
+        _ if datos.vencimiento.is_none() || datos.cedula.is_none() => (
+            "Gafete PRAIND leído: complete lo que falta. Al guardar se carga el gafete.".into(),
+            false,
+        ),
+        _ => (
+            "Gafete PRAIND leído: revise los datos. Al guardar se carga el gafete.".into(),
+            false,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1477,6 +1554,90 @@ mod tests {
             mensaje_auth_supabase(AuthSupabaseError::CredencialesInvalidas),
             "Cédula o contraseña incorrecta"
         );
+    }
+
+    mod gafete_guardado {
+        use crate::domain::gafete_praind::{ContratistaRegistrado, DatosAltaDesdeGafete};
+        use crate::mensajes::{
+            mensaje_alta_desde_gafete, mensaje_alta_sin_gafete, mensaje_gafete_guardado,
+        };
+
+        fn dia(texto: &str) -> chrono::NaiveDate {
+            texto.parse().unwrap()
+        }
+
+        #[test]
+        fn dice_la_fecha_nueva_y_si_se_corrigio_la_ficha() {
+            assert_eq!(
+                mensaje_gafete_guardado("ANA", Some(dia("2027-06-19")), true),
+                "Gafete PRAIND de ANA guardado; la ficha vence el 19/06/2027; ficha corregida."
+            );
+            assert_eq!(
+                mensaje_gafete_guardado("ANA", None, false),
+                "Gafete PRAIND de ANA guardado."
+            );
+        }
+
+        #[test]
+        fn alta_sin_gafete_con_o_sin_motivo() {
+            assert_eq!(
+                mensaje_alta_sin_gafete(Some("Revise la conexión.")),
+                "Contratista guardado, pero el gafete PRAIND no se cargó: Revise la conexión. \
+                 Cárguelo desde su ingreso."
+            );
+            assert_eq!(
+                mensaje_alta_sin_gafete(None),
+                "Contratista guardado, pero el gafete PRAIND no se cargó. Cárguelo desde su \
+                 ingreso."
+            );
+        }
+
+        #[test]
+        fn el_formulario_de_alta_dice_que_hacer() {
+            let completo = DatosAltaDesdeGafete {
+                cedula: Some("701000000".into()),
+                vencimiento: Some(dia("2099-06-19")),
+                ..DatosAltaDesdeGafete::default()
+            };
+            assert_eq!(
+                mensaje_alta_desde_gafete(&completo).0,
+                "Gafete PRAIND leído: revise los datos. Al guardar se carga el gafete."
+            );
+            let vencido = DatosAltaDesdeGafete {
+                vencimiento: Some(dia("2025-06-19")),
+                vencido: true,
+                ..completo.clone()
+            };
+            assert_eq!(
+                mensaje_alta_desde_gafete(&vencido),
+                (
+                    "El gafete PRAIND venció el 19/06/2025: pida a la persona el gafete \
+                     actualizado."
+                        .into(),
+                    true
+                )
+            );
+            let registrado = DatosAltaDesdeGafete {
+                ya_registrado: Some(ContratistaRegistrado {
+                    id: 1,
+                    nombre: "ANA ROJAS".into(),
+                }),
+                ..completo.clone()
+            };
+            assert_eq!(
+                mensaje_alta_desde_gafete(&registrado).0,
+                "Esta cédula ya está registrada (ANA ROJAS): actualice su ficha con este gafete."
+            );
+            let sin_cedula = DatosAltaDesdeGafete {
+                cedula: None,
+                ..completo
+            };
+            assert!(
+                mensaje_alta_desde_gafete(&sin_cedula)
+                    .0
+                    .contains("complete lo que falta")
+            );
+        }
     }
 
     mod revision_gafete_praind {

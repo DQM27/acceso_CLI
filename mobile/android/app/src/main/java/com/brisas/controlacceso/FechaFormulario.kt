@@ -31,3 +31,13 @@ fun textoDDMMYYYYaIso(texto: String): String {
     val (dia, mes, anio) = partes
     return String.format(Locale.ROOT, "%s-%s-%s", anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
 }
+
+/// Inverso de [textoDDMMYYYYaIso]: una fecha ISO del núcleo (`AAAA-MM-DD`)
+/// en el campo del formulario (`DD-MM-AAAA`). Si no tiene esa forma se
+/// devuelve tal cual.
+fun isoATextoDDMMYYYY(iso: String): String {
+    val partes = iso.split("-")
+    if (partes.size != 3) return iso
+    val (anio, mes, dia) = partes
+    return "$dia-$mes-$anio"
+}

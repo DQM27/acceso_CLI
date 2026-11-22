@@ -119,12 +119,59 @@ pub struct EmpresaPropuesta {
     pub nombre: String,
 }
 
+/// Cómo se guarda el gafete revisado: lo que dice el botón de guardar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModoGuardadoGafete {
+    /// Cédula distinta: puede ser el gafete de otra persona.
+    NoSePuede,
+    /// Vencido: queda sólo como imagen ilustrativa, la ficha no cambia.
+    SoloImagen,
+    /// Algún dato no coincide o no se leyó: se puede guardar igual.
+    ConAvisos,
+    Normal,
+}
+
 impl RevisionGafetePraind {
     /// Si el gafete no se puede guardar para este contratista.
     #[must_use]
     pub fn bloquea_guardar(&self) -> bool {
         matches!(self.cedula, Comparacion::Difiere { .. })
     }
+
+    /// Cómo se guarda (mismo criterio que las líneas de
+    /// `mensajes::lineas_revision_gafete_praind`).
+    #[must_use]
+    pub fn modo_guardado(&self) -> ModoGuardadoGafete {
+        if self.bloquea_guardar() {
+            return ModoGuardadoGafete::NoSePuede;
+        }
+        if matches!(self.vencimiento, VencimientoGafete::Vencido(_)) {
+            return ModoGuardadoGafete::SoloImagen;
+        }
+        let dato_dudoso = |c: &Comparacion| !matches!(c, Comparacion::Coincide);
+        let fecha_dudosa = match (self.vencimiento, self.contra_ficha) {
+            (VencimientoGafete::NoLeido, _)
+            | (_, FechaContraFicha::SinComparar | FechaContraFicha::MasViejo) => true,
+            (_, FechaContraFicha::MasNuevo) => self.fecha_para_ficha.is_none(),
+            _ => false,
+        };
+        if dato_dudoso(&self.cedula)
+            || dato_dudoso(&self.nombre)
+            || dato_dudoso(&self.empresa)
+            || fecha_dudosa
+        {
+            ModoGuardadoGafete::ConAvisos
+        } else {
+            ModoGuardadoGafete::Normal
+        }
+    }
+}
+
+/// Si el gafete leído es de esta cédula (sólo cuentan los dígitos). Sin
+/// cédula leída en el gafete no hay con qué contrastar: se acepta.
+#[must_use]
+pub fn gafete_es_de_cedula(cedula_gafete: Option<&str>, cedula: &str) -> bool {
+    cedula_gafete.is_none_or(|en_gafete| solo_digitos(en_gafete) == solo_digitos(cedula))
 }
 
 #[must_use]
@@ -601,6 +648,52 @@ mod tests {
         assert_eq!(datos.empresa.as_deref(), Some("Sodexo"));
         assert_eq!(datos.vencimiento, Some(fecha("2027-06-19")));
         assert!(!datos.vencido);
+    }
+
+    #[test]
+    fn modo_de_guardado_segun_la_revision() {
+        let modo = |leido: &DatosGafeteLeido, vence: &str| {
+            revisar_gafete_praind(leido, ficha_hazel(vence), hoy()).modo_guardado()
+        };
+        // Vencido (el gafete viejo de Hazel): sólo imagen.
+        assert_eq!(
+            modo(&gafete_hazel(), "2027-05-30"),
+            ModoGuardadoGafete::SoloImagen
+        );
+        let vigente = DatosGafeteLeido {
+            induccion: Some(fecha("2026-06-19")),
+            vencimiento: Some(fecha("2027-06-19")),
+            ..gafete_hazel()
+        };
+        // Igual a la ficha o más nuevo y bien leído: normal.
+        assert_eq!(modo(&vigente, "2027-06-19"), ModoGuardadoGafete::Normal);
+        assert_eq!(modo(&vigente, "2026-01-01"), ModoGuardadoGafete::Normal);
+        // Más viejo que la ficha o un nombre distinto: con avisos.
+        assert_eq!(modo(&vigente, "2028-01-01"), ModoGuardadoGafete::ConAvisos);
+        let otro_nombre = DatosGafeteLeido {
+            nombre: Some("Ana Perez".into()),
+            ..vigente.clone()
+        };
+        assert_eq!(
+            modo(&otro_nombre, "2027-06-19"),
+            ModoGuardadoGafete::ConAvisos
+        );
+        // Otra cédula: no se puede.
+        let otra_cedula = DatosGafeteLeido {
+            cedula: Some("111111111".into()),
+            ..vigente
+        };
+        assert_eq!(
+            modo(&otra_cedula, "2027-06-19"),
+            ModoGuardadoGafete::NoSePuede
+        );
+    }
+
+    #[test]
+    fn el_gafete_es_de_la_cedula_si_coinciden_los_digitos() {
+        assert!(gafete_es_de_cedula(Some("3-0545-0949"), "305450949"));
+        assert!(!gafete_es_de_cedula(Some("305450949"), "702000000"));
+        assert!(gafete_es_de_cedula(None, "702000000"));
     }
 
     #[test]

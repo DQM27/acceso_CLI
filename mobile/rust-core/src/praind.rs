@@ -78,6 +78,39 @@ pub struct RevisionGafetePraind {
     pub nombre_para_ficha: Option<String>,
     /// Si la empresa difiere y la del gafete es una del catálogo.
     pub empresa_para_ficha: Option<EmpresaParaFicha>,
+    /// Cómo se guarda: lo que dice el botón
+    /// (`domain::gafete_praind::RevisionGafetePraind::modo_guardado`).
+    pub modo_guardado: ModoGuardadoGafete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ModoGuardadoGafete {
+    /// Cédula distinta: no se puede guardar.
+    NoSePuede,
+    /// Vencido: sólo como imagen ilustrativa.
+    SoloImagen,
+    /// Algún dato no coincide o no se leyó: se guarda igual.
+    ConAvisos,
+    Normal,
+}
+
+/// El gafete quedó guardado. `aviso` es lo que se muestra: con
+/// `aviso_es_error`, el gafete se guardó pero la ficha no se pudo corregir.
+/// Con `ficha_cambio` hay un cambio local para subir.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GafeteGuardado {
+    pub aviso: String,
+    pub aviso_es_error: bool,
+    pub ficha_cambio: bool,
+}
+
+/// El alta quedó guardada; `aviso` dice si el gafete del QR se cargó o por
+/// qué no (`None` si no había gafete del QR).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AltaConGafete {
+    pub contratista_id: i64,
+    pub aviso: Option<String>,
+    pub aviso_es_error: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -111,6 +144,10 @@ pub struct DatosAltaDesdeGafete {
     /// Esa cédula ya tiene ficha: se ofrece actualizarla con el gafete en
     /// vez de darla de alta otra vez.
     pub ya_registrado: Option<ContratistaYaRegistrado>,
+    /// Lo que dice el formulario después de leerlo
+    /// (`mensajes::mensaje_alta_desde_gafete`), y si es un error.
+    pub mensaje: String,
+    pub mensaje_es_error: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -165,6 +202,26 @@ impl Nucleo {
                     }
                 }
             })
+    }
+
+    /// Guarda el gafete del QR de un contratista recién dado de alta. Si
+    /// todavía no llegó a la nube, primero sube los cambios pendientes de
+    /// este teléfono (el alta) y recién después carga el gafete.
+    fn cargar_gafete_praind_de_alta(
+        &self,
+        contratista_id: i64,
+        enlace: String,
+    ) -> Result<CargaCarnePraind, NucleoError> {
+        self.actor_autenticado()?;
+        let sin_subir = praind::estado_carne(&self.conexion_secundaria()?, contratista_id)
+            .map_err(rechazo)?
+            .uuid
+            .is_none();
+        if sin_subir {
+            // Si falla, la carga de abajo avisa que todavía no llegó a la nube.
+            let _ = self.enviar_cambios();
+        }
+        self.cargar_carne_praind_desde_qr(contratista_id, enlace, false)
     }
 }
 
@@ -295,7 +352,11 @@ impl Nucleo {
         let datos = self
             .core_lock()
             .datos_alta_desde_gafete(&gafete_leido(&texto_ocr), nombre_en_origen.as_deref())?;
+        let (mensaje, mensaje_es_error) =
+            control_acceso::mensajes::mensaje_alta_desde_gafete(&datos);
         Ok(DatosAltaDesdeGafete {
+            mensaje,
+            mensaje_es_error,
             cedula: datos.cedula,
             nombre: datos.nombre,
             empresa: datos.empresa,
@@ -316,24 +377,113 @@ impl Nucleo {
         })
     }
 
-    /// Guarda el gafete del QR de un contratista recién dado de alta. Si
-    /// todavía no llegó a la nube, primero sube los cambios pendientes de
-    /// este teléfono (el alta) y recién después carga el gafete.
-    pub fn cargar_gafete_praind_de_alta(
+    /// Da de alta al contratista y, si se leyó el QR de su gafete, lo carga.
+    /// El gafete sólo se carga si es de esa cédula
+    /// (`domain::gafete_praind::gafete_es_de_cedula`): si la cambiaron a
+    /// mano por otra, sería de otra persona. Si la carga falla, el alta
+    /// queda igual y el aviso lo dice (se carga desde su ingreso).
+    pub fn crear_contratista_con_gafete(
+        &self,
+        datos: crate::DatosContratista,
+        enlace: Option<String>,
+        cedula_gafete: Option<String>,
+    ) -> Result<AltaConGafete, NucleoError> {
+        use control_acceso::domain::gafete_praind::gafete_es_de_cedula;
+        use control_acceso::mensajes::{
+            MENSAJE_GAFETE_DE_OTRA_CEDULA, mensaje_alta_sin_gafete, mensaje_gafete_guardado,
+        };
+
+        let cedula = datos.cedula.clone();
+        let contratista_id = self.crear_contratista(datos)?;
+        let Some(enlace) = enlace else {
+            return Ok(AltaConGafete {
+                contratista_id,
+                aviso: None,
+                aviso_es_error: false,
+            });
+        };
+        let (aviso, aviso_es_error) = if gafete_es_de_cedula(cedula_gafete.as_deref(), &cedula) {
+            match self.cargar_gafete_praind_de_alta(contratista_id, enlace) {
+                Ok(_) => {
+                    let nombre = nombre_contratista(&self.conexion_secundaria()?, contratista_id)?;
+                    (mensaje_gafete_guardado(&nombre, None, false), false)
+                }
+                Err(error) => (mensaje_alta_sin_gafete(Some(&error.to_string())), true),
+            }
+        } else {
+            (MENSAJE_GAFETE_DE_OTRA_CEDULA.to_string(), true)
+        };
+        Ok(AltaConGafete {
+            contratista_id,
+            aviso: Some(aviso),
+            aviso_es_error,
+        })
+    }
+
+    /// Guarda el gafete del QR y corrige la ficha con él, en este orden:
+    /// primero el gafete (si no se puede, la ficha no cambia y se puede
+    /// reintentar) y después la ficha, en una sola edición: el vencimiento
+    /// si el gafete es más nuevo (lo decide la revisión) y, si se pidió, el
+    /// nombre y la empresa del gafete. Vuelve a revisar el gafete contra la
+    /// ficha de este momento: si la cédula no coincide no guarda nada. La
+    /// usan "Cargar gafete PRAIND" (con las casillas) y la actualización
+    /// desde el alta (con todo).
+    #[allow(clippy::fn_params_excessive_bools)]
+    pub fn guardar_gafete_praind_revisado(
         &self,
         contratista_id: i64,
         enlace: String,
-    ) -> Result<CargaCarnePraind, NucleoError> {
-        self.actor_autenticado()?;
-        let sin_subir = praind::estado_carne(&self.conexion_secundaria()?, contratista_id)
-            .map_err(rechazo)?
-            .uuid
-            .is_none();
-        if sin_subir {
-            // Si falla, la carga de abajo avisa que todavía no llegó a la nube.
-            let _ = self.enviar_cambios();
+        texto_ocr: String,
+        nombre_en_origen: Option<String>,
+        corregir_nombre: bool,
+        corregir_empresa: bool,
+    ) -> Result<GafeteGuardado, NucleoError> {
+        use control_acceso::mensajes::{
+            MENSAJE_GAFETE_NO_ES_DE_LA_FICHA, mensaje_gafete_guardado,
+            mensaje_gafete_guardado_ficha_sin_corregir,
+        };
+
+        let actor = self.actor_autenticado()?;
+        let leido = gafete_leido(&texto_ocr).con_nombre_de_pagina(nombre_en_origen.as_deref());
+        let revision = self
+            .core_lock()
+            .revisar_gafete_praind(contratista_id, &leido)?;
+        if revision.bloquea_guardar() {
+            return Err(rechazo(MENSAJE_GAFETE_NO_ES_DE_LA_FICHA.to_string()));
         }
-        self.cargar_carne_praind_desde_qr(contratista_id, enlace, false)
+        self.cargar_gafete_praind_de_alta(contratista_id, enlace)?;
+
+        let correccion = control_acceso::application::CorreccionDesdeGafete {
+            vencimiento: revision.fecha_para_ficha,
+            nombre: revision.nombre_para_ficha.filter(|_| corregir_nombre),
+            empresa_id: revision
+                .empresa_para_ficha
+                .map(|empresa| empresa.id)
+                .filter(|_| corregir_empresa),
+        };
+        let vencimiento = correccion.vencimiento;
+        let corrige_datos = correccion.nombre.is_some() || correccion.empresa_id.is_some();
+        let ficha_cambio = vencimiento.is_some() || corrige_datos;
+        if ficha_cambio {
+            let resultado =
+                self.core_lock()
+                    .corregir_ficha_desde_gafete(&actor, contratista_id, correccion);
+            if let Err(error) = resultado {
+                return Ok(GafeteGuardado {
+                    aviso: mensaje_gafete_guardado_ficha_sin_corregir(
+                        &NucleoError::from(error).to_string(),
+                    ),
+                    aviso_es_error: true,
+                    ficha_cambio: false,
+                });
+            }
+        }
+        let nombre = nombre_contratista(&self.conexion_secundaria()?, contratista_id)?;
+        Ok(GafeteGuardado {
+            aviso: mensaje_gafete_guardado(&nombre, vencimiento, corrige_datos),
+            aviso_es_error: false,
+            ficha_cambio,
+        })
     }
 
     /// Revisa el texto que el OCR leyó del gafete contra la ficha del
@@ -346,6 +496,7 @@ impl Nucleo {
         texto_ocr: String,
         nombre_en_origen: Option<String>,
     ) -> Result<RevisionGafetePraind, NucleoError> {
+        use control_acceso::domain::gafete_praind::ModoGuardadoGafete as Modo;
         use control_acceso::mensajes::{
             NivelRevisionGafete as Nivel, lineas_revision_gafete_praind,
         };
@@ -354,6 +505,12 @@ impl Nucleo {
         let revision = self
             .core_lock()
             .revisar_gafete_praind(contratista_id, &leido)?;
+        let modo_guardado = match revision.modo_guardado() {
+            Modo::NoSePuede => ModoGuardadoGafete::NoSePuede,
+            Modo::SoloImagen => ModoGuardadoGafete::SoloImagen,
+            Modo::ConAvisos => ModoGuardadoGafete::ConAvisos,
+            Modo::Normal => ModoGuardadoGafete::Normal,
+        };
         Ok(RevisionGafetePraind {
             lineas: lineas_revision_gafete_praind(&revision)
                 .into_iter()
@@ -371,40 +528,20 @@ impl Nucleo {
                 .fecha_para_ficha
                 .map(|fecha| fecha.format("%Y-%m-%d").to_string()),
             nombre_para_ficha: revision.nombre_para_ficha,
+            modo_guardado,
             empresa_para_ficha: revision.empresa_para_ficha.map(|empresa| EmpresaParaFicha {
                 id: empresa.id,
                 nombre: empresa.nombre,
             }),
         })
     }
+}
 
-    /// Corrige la ficha con lo que dice el gafete PRAIND, en una sola
-    /// edición con las mismas reglas que el formulario: el vencimiento de un
-    /// gafete más nuevo (`AAAA-MM-DD`) y, si el portero lo eligió, el nombre y
-    /// la empresa. `None`: queda como estaba.
-    pub fn corregir_ficha_desde_gafete(
-        &self,
-        contratista_id: i64,
-        vencimiento: Option<String>,
-        nombre: Option<String>,
-        empresa_id: Option<i64>,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        let vencimiento = vencimiento
-            .map(|texto| {
-                texto
-                    .parse()
-                    .map_err(|_| NucleoError::FechaInvalida { mensaje: texto })
-            })
-            .transpose()?;
-        Ok(self.core_lock().corregir_ficha_desde_gafete(
-            &actor,
-            contratista_id,
-            control_acceso::application::CorreccionDesdeGafete {
-                vencimiento,
-                nombre,
-                empresa_id,
-            },
-        )?)
-    }
+/// Si el gafete leído es de esta cédula (sólo cuentan los dígitos; sin
+/// cédula en el gafete no hay con qué contrastar). La regla es del dominio
+/// (`domain::gafete_praind::gafete_es_de_cedula`): el formulario de alta la
+/// usa para saber si la cédula escrita sigue siendo la del gafete.
+#[uniffi::export]
+pub fn gafete_es_de_cedula(cedula_gafete: Option<String>, cedula: String) -> bool {
+    control_acceso::domain::gafete_praind::gafete_es_de_cedula(cedula_gafete.as_deref(), &cedula)
 }

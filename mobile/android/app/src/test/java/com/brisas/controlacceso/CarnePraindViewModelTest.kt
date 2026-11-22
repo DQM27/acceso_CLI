@@ -17,6 +17,8 @@ import org.junit.Test
 import uniffi.control_acceso_mobile.CargaCarnePraind
 import uniffi.control_acceso_mobile.CarnePraind
 import uniffi.control_acceso_mobile.EstadoCarnePraind
+import uniffi.control_acceso_mobile.GafeteGuardado
+import uniffi.control_acceso_mobile.ModoGuardadoGafete
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.EmpresaParaFicha
 import uniffi.control_acceso_mobile.LineaRevisionGafete
@@ -48,6 +50,7 @@ class CarnePraindViewModelTest {
         val errorCarga: String? = null,
         val revision: RevisionGafetePraind? = null,
         val errorFecha: String? = null,
+        val nombreFicha: String = "BETO SOLIS",
     ) : FuenteCarnes {
         var consultasPermisos = 0
         val guardados = mutableListOf<Pair<Long, String>>()
@@ -64,9 +67,42 @@ class CarnePraindViewModelTest {
             return revision ?: throw NucleoException.Rechazado("sin revisión")
         }
 
-        override fun corregirFicha(contratistaId: Long, vencimiento: String?, nombre: String?, empresaId: Long?) {
-            errorFecha?.let { throw NucleoException.Rechazado(it) }
-            correcciones += Correccion(contratistaId, vencimiento, nombre, empresaId)
+        /// Imita a `guardar_gafete_praind_revisado` del núcleo: guarda el
+        /// gafete y corrige con lo que diga la revisión y las casillas. Los
+        /// textos imitan a `mensajes::mensaje_gafete_guardado`.
+        override fun guardarRevisado(
+            contratistaId: Long,
+            enlace: String,
+            textoOcr: String,
+            nombreEnOrigen: String?,
+            corregirNombre: Boolean,
+            corregirEmpresa: Boolean,
+        ): GafeteGuardado {
+            errorCarga?.let { throw NucleoException.Rechazado(it) }
+            if (revision?.bloqueaGuardar == true) throw NucleoException.Rechazado("no es de la ficha")
+            guardados += contratistaId to enlace
+            conCarne += contratistaId
+            val fecha = revision?.fechaParaFicha
+            val nombre = revision?.nombreParaFicha?.takeIf { corregirNombre }
+            val empresa = revision?.empresaParaFicha?.id?.takeIf { corregirEmpresa }
+            val cambia = fecha != null || nombre != null || empresa != null
+            if (cambia) {
+                errorFecha?.let {
+                    return GafeteGuardado(
+                        "El gafete PRAIND se guardó, pero no se pudo corregir la ficha: $it",
+                        avisoEsError = true,
+                        fichaCambio = false,
+                    )
+                }
+                correcciones += Correccion(contratistaId, fecha, nombre, empresa)
+            }
+            val aviso = buildString {
+                append("Gafete PRAIND de ${nombre ?: nombreFicha} guardado")
+                if (fecha != null) append("; la ficha vence el $fecha")
+                if (nombre != null || empresa != null) append("; ficha corregida")
+                append('.')
+            }
+            return GafeteGuardado(aviso, avisoEsError = false, fichaCambio = cambia)
         }
 
         override fun estado(contratistaId: Long) =
@@ -114,6 +150,13 @@ class CarnePraindViewModelTest {
     ) = RevisionGafetePraind(
         lineas = lineas.map { (nivel, texto) -> LineaRevisionGafete(nivel, texto) },
         bloqueaGuardar = bloquea,
+        // En el núcleo sale de la revisión; acá, de las líneas de la prueba.
+        modoGuardado = when {
+            bloquea -> ModoGuardadoGafete.NO_SE_PUEDE
+            lineas.any { it.first == NivelRevisionGafete.ERROR } -> ModoGuardadoGafete.SOLO_IMAGEN
+            lineas.any { it.first == NivelRevisionGafete.AVISO } -> ModoGuardadoGafete.CON_AVISOS
+            else -> ModoGuardadoGafete.NORMAL
+        },
         fechaParaFicha = fecha,
         nombreParaFicha = nombre,
         empresaParaFicha = empresa,
@@ -190,7 +233,7 @@ class CarnePraindViewModelTest {
         advanceUntilIdle()
         assertEquals(listOf(2L to enlace), fuente.guardados)
         assertEquals(listOf(Correccion(2L, "2028-06-06", null, null)), fuente.correcciones)
-        assertEquals("Gafete PRAIND de BETO SOLIS guardado; vence el 06/06/2028.", vm.guardado.value)
+        assertEquals("Gafete PRAIND de BETO SOLIS guardado; la ficha vence el 2028-06-06.", vm.guardado.value)
     }
 
     @Test
