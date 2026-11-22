@@ -929,6 +929,116 @@ pub fn mensaje_auth_supabase(error: crate::nube::AuthSupabaseError) -> String {
     }
 }
 
+/// Cómo se ve una línea de la revisión del gafete PRAIND.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NivelRevisionGafete {
+    Bien,
+    Aviso,
+    Error,
+}
+
+/// Una línea de la revisión del gafete PRAIND, lista para mostrar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineaRevisionGafete {
+    pub nivel: NivelRevisionGafete,
+    pub texto: String,
+}
+
+/// Lo que se le muestra al portero al revisar el gafete PRAIND leído con
+/// OCR contra la ficha: cédula, nombre, empresa y vencimiento, en ese orden
+/// (`domain::gafete_praind`). Un solo texto para el teléfono y, cuando lo
+/// tengan, el escritorio y el panel.
+#[must_use]
+pub fn lineas_revision_gafete_praind(
+    revision: &crate::domain::gafete_praind::RevisionGafetePraind,
+) -> Vec<LineaRevisionGafete> {
+    use crate::domain::gafete_praind::{Comparacion, FechaContraFicha, VencimientoGafete};
+    use NivelRevisionGafete::{Aviso, Bien, Error};
+
+    let linea = |nivel, texto: String| LineaRevisionGafete { nivel, texto };
+    let fecha = |f: chrono::NaiveDate| f.format("%d/%m/%Y").to_string();
+    let mut lineas = Vec::with_capacity(4);
+
+    lineas.push(match &revision.cedula {
+        Comparacion::Coincide => linea(Bien, "Cédula: coincide.".into()),
+        Comparacion::Difiere { gafete, ficha } => linea(
+            Error,
+            format!(
+                "Cédula distinta: el gafete dice {gafete} y la ficha {ficha}. No se puede \
+                 guardar: puede ser el gafete de otra persona."
+            ),
+        ),
+        Comparacion::NoLeido => linea(Aviso, "No se pudo leer la cédula del gafete.".into()),
+    });
+    // (dato, "distinto/a", "el/la dato" en minúscula).
+    for (dato, distinto, con_articulo, comparacion) in [
+        ("Nombre", "distinto", "el nombre", &revision.nombre),
+        ("Empresa", "distinta", "la empresa", &revision.empresa),
+    ] {
+        lineas.push(match comparacion {
+            Comparacion::Coincide => linea(Bien, format!("{dato}: coincide.")),
+            Comparacion::Difiere { gafete, ficha } => linea(
+                Aviso,
+                format!("{dato} {distinto}: el gafete dice «{gafete}» y la ficha «{ficha}»."),
+            ),
+            Comparacion::NoLeido => {
+                linea(Aviso, format!("No se pudo leer {con_articulo} del gafete."))
+            }
+        });
+    }
+
+    let en_ficha = revision
+        .vencimiento_ficha
+        .map_or_else(|| "sin fecha".to_string(), fecha);
+    lineas.push(match (revision.vencimiento, revision.contra_ficha) {
+        (VencimientoGafete::NoLeido, _) | (_, FechaContraFicha::SinComparar) => linea(
+            Aviso,
+            "No se pudo leer la fecha de vencimiento del gafete.".into(),
+        ),
+        (VencimientoGafete::Vencido(vence), _) => linea(
+            Error,
+            format!(
+                "Gafete PRAIND vencido el {}: se guarda sólo como imagen ilustrativa. \
+                 Pida a la persona el gafete actualizado.",
+                fecha(vence)
+            ),
+        ),
+        (VencimientoGafete::Vigente(vence), FechaContraFicha::Igual) => {
+            linea(Bien, format!("Vigente hasta el {}.", fecha(vence)))
+        }
+        (VencimientoGafete::Vigente(vence), FechaContraFicha::MasNuevo)
+            if revision.fecha_para_ficha.is_some() =>
+        {
+            linea(
+                Bien,
+                format!(
+                    "Gafete más nuevo: vence el {}. Al guardar, la ficha pasa de {en_ficha} \
+                     a {}.",
+                    fecha(vence),
+                    fecha(vence)
+                ),
+            )
+        }
+        (VencimientoGafete::Vigente(vence), FechaContraFicha::MasNuevo) => linea(
+            Aviso,
+            format!(
+                "El gafete vence el {} y la ficha dice {en_ficha}, pero la fecha no se leyó con \
+                 claridad: la ficha no cambia. Revísela.",
+                fecha(vence)
+            ),
+        ),
+        (VencimientoGafete::Vigente(vence), FechaContraFicha::MasViejo) => linea(
+            Aviso,
+            format!(
+                "Gafete más viejo que la ficha: vence el {} y la ficha dice {en_ficha}. Se \
+                 guarda como imagen ilustrativa; la ficha no cambia.",
+                fecha(vence)
+            ),
+        ),
+    });
+    lineas
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1346,5 +1456,95 @@ mod tests {
             mensaje_auth_supabase(AuthSupabaseError::CredencialesInvalidas),
             "Cédula o contraseña incorrecta"
         );
+    }
+
+    mod revision_gafete_praind {
+        use crate::domain::gafete_praind::{DatosFicha, DatosGafeteLeido, revisar_gafete_praind};
+        use crate::mensajes::{NivelRevisionGafete, lineas_revision_gafete_praind};
+        use chrono::NaiveDate;
+
+        fn fecha(texto: &str) -> NaiveDate {
+            NaiveDate::parse_from_str(texto, "%Y-%m-%d").expect("fecha de prueba")
+        }
+
+        fn lineas(
+            leido: &DatosGafeteLeido,
+            vence_ficha: &str,
+        ) -> Vec<(NivelRevisionGafete, String)> {
+            let ficha = DatosFicha {
+                cedula: "305450949",
+                nombre: "HAZEL JOHANNA ANGULO AGUILAR",
+                empresa: "SODEXO",
+                vencimiento: Some(fecha(vence_ficha)),
+            };
+            lineas_revision_gafete_praind(&revisar_gafete_praind(leido, ficha, fecha("2026-11-21")))
+                .into_iter()
+                .map(|l| (l.nivel, l.texto))
+                .collect()
+        }
+
+        fn gafete(induccion: &str, vence: &str) -> DatosGafeteLeido {
+            DatosGafeteLeido {
+                cedula: Some("305450949".into()),
+                nombre: Some("Hazel Johanna Angulo Aguilar".into()),
+                empresa: Some("Sodexo".into()),
+                induccion: Some(fecha(induccion)),
+                vencimiento: Some(fecha(vence)),
+            }
+        }
+
+        #[test]
+        fn el_gafete_viejo_de_hazel() {
+            use NivelRevisionGafete::{Bien, Error};
+            assert_eq!(
+                lineas(&gafete("2025-06-19", "2026-06-19"), "2027-05-30"),
+                vec![
+                    (Bien, "Cédula: coincide.".into()),
+                    (Bien, "Nombre: coincide.".into()),
+                    (Bien, "Empresa: coincide.".into()),
+                    (
+                        Error,
+                        "Gafete PRAIND vencido el 19/06/2026: se guarda sólo como imagen \
+                         ilustrativa. Pida a la persona el gafete actualizado."
+                            .into()
+                    ),
+                ]
+            );
+        }
+
+        #[test]
+        fn un_gafete_mas_nuevo_dice_que_corrige_la_ficha() {
+            let todas = lineas(&gafete("2026-06-07", "2028-06-06"), "2027-05-30");
+            assert_eq!(
+                todas[3],
+                (
+                    NivelRevisionGafete::Bien,
+                    "Gafete más nuevo: vence el 06/06/2028. Al guardar, la ficha pasa de \
+                     30/05/2027 a 06/06/2028."
+                        .into()
+                )
+            );
+        }
+
+        #[test]
+        fn los_datos_distintos_dicen_que_dice_cada_lado() {
+            let leido = DatosGafeteLeido {
+                cedula: Some("116150109".into()),
+                empresa: Some("Componentes el Orbe".into()),
+                ..gafete("2026-01-27", "2027-01-27")
+            };
+            let todas = lineas(&leido, "2027-01-27");
+            assert_eq!(todas[0].0, NivelRevisionGafete::Error);
+            assert!(
+                todas[0]
+                    .1
+                    .contains("el gafete dice 116150109 y la ficha 305450949")
+            );
+            assert_eq!(
+                todas[2].1,
+                "Empresa distinta: el gafete dice «Componentes el Orbe» y la ficha «SODEXO»."
+            );
+            assert_eq!(todas[3].1, "Vigente hasta el 27/01/2027.");
+        }
     }
 }

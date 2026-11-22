@@ -59,6 +59,10 @@ pub struct CargaPraind {
     pub nombre_en_origen: Option<String>,
     pub bytes: u64,
     pub tipo_mime: String,
+    /// Sólo en la vista previa pedida con la imagen (el teléfono la lee con
+    /// OCR antes de guardar). No se manda a las pantallas.
+    #[serde(default, skip_serializing)]
+    pub imagen_base64: Option<String>,
 }
 
 /// Un carné bajado del Worker.
@@ -181,6 +185,7 @@ pub fn cargar_desde_qr(
     contratista_uuid: &str,
     enlace: &str,
     solo_previsualizar: bool,
+    incluir_imagen: bool,
 ) -> Result<CargaPraind, ErrorPraind> {
     let respuesta = CLIENTE
         .post(format!("{}/cargar-desde-qr", praind_url()))
@@ -189,6 +194,7 @@ pub fn cargar_desde_qr(
             "contratista_id": contratista_uuid,
             "enlace": enlace,
             "solo_previsualizar": solo_previsualizar,
+            "incluir_imagen": incluir_imagen,
         }))
         .send()
         .map_err(|error| error_de_red(&error))?;
@@ -327,12 +333,36 @@ pub fn cargar_carne_desde_qr(
         .uuid
         .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
     let carga = token()
-        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), solo_previsualizar))
+        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), solo_previsualizar, false))
         .map_err(|error| error.to_string())?;
     if let Some(clave) = carga.clave.as_deref() {
         anotar_clave(connection, contratista_id, clave)?;
     }
     Ok(carga)
+}
+
+/// Vista previa del gafete del QR **con su imagen**, sin guardar nada: el
+/// teléfono la lee con OCR para compararla con la ficha antes de guardar.
+pub fn previsualizar_carne_con_imagen(
+    connection: &rusqlite::Connection,
+    contratista_id: i64,
+    enlace: &str,
+    token: impl FnOnce() -> Result<String, ErrorPraind>,
+) -> Result<(CargaPraind, Vec<u8>), String> {
+    use base64::Engine as _;
+
+    let uuid = carne_de(connection, contratista_id)?
+        .uuid
+        .ok_or_else(|| SIN_SINCRONIZAR.to_string())?;
+    let mut carga = token()
+        .and_then(|token| cargar_desde_qr(&token, &uuid, enlace.trim(), true, true))
+        .map_err(|error| error.to_string())?;
+    let imagen = carga
+        .imagen_base64
+        .take()
+        .and_then(|texto| base64::engine::general_purpose::STANDARD.decode(texto).ok())
+        .ok_or_else(|| "La vista previa no trajo la imagen del gafete PRAIND.".to_string())?;
+    Ok((carga, imagen))
 }
 
 /// Carga la imagen del carné. Queda guardada en el equipo para verla sin
