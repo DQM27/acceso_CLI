@@ -85,6 +85,75 @@ Reportado ───────┤
 Un cabezal puede **entrar vacío o cargado** y **salir con otra carga o
 vacío**: la carga de ingreso y la de salida son independientes.
 
+## Diagramas
+
+Solo muestran reglas confirmadas. Lo pendiente (salida sin ingreso, una sola
+vía por persona) queda fuera hasta que se decida.
+
+### Estados del ciclo
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Esperando" as Esperando
+    state "Adentro" as Adentro
+    state "Salió" as Salio
+    state "Anulado" as Anulado
+
+    [*] --> Esperando: Reporte
+    Esperando --> Adentro: Ingreso (lo llaman)
+    Esperando --> Anulado: Anulación (motivo obligatorio)
+    Adentro --> Salio: Salida (vacío o con carga)
+    Salio --> [*]
+    Anulado --> [*]
+```
+
+### Reporte e ingreso
+
+```mermaid
+flowchart TD
+    A(["Chofer llega al puesto de control"]) --> B["Chofer: escanear cédula<br/>o buscar en el catálogo"]
+    B --> C{"¿Existe en el catálogo<br/>de contratistas?"}
+    C -- No --> C1["Alta de contratista<br/>(flujo que ya existe)"] --> B
+    C -- Sí --> D{"Validación de ingreso<br/>igual que contratistas (R20)"}
+    D -- Denegado --> X1(["No se registra:<br/>se muestra el motivo"])
+    D -- "Permitido o<br/>con advertencia" --> E{"¿El chofer tiene<br/>un ciclo abierto? (R15)"}
+    E -- Sí --> X2(["No se registra:<br/>ya está reportado o adentro"])
+    E -- No --> F["Placa del cabezal:<br/>escanear o digitar (R18)"]
+    F --> G{"¿El cabezal tiene<br/>un ciclo abierto? (R15)"}
+    G -- Sí --> X2
+    G -- No --> H["Unidad de arrastre:<br/>elegir Carreta o Furgón + placa (R5)"]
+    H --> I{"¿Viene vacío<br/>o cargado?"}
+    I -- Vacío --> J["SM / SD<br/>Origen = Predio (R8)"]
+    I -- Cargado --> K["SAP: escanear código de barras<br/>o digitar (D1, D2)"]
+    K --> L["Marchamo: número completo<br/>escanear o digitar (R12)"]
+    L --> M{"¿Mínimo alcanzado?<br/>Carreta ≥ 6 · Furgón ≥ 1 (R7)"}
+    M -- "No / agregar otro" --> L
+    M -- Sí --> N["Origen: catálogo sin Predio,<br/>u Otro con texto (R9)"]
+    J --> O[["Reporte registrado<br/>Estado: Esperando<br/>hora de reporte y guarda automáticos"]]
+    N --> O
+    O --> P{"¿Lo llaman?"}
+    P -- Entra --> Q[["Marcar ingreso<br/>Estado: Adentro<br/>hora de ingreso y guarda automáticos"]]
+    P -- "No entra" --> R[["Anular con motivo (R17, R21)<br/>Estado: Anulado"]]
+```
+
+### Salida
+
+```mermaid
+flowchart TD
+    S(["Lista de cabezales adentro"]) --> T["El guarda toca el cabezal"]
+    T --> U["Se reutilizan chofer, cabezal<br/>y unidad de arrastre (R13)"]
+    U --> V{"¿Sale vacío<br/>o con carga? (R14)"}
+    V -- Vacío --> W["SM / SD<br/>Destino = Predio<br/>Nada más que capturar"]
+    V -- "Con carga" --> Y["SAP: escanear código de barras<br/>o digitar (D1, D2)"]
+    Y --> Z["Marchamo: número completo<br/>escanear o digitar (R12)"]
+    Z --> Z1{"¿Mínimo alcanzado?<br/>según la unidad del ingreso (R7)"}
+    Z1 -- "No / agregar otro" --> Z
+    Z1 -- Sí --> Z2["Destino: catálogo sin Predio,<br/>u Otro con texto (R9)"]
+    W --> FIN[["Salida registrada<br/>Estado: Salió · ciclo cerrado<br/>hora y guarda automáticos"]]
+    Z2 --> FIN
+```
+
 ## Modelo conceptual
 
 ```
