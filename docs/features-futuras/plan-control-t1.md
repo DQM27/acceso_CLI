@@ -85,73 +85,135 @@ Reportado ───────┤
 Un cabezal puede **entrar vacío o cargado** y **salir con otra carga o
 vacío**: la carga de ingreso y la de salida son independientes.
 
-## Diagramas
+## Diagramas de flujo
 
-Solo muestran reglas confirmadas. Lo pendiente (salida sin ingreso, una sola
-vía por persona) queda fuera hasta que se decida.
-
-### Estados del ciclo
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    state "Esperando" as Esperando
-    state "Adentro" as Adentro
-    state "Salió" as Salio
-    state "Anulado" as Anulado
-
-    [*] --> Esperando: Reporte
-    Esperando --> Adentro: Ingreso (lo llaman)
-    Esperando --> Anulado: Anulación (motivo obligatorio)
-    Adentro --> Salio: Salida (vacío o con carga)
-    Salio --> [*]
-    Anulado --> [*]
-```
+Muestran reglas confirmadas y derivadas. Convención de colores: **rojo**,
+no se registra; **amarillo**, aviso que el guarda puede confirmar;
+**verde**, cambio de estado del ciclo; **borde punteado**, propuesta
+todavía no confirmada.
 
 ### Reporte e ingreso
 
 ```mermaid
 flowchart TD
-    A(["Chofer llega al puesto de control"]) --> B["Chofer: escanear cédula<br/>o buscar en el catálogo"]
-    B --> C{"¿Existe en el catálogo<br/>de contratistas?"}
-    C -- No --> C1["Alta de contratista<br/>(flujo que ya existe)"] --> B
-    C -- Sí --> D{"Validación de ingreso<br/>igual que contratistas (R20)"}
-    D -- Denegado --> X1(["No se registra:<br/>se muestra el motivo"])
-    D -- "Permitido o<br/>con advertencia" --> E{"¿El chofer tiene<br/>un ciclo abierto? (R15)"}
-    E -- Sí --> X2(["No se registra:<br/>ya está reportado o adentro"])
-    E -- No --> F["Placa del cabezal:<br/>escanear o digitar (R18)"]
-    F --> G{"¿El cabezal tiene<br/>un ciclo abierto? (R15)"}
-    G -- Sí --> X2
-    G -- No --> H["Unidad de arrastre:<br/>elegir Carreta o Furgón + placa (R5)"]
-    H --> I{"¿Viene vacío<br/>o cargado?"}
-    I -- Vacío --> J["SM / SD<br/>Origen = Predio (R8)"]
-    I -- Cargado --> K["SAP: escanear código de barras<br/>o digitar (D1, D2)"]
-    K --> L["Marchamo: número completo<br/>escanear o digitar (R12)"]
-    L --> M{"¿Mínimo alcanzado?<br/>Carreta ≥ 6 · Furgón ≥ 1 (R7)"}
-    M -- "No / agregar otro" --> L
-    M -- Sí --> N["Origen: catálogo sin Predio,<br/>u Otro con texto (R9)"]
-    J --> O[["Reporte registrado<br/>Estado: Esperando<br/>hora de reporte y guarda automáticos"]]
-    N --> O
-    O --> P{"¿Lo llaman?"}
-    P -- Entra --> Q[["Marcar ingreso<br/>Estado: Adentro<br/>hora de ingreso y guarda automáticos"]]
-    P -- "No entra" --> R[["Anular con motivo (R17, R21)<br/>Estado: Anulado"]]
+    classDef rechazo fill:#fde8e8,stroke:#c0392b,color:#7b241c
+    classDef aviso fill:#fff4d6,stroke:#b9770e,color:#7e5109
+    classDef estado fill:#e3f4e8,stroke:#1e8449,color:#145a32
+    classDef propuesta stroke-dasharray:6 4,stroke:#566573
+
+    subgraph F1["1 · Chofer"]
+        A(["El chofer se reporta<br/>en el puesto de control"]) --> B{"¿Cómo se identifica?"}
+        B -- "Escanear cédula" --> B1["OCR de cédula<br/>(lector existente)"]
+        B -- "Buscar" --> B2["Buscar por nombre o cédula<br/>en el catálogo de contratistas"]
+        B1 --> C{"¿La cédula está<br/>en el catálogo?"}
+        B2 --> C
+        C -- No --> C1["Alta de contratista<br/>con empresa existente (R3)"] --> C
+        C -- Sí --> D{"verificar_acceso<br/>misma regla que contratistas (R20)"}
+        D -- "Empresa inactiva · sin acceso ·<br/>PRAIND no registrado · vencido" --> X1(["Rechazado: se muestra el motivo<br/>no se crea ningún registro"]):::rechazo
+        D -- "PRAIND por vencer" --> D1["Aviso: vence en N días<br/>el guarda continúa"]:::aviso
+        D -- Permitido --> E{"¿El chofer tiene un ciclo<br/>abierto? (R15)"}
+        D1 --> E
+        E -- Sí --> X2(["Rechazado: ya está esperando o adentro<br/>se muestra ese ciclo"]):::rechazo
+    end
+
+    subgraph F2["2 · Vehículo"]
+        E -- No --> F{"Placa del cabezal (R4)"}
+        F -- Escanear --> F1x["Lector de placas de CR"]
+        F -- Digitar --> F2x["Teclado"]
+        F1x --> F3["Normalizar: mayúsculas,<br/>sin espacios ni guiones (D4)"]
+        F2x --> F3
+        F3 --> G{"¿El cabezal tiene un ciclo<br/>abierto? (R15)"}
+        G -- Sí --> X3(["Rechazado: el cabezal ya está<br/>esperando o adentro"]):::rechazo
+        G -- No --> H["Tipo de unidad de arrastre (R5)<br/>Carreta → mínimo 6 · Furgón → mínimo 1"]
+        H --> H1["Placa de la unidad<br/>escanear o digitar, normalizada (D4)"]
+    end
+
+    subgraph F3x["3 · Carga de ingreso"]
+        H1 --> I{"¿Viene vacío<br/>o cargado?"}
+        I -- Vacío --> J["SM / SD<br/>Origen = Predio (R8)<br/>no se pide nada más"]
+        I -- Cargado --> K{"SAP"}
+        K -- "Escanear código de barras (D2)" --> K3["SAP aceptado<br/>solo dígitos, sin longitud fija (R11)"]
+        K -- Digitar --> K1{"¿Empieza con 90?"}
+        K1 -- Sí --> K3
+        K1 -- No --> K2["Aviso: no parece el número<br/>del código de barras (D1)"]:::aviso
+        K2 -- "Confirma" --> K3
+        K2 -- "Corrige" --> K
+        K3 --> L{"Marchamo<br/>número completo (R12)"}
+        L -- Escanear --> L1["OCR de marchamo"]
+        L -- Digitar --> L2["Propone el número anterior;<br/>se corrigen los últimos dígitos (D6)"]
+        L1 --> L3{"¿Ya está en esta carga?<br/>compara sin ceros a la izquierda (D3, D7)"}
+        L2 --> L3
+        L3 -- Sí --> L4["Aviso: marchamo repetido"]:::aviso --> L
+        L3 -- No --> L5["Se agrega a la lista"]
+        L5 --> M{"¿Llegó al mínimo<br/>de la unidad? (R7)"}
+        M -- No --> L
+        M -- "Sí · agregar otro" --> L
+        M -- "Sí · listo" --> N{"Origen (R9)"}
+        N -- Catálogo --> N1["Lugar del catálogo<br/>(Predio no se ofrece con carga)"]
+        N -- Otro --> N2["Texto obligatorio"]
+    end
+
+    subgraph F4["4 · Confirmar, esperar e ingresar"]
+        J --> O["Resumen para revisar<br/>todo editable antes de guardar"]
+        N1 --> O
+        N2 --> O
+        O --> O0{"Al guardar: ¿sigue sin ciclo abierto<br/>el chofer y el cabezal? (R15)<br/>otro equipo pudo registrarlo"}
+        O0 -- No --> X4(["No se guarda: otro equipo<br/>lo registró primero"]):::rechazo
+        O0 -- Sí --> O1[["Ciclo creado · ESPERANDO<br/>hora de reporte + guarda (R1, R2)"]]:::estado
+        O1 --> O2["Aparece en la lista de reportados"]
+        O2 --> P{"¿Lo llaman?"}
+        P -- Entra --> P1{"verificar_acceso otra vez<br/>(el acceso pudo cambiar mientras esperaba)"}:::propuesta
+        P1 -- Denegado --> X5(["No entra: se muestra el motivo<br/>el ciclo sigue ESPERANDO para anularlo"]):::rechazo
+        P1 -- Permitido --> Q[["INGRESO · ADENTRO<br/>hora de ingreso + guarda (R2)"]]:::estado
+        P -- "No entra" --> R["Motivo: texto libre<br/>obligatorio (R21)"]
+        R --> R1[["ANULADO<br/>hora + guarda + motivo<br/>el registro queda (R17)"]]:::estado
+    end
 ```
 
 ### Salida
 
 ```mermaid
 flowchart TD
-    S(["Lista de cabezales adentro"]) --> T["El guarda toca el cabezal"]
-    T --> U["Se reutilizan chofer, cabezal<br/>y unidad de arrastre (R13)"]
-    U --> V{"¿Sale vacío<br/>o con carga? (R14)"}
-    V -- Vacío --> W["SM / SD<br/>Destino = Predio<br/>Nada más que capturar"]
-    V -- "Con carga" --> Y["SAP: escanear código de barras<br/>o digitar (D1, D2)"]
-    Y --> Z["Marchamo: número completo<br/>escanear o digitar (R12)"]
-    Z --> Z1{"¿Mínimo alcanzado?<br/>según la unidad del ingreso (R7)"}
-    Z1 -- "No / agregar otro" --> Z
-    Z1 -- Sí --> Z2["Destino: catálogo sin Predio,<br/>u Otro con texto (R9)"]
-    W --> FIN[["Salida registrada<br/>Estado: Salió · ciclo cerrado<br/>hora y guarda automáticos"]]
-    Z2 --> FIN
+    classDef rechazo fill:#fde8e8,stroke:#c0392b,color:#7b241c
+    classDef aviso fill:#fff4d6,stroke:#b9770e,color:#7e5109
+    classDef estado fill:#e3f4e8,stroke:#1e8449,color:#145a32
+
+    subgraph S1["1 · Elegir el ciclo"]
+        S(["Lista de cabezales adentro<br/>buscar por placa, chofer o SAP"]) --> T["El guarda elige el cabezal"]
+        T --> U["Datos reutilizados (R13):<br/>chofer · placa del cabezal ·<br/>tipo y placa de la unidad · hora de ingreso"]
+    end
+
+    subgraph S2["2 · Carga de salida"]
+        U --> V{"¿Sale vacío<br/>o con carga? (R14)"}
+        V -- Vacío --> W["SM / SD<br/>Destino = Predio (R8)<br/>nada más que capturar"]
+        V -- "Con carga" --> K{"SAP"}
+        K -- "Escanear código de barras (D2)" --> K3["SAP aceptado (R11)"]
+        K -- Digitar --> K1{"¿Empieza con 90?"}
+        K1 -- Sí --> K3
+        K1 -- No --> K2["Aviso (D1)"]:::aviso
+        K2 -- Confirma --> K3
+        K2 -- Corrige --> K
+        K3 --> L{"Marchamo<br/>número completo (R12)"}
+        L -- "Escanear / digitar (D6)" --> L3{"¿Ya está en esta carga?<br/>(D3, D7)"}
+        L3 -- Sí --> L4["Aviso: marchamo repetido"]:::aviso --> L
+        L3 -- No --> L5["Se agrega a la lista"]
+        L5 --> M{"¿Llegó al mínimo de la unidad<br/>registrada en el ingreso? (R7)"}
+        M -- No --> L
+        M -- "Sí · agregar otro" --> L
+        M -- "Sí · listo" --> N{"Destino (R9)"}
+        N -- Catálogo --> N1["Lugar del catálogo<br/>(Predio no se ofrece con carga)"]
+        N -- Otro --> N2["Texto obligatorio"]
+    end
+
+    subgraph S3["3 · Confirmar"]
+        W --> O["Resumen para revisar"]
+        N1 --> O
+        N2 --> O
+        O -- Cancelar --> S
+        O -- Guardar --> O0{"¿El ciclo sigue ADENTRO?<br/>otro equipo pudo cerrarlo"}
+        O0 -- No --> X1(["Aviso: ese cabezal ya salió<br/>se refresca la lista"]):::rechazo
+        O0 -- Sí --> FIN[["SALIÓ · ciclo cerrado<br/>hora de salida + guarda (R1)<br/>carga y destino de salida"]]:::estado
+    end
 ```
 
 ## Modelo conceptual
@@ -160,7 +222,8 @@ flowchart TD
 Carga = Vacía
       | Cargada { sap, marchamos: [al menos uno] }
 
-Lugar = Catalogo(lugar_id)          (Predio es una entrada fija del catálogo)
+Lugar = Predio                      (valor propio del dominio, no una fila editable)
+      | Catalogo(lugar_id)          (bodegas y plantas que administra el dueño)
       | Otro(texto)                 (caso puntual, texto obligatorio)
 
 Ciclo T1
@@ -223,14 +286,236 @@ Ciclo T1
 | D2 | El SAP se lee del **código de barras**, no por OCR: es exacto | El documento lo trae en código de barras |
 | D3 | El marchamo se guarda **tal como está impreso** (`0996362`) y se compara **sin ceros a la izquierda**, así `996362` y `0996362` son el mismo | La hoja anota sin el cero; el marchamo lo trae |
 | D4 | La placa se guarda **normalizada** (mayúsculas, sin espacios ni guiones), tanto la escaneada como la digitada, para que R15 compare igual `C-179371`, `c 179371` y `C179371`. Sin formato rígido, igual que R11 | R15 y R18 |
-| D5 | **Predio** es una entrada fija del catálogo (no se puede desactivar ni renombrar), porque R8 y R14 dependen de ella. Un movimiento con **Otro** siempre es cargado | R8, R9 |
+| D5 | **Predio** es un **valor propio del dominio** (`Lugar::Predio`), no una fila del catálogo: así R8 y R14 se verifican sin consultar la base y nadie puede desactivarlo ni renombrarlo. El catálogo solo tiene los demás lugares. Un movimiento con **Otro** siempre es cargado | R8, R9, R14 |
 | D6 | Al teclear varios marchamos, el siguiente campo puede **proponer el número anterior** para que solo se corrijan los últimos dígitos. Es ayuda de captura: el número se guarda completo igual | Los marchamos de una misma carga comparten el inicio (R12) |
+| D7 | Los marchamos de **una misma carga no se repiten** (comparados según D3) | Una lista de sellos físicos distintos |
+| D8 | Al guardar el reporte se **vuelve a comprobar R15**, y al guardar la salida, que el ciclo **siga adentro**: otro equipo pudo registrar el mismo cabezal o cerrar el ciclo mientras el guarda capturaba | Varios equipos por sitio (`docs/auditorias/revision-carreras-2026-10-04.md`) |
 
 ### A futuro (fuera de alcance por ahora)
 
 - **Cruce de envíos entre sitios**: lo que sale de un lugar debe llegar al
   otro con el mismo SAP y los mismos marchamos. Hoy T1 solo se usa en este
   sitio, así que no aplica todavía; el modelo no debe impedirlo.
+
+## Diagramas de reglas del dominio
+
+### Modelo del dominio e invariantes
+
+El ciclo T1 es el **agregado**: toda modificación entra por sus cuatro
+operaciones y nunca se edita una parte suelta. Las notas amarillas son las
+invariantes de cada pieza.
+
+```mermaid
+classDiagram
+    direction TB
+    class CicloT1 {
+        <<agregado>>
+        chofer : ChoferRef
+        cabezal : Placa
+        unidad : UnidadArrastre
+        reporte : Reporte
+        estado : EstadoCiclo
+        reportar()
+        marcar_ingreso()
+        anular(motivo)
+        registrar_salida(carga, destino)
+    }
+    class ChoferRef {
+        <<referencia>>
+        contratista_id
+        cedula
+        nombre
+        empresa
+    }
+    class Contratista {
+        <<catálogo existente>>
+        verificar_acceso()
+    }
+    class Reporte {
+        evento : Evento
+        carga : Carga
+        origen : Lugar
+    }
+    class Salida {
+        evento : Evento
+        carga : Carga
+        destino : Lugar
+    }
+    class Evento {
+        <<valor>>
+        fecha_hora : reloj de la aplicación
+        guarda : usuario de la sesión
+    }
+    class EstadoCiclo {
+        <<enumeración>>
+        Esperando
+        Anulado : evento, motivo
+        Adentro : ingreso
+        Salio : ingreso, salida
+    }
+    class Placa {
+        <<valor>>
+        texto normalizado
+    }
+    class UnidadArrastre {
+        <<valor>>
+        tipo : TipoUnidad
+        placa : Placa
+        minimo_marchamos()
+    }
+    class TipoUnidad {
+        <<enumeración>>
+        Carreta : mínimo 6
+        Furgon : mínimo 1
+    }
+    class Carga {
+        <<enumeración>>
+        Vacia
+        Cargada : sap, marchamos
+    }
+    class Sap {
+        <<valor>>
+        dígitos
+    }
+    class Marchamo {
+        <<valor>>
+        dígitos tal como impresos
+    }
+    class Lugar {
+        <<enumeración>>
+        Predio
+        Catalogo : lugar_id
+        Otro : texto
+    }
+
+    CicloT1 --> ChoferRef
+    ChoferRef ..> Contratista : R20
+    CicloT1 *-- Placa : cabezal
+    CicloT1 *-- UnidadArrastre
+    CicloT1 *-- Reporte
+    CicloT1 *-- EstadoCiclo
+    EstadoCiclo *-- Salida
+    UnidadArrastre *-- TipoUnidad
+    UnidadArrastre *-- Placa
+    Reporte *-- Evento
+    Reporte *-- Carga
+    Reporte *-- Lugar : origen
+    Salida *-- Evento
+    Salida *-- Carga
+    Salida *-- Lugar : destino
+    Carga *-- Sap
+    Carga "1" *-- "1..*" Marchamo
+
+    note for CicloT1 "Un solo ciclo abierto por placa de cabezal<br>y por cédula de chofer (R15)<br>Nunca se borra (R17)"
+    note for Placa "Mayúsculas, sin espacios ni guiones (D4)<br>Placa de CR, sin formato rígido (R18)"
+    note for Carga "Cargada: SAP + marchamos ≥ mínimo de la unidad (R6, R7)<br>Vacía ⇔ Predio (R8)"
+    note for Sap "Solo dígitos, no vacío, sin longitud fija (R11)<br>Aviso si no empieza con 90 (D1)"
+    note for Marchamo "Solo dígitos, no vacío (R11)<br>Iguales si coinciden sin ceros a la izquierda (D3)<br>Sin repetir en la misma carga (D7)"
+    note for Lugar "Predio es un valor del dominio, no una fila editable (D5)<br>Otro: texto obligatorio; nunca con carga vacía"
+```
+
+### Máquina de estados con sus condiciones
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "ESPERANDO" as Esperando
+    state "ADENTRO" as Adentro
+    state "SALIÓ" as Salio
+    state "ANULADO" as Anulado
+
+    [*] --> Esperando : reportar
+    Esperando --> Adentro : marcar_ingreso
+    Esperando --> Anulado : anular(motivo)
+    Adentro --> Salio : registrar_salida(carga, destino)
+    Salio --> [*]
+    Anulado --> [*]
+
+    note left of Esperando
+        reportar exige
+        · chofer en el catálogo (R3)
+        · verificar_acceso permitido (R20)
+        · sin ciclo abierto del chofer ni del cabezal (R15)
+        · unidad con tipo y placa (R5)
+        · carga y origen coherentes (R6, R7, R8, R9)
+        registra hora de reporte y guarda (R1, R2)
+    end note
+
+    note right of Adentro
+        marcar_ingreso exige
+        · estado ESPERANDO
+        registra hora de ingreso y guarda (R2)
+    end note
+
+    note right of Anulado
+        anular exige
+        · estado ESPERANDO
+        · motivo no vacío (R21)
+        el registro se conserva (R17)
+    end note
+
+    note right of Salio
+        registrar_salida exige
+        · estado ADENTRO
+        · carga y destino coherentes (R6, R7, R8, R9)
+        · reutiliza chofer, cabezal y unidad (R13)
+        registra hora de salida y guarda (R1)
+    end note
+```
+
+### Dónde se aplica cada regla
+
+Mismo criterio que `docs/arquitectura/reglas-compartidas.md`: las reglas de
+**criterio** (¿el dato es válido?) van al crate `reglas` para que valgan igual
+en todas partes; las que necesitan **ver datos** (ciclo abierto, catálogo)
+van donde están los datos; las de **autoridad**, en la sesión y la RLS.
+
+```mermaid
+flowchart TB
+    classDef pendiente stroke-dasharray:6 4,stroke:#566573,fill:#f4f6f7
+    classDef nota fill:#ffffff,stroke:#ffffff,color:#566573
+
+    subgraph P["Reglas puras (crate reglas)"]
+        p0["Valen igual en teléfono, escritorio,<br/>panel web y Edge Functions"]:::nota
+        p1["Placa: normalizar (D4)"]
+        p2["SAP: dígitos, no vacío (R11)<br/>aviso si no empieza con 90 (D1)"]
+        p3["Marchamo: dígitos, no vacío (R11)<br/>igualdad sin ceros (D3) · sin repetir en la carga (D7)"]
+        p4["Carga: Vacía | Cargada<br/>mínimo según la unidad (R6, R7)"]
+        p5["Lugar ↔ carga: Vacío ⇔ Predio (R8)<br/>Otro con texto (R9)"]
+        p6["Motivo de anulación no vacío (R21)"]
+    end
+
+    subgraph A["Agregado Ciclo T1 (núcleo)"]
+        a1["ESPERANDO → ADENTRO o ANULADO (R2, R17)"]
+        a2["ADENTRO → SALIÓ (R13, R14)"]
+        a3["La salida reutiliza chofer, cabezal y unidad (R13)"]
+        a4["Cada evento: hora del reloj + guarda de la sesión (R1)"]
+    end
+
+    subgraph D["Reglas con datos (SQLite y Postgres)"]
+        d1["Chofer en el catálogo + verificar_acceso (R3, R20)"]
+        d2["Un ciclo abierto por placa y por cédula (R15)<br/>índice único parcial en las dos bases"]
+        d3["Un ciclo nunca se borra (R17)<br/>apertura inmutable, cierre una sola vez"]
+        d4["Catálogo de lugares activo (R9)"]
+    end
+
+    subgraph U["Autoridad"]
+        u1["Guarda = usuario autenticado del equipo"]
+        u2["El catálogo de lugares lo administra el dueño"]
+    end
+
+    subgraph Q["Pendientes"]
+        q1["Una sola vía por persona"]:::pendiente
+        q2["Salida sin ingreso registrado"]:::pendiente
+        q3["Marchamo de un solo uso"]:::pendiente
+        q4["¿verificar_acceso otra vez al ingresar?"]:::pendiente
+    end
+
+    P -- "las usa" --> A
+    A -- "se persiste con" --> D
+    U -. "decide quién" .-> A
+    D ~~~ Q
+```
 
 ## Reutilización técnica
 
@@ -277,3 +562,12 @@ Ciclo T1
    Inclinación inicial: **B** para el olvido, más una **carga inicial** el día
    del arranque (registrar a los que ya están adentro, marcados como "previos
    al sistema").
+4. **¿Se repite `verificar_acceso` al marcar el ingreso?** Propuesta: sí. El
+   reporte es solo el aviso de llegada; el ingreso es la entrada real, y entre
+   uno y otro pudieron negarle el acceso o vencerle el PRAIND (por ejemplo, a
+   medianoche). Si se deniega, el ciclo sigue ESPERANDO para anularlo con su
+   motivo.
+5. **Marchamo de un solo uso:** ¿un mismo número de marchamo puede volver a
+   aparecer en otro ciclo? Si es de un solo uso, repetirlo delataría una
+   carga manipulada. Falta saber si los distintos tipos de marchamo
+   comparten numeración.
