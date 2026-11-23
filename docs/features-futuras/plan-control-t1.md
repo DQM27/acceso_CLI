@@ -143,6 +143,8 @@ Ciclo T1
 | R17 | Un reporte que no entra **se anula con un motivo**; nunca se borra |
 | R18 | Las placas (cabezal y unidad de arrastre) son **placas de Costa Rica**; se **escanean** con el lector de placas o se **digitan a mano** |
 | R19 | La exportación sigue **el mismo patrón** que las otras vistas de ingresos |
+| R20 | El chofer pasa **la misma validación de ingreso que cualquier contratista**: se reutiliza `domain::acceso::verificar_acceso` tal cual (empresa inactiva, acceso negado, PRAIND no registrado, vencido y próximo a vencer, según su tipo de ingreso y si es personal de ruta). No hay reglas propias de T1 para esto. El gafete no se pide (R16): esa exigencia vive fuera de `verificar_acceso`, en el registro de entrada de contratistas, así que no hay nada que desactivar |
+| R21 | El motivo de anulación es **texto libre y obligatorio** |
 
 ### Derivadas (revisar con el dueño)
 
@@ -173,17 +175,36 @@ Ciclo T1
 
 ## Pendientes
 
-1. **PRAIND del chofer:** "lo tienen o deberían tenerlo". Si está **vencido o
-   no lo tiene**, ¿se **bloquea** el reporte o solo se **advierte**? (Para un
-   contratista normal, vencido bloquea y próximo a vencer advierte.)
-2. **Acceso negado y empresa inactiva:** hoy todas las puertas respetan el
-   acceso negado de un contratista (`plan-veto-por-persona.md`). Propuesta:
-   T1 también, y también la empresa inactiva.
-3. **Persona adentro por una sola vía:** propuesta: un chofer con un ciclo T1
+1. **¿Tabla propia de choferes?** Recomendación: **no**. Mismo catálogo
+   `contratistas`, con una característica `es_chofer_t1` (mismo precedente
+   que "personal de ruta", que es una característica del contratista y no un
+   tipo de ingreso). La característica solo sirve para **filtrar**: el
+   buscador del reporte T1 muestra choferes y la pantalla Contratistas puede
+   separarlos. No cambia ninguna regla. Una tabla aparte obligaría a duplicar
+   todo lo que hoy cuelga de `contratistas`, y la misma persona podría quedar
+   en las dos tablas con datos distintos:
+   - `verificar_acceso` y la cédula única;
+   - el acceso negado en todas las puertas (`plan-veto-por-persona.md`);
+   - los carnés PRAIND;
+   - la búsqueda indexada, la sincronización, el panel web y el alta por
+     Edge Function.
+2. **Persona adentro por una sola vía:** propuesta: un chofer con un ciclo T1
    abierto no puede estar adentro a la vez como contratista, proveedor o por
    correo (T1 pasa a ser una vía más, igual que las otras).
-4. **Salida sin ingreso registrado:** ¿qué se hace con un cabezal que sale
-   sin haber entrado por la aplicación? Pasará al arrancar el módulo (los que
-   ya están adentro) y si un día se olvida el ingreso.
-5. **Motivo de anulación:** ¿texto libre o una lista corta (por ejemplo "se
-   retiró", "no fue autorizado", "error de registro") más "Otro"?
+3. **Salida sin ingreso registrado** (no debería pasar; analizar con calma).
+   Cuándo puede ocurrir:
+   - **Arranque del módulo:** los cabezales que ya están adentro ese día.
+   - **Olvido:** el guarda no registró el reporte o el ingreso.
+
+   Opciones:
+   - **A. Bloquear:** obliga a registrar ahora un reporte e ingreso con la
+     hora actual. El historial queda con una hora de ingreso falsa.
+   - **B. Salida marcada "sin ingreso":** se registra la salida con su hora
+     real y el ciclo queda marcado como anomalía, visible en historial y
+     exportación. No inventa horas.
+   - **C. Ingreso tardío declarado:** el guarda escribe la hora en que entró,
+     marcada como declarada. Contradice R1 (la hora no se edita).
+
+   Inclinación inicial: **B** para el olvido, más una **carga inicial** el día
+   del arranque (registrar a los que ya están adentro, marcados como "previos
+   al sistema").
