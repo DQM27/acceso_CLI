@@ -20,16 +20,18 @@ const MAX_RESULTADOS = 4;
 
 type ModoBusqueda = "nombre" | "gafete";
 
+// Gafete primero y por defecto: en la portería se da salida mucho más por
+// el número de gafete que por el nombre (pedido del usuario 2026-11-26).
 const OPCIONES_MODO: OpcionSegmentada<ModoBusqueda>[] = [
-  { valor: "nombre", Icono: UserSearch, titulo: "Nombre o cédula" },
   { valor: "gafete", Icono: IdCard, titulo: "Gafete" },
+  { valor: "nombre", Icono: UserSearch, titulo: "Nombre o cédula" },
 ];
 
 type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: ActivoUnificado };
 
 /**
  * Un solo modal para las dos formas de encontrar a quién dar salida — un
- * selector "Nombre o cédula / Gafete" sobre el buscador cambia cómo se interpreta el mismo campo de
+ * selector "Gafete / Nombre o cédula" (gafete por defecto) sobre el buscador cambia cómo se interpreta el mismo campo de
  * texto, en vez de mantener dos modales casi idénticos (ambos ya
  * necesitaban la misma lista de activos, el mismo "queda abierto tras
  * confirmar", el mismo foco de vuelta al buscador):
@@ -57,7 +59,7 @@ export default function SalidaModal({
   // Un número de gafete puede tenerlo más de uno (conjuntos de gafetes
   // distintos): a cuál se le da la salida, por número, cuando hay varios.
   const [elecciones, setElecciones] = useState<Record<number, string>>({});
-  const [modoGafete, setModoGafete] = useState(false);
+  const [modoGafete, setModoGafete] = useState(true);
   const [texto, setTexto] = useState("");
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [mensaje, setMensaje] = useState<string | null>(null);

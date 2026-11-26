@@ -16,22 +16,14 @@ Cualquier usuario con sesión abierta en el escritorio.
 - O en **Activos**, botón **Registrar salida (Ctrl+S)**.
 
 La ventana **Salida** tiene dos formas de buscar, con los botones de
-**Buscar por**: **Nombre o cédula** y **Gafete**.
-
-## Pasos — por nombre o cédula (una persona)
-
-1. Pulse **Ctrl+S**.
-2. Con **Nombre o cédula** elegido, escriba la cédula o el nombre.
-3. Elija a la persona de la lista (flechas y **Enter**, o clic).
-4. Pulse **Registrar salida**.
-5. Verá **"✓ Salida registrada — (nombre)"**. La ventana queda lista para
-   la siguiente persona. Para cerrarla, pulse **Esc**.
+**Buscar por**: **Gafete** (viene elegida al abrir) y **Nombre o cédula**.
 
 ## Pasos — por gafete (una o varias personas a la vez)
 
-Útil cuando sale un grupo y le devuelven los gafetes.
+Es la forma más usada; también sirve cuando sale un grupo y le devuelven
+los gafetes.
 
-1. Pulse **Ctrl+S** y elija **Gafete**.
+1. Pulse **Ctrl+S**: ya viene elegido **Gafete**.
 2. Escriba los números separados por coma, por ejemplo **2, 25, 85**.
 3. Debajo aparece a quién corresponde cada gafete.
 4. Si dice **"N personas tienen este gafete — elija a quién:"**, pulse el
@@ -40,6 +32,15 @@ La ventana **Salida** tiene dos formas de buscar, con los botones de
    son distintos.
 5. Pulse **Registrar salida** (o **Enter**). Salen todos de una vez.
 6. Verá **"✓ Salida registrada — (nombres)"**.
+
+## Pasos — por nombre o cédula (una persona)
+
+1. Pulse **Ctrl+S** y elija **Nombre o cédula**.
+2. Escriba la cédula o el nombre.
+3. Elija a la persona de la lista (flechas y **Enter**, o clic).
+4. Pulse **Registrar salida**.
+5. Verá **"✓ Salida registrada — (nombre)"**. La ventana queda lista para
+   la siguiente persona. Para cerrarla, pulse **Esc**.
 
 ## Desde la tabla de Activos
 
