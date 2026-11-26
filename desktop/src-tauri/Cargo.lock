@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "control-acceso-desktop"
-version = "1.10.17"
+version = "1.10.18"
 dependencies = [
  "chrono",
  "control_acceso",
