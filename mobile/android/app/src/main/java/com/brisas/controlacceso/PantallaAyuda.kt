@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -80,6 +82,7 @@ fun PantallaAyuda(onVolver: () -> Unit) {
 
     // Atrás del sistema, con su gesto, desanda igual que "‹ Volver".
     PantallaConGestoVolver(onVolver = ::volver) {
+      Box(modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = actual,
             modifier = Modifier.fillMaxSize(),
@@ -92,6 +95,9 @@ fun PantallaAyuda(onVolver: () -> Unit) {
                 TemaAyuda(destino, onAbrir = ::abrir, onVolver = ::volver)
             }
         }
+        // La nieve de temporada cae por el encabezado (ver `NieveNavidena.kt`).
+        NieveNavidena(altoBarra = ALTO_ENCABEZADO_NIEVE, modifier = Modifier.align(Alignment.TopCenter))
+      }
     }
 }
 

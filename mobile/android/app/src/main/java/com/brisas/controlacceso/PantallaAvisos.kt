@@ -74,6 +74,8 @@ fun PantallaAvisos(
     var porBorrar by rememberSaveable { mutableStateOf<String?>(null) }
 
     PantallaConGestoVolver(onVolver = onVolver) {
+    // La nieve de temporada cae por el encabezado (ver `NieveNavidena.kt`).
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         // Como iOS: "‹ Volver" chico arriba y el título grande debajo, con la
         // acción de la pantalla a su derecha.
@@ -153,6 +155,8 @@ fun PantallaAvisos(
                 }
             }
         }
+    }
+    NieveNavidena(altoBarra = ALTO_ENCABEZADO_NIEVE, modifier = Modifier.align(Alignment.TopCenter))
     }
     }
 

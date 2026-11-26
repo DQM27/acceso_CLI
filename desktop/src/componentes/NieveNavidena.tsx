@@ -11,7 +11,7 @@ import {
 // (`poner` en el parche de fines de noviembre, `quitar` en el de
 // principios de enero), sin fechas en el código (pedido del usuario
 // 2026-10-29: un parche que se pone y se quita, nada más).
-export const NAVIDAD_ACTIVA = false;
+export const NAVIDAD_ACTIVA = true;
 
 /** ~30 cuadros por segundo (ver `dibujar`). */
 const MS_ENTRE_CUADROS = 1000 / 30;

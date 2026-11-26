@@ -102,6 +102,15 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(top = if (compacto) 10.dp else 18.dp),
             )
+            // En temporada, un saludo bajo el título (pedido del usuario 2026-11-26).
+            SALUDO_DE_TEMPORADA?.let { saludo ->
+                Text(
+                    saludo,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             // Unidad con que quedó registrado el teléfono: si lo registraron
             // en la unidad equivocada, se ve antes de entrar.
             if (textoUnidad != null) {
