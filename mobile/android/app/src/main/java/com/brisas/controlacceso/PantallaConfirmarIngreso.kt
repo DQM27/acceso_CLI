@@ -308,16 +308,19 @@ internal fun HojaIngreso(
                     // mínimo de un botón dejaba una franja vacía hasta el
                     // selector de abajo. El relleno vertical agranda la zona
                     // que se toca sin separar más las líneas.
-                    val accionCarne: Pair<String, () -> Unit>? = when {
-                        tieneCarne -> "Ver gafete PRAIND" to onVerCarne
-                        puedeCargarCarne -> "Cargar gafete PRAIND" to onCargarCarne
+                    // "Cargar gafete PRAIND" en rojo: le falta el gafete y
+                    // tiene que saltar a la vista (pedido del usuario
+                    // 2026-11-26). "Ver gafete PRAIND" sigue en azul.
+                    val accionCarne: Triple<String, () -> Unit, Boolean>? = when {
+                        tieneCarne -> Triple("Ver gafete PRAIND", onVerCarne, false)
+                        puedeCargarCarne -> Triple("Cargar gafete PRAIND", onCargarCarne, true)
                         else -> null
                     }
-                    accionCarne?.let { (texto, accion) ->
+                    accionCarne?.let { (texto, accion, falta) ->
                         Text(
                             texto,
                             style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (falta) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .padding(top = 2.dp)
                                 .clickable(role = Role.Button, onClick = accion)
