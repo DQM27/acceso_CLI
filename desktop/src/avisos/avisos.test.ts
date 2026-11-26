@@ -12,6 +12,7 @@ const sonner = vi.hoisted(() => ({
 vi.mock("sonner", () => ({ toast: sonner }));
 
 import { avisos } from "./avisos";
+import { textoDeTemporada } from "../componentes/temporada";
 import { duracionDe, textoDeError, tituloPorDefecto } from "./avisos.logica";
 
 describe("avisos.logica", () => {
@@ -52,7 +53,8 @@ describe("avisos", () => {
     avisos.exito("Ingreso registrado.");
     expect(sonner.success).toHaveBeenCalledWith(
       "Listo",
-      expect.objectContaining({ description: "Ingreso registrado.", duration: 4500 }),
+      // En temporada, con el copo (`componentes/temporada.ts`).
+      expect.objectContaining({ description: textoDeTemporada("Ingreso registrado."), duration: 4500 }),
     );
   });
 

@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { duracionDe, textoDeError, tituloPorDefecto } from "./avisos.logica";
+import { textoDeTemporada } from "../componentes/temporada";
 import type { TipoAviso } from "./avisos.logica";
 
 /**
@@ -31,7 +32,8 @@ function mostrar(tipo: TipoAviso, mensaje: string, opciones: OpcionesAviso = {})
   const persistente = opciones.persistente ?? false;
   const configuracion = {
     id: opciones.id,
-    description: mensaje,
+    // En temporada, los éxitos llevan un copo (igual que en el teléfono).
+    description: tipo === "exito" ? textoDeTemporada(mensaje) : mensaje,
     duration: duracionDe(tipo, persistente),
     closeButton: persistente,
     action: opciones.accion && {
@@ -84,7 +86,8 @@ export const avisos = {
   progreso<T>(promesa: Promise<T>, textos: TextosProgreso<T>): void {
     toast.promise(promesa, {
       loading: textos.cargando,
-      success: textos.exito,
+      success: (resultado: T) =>
+        textoDeTemporada(typeof textos.exito === "function" ? textos.exito(resultado) : textos.exito),
       error: (causa: unknown) => (textos.error ? textos.error(causa) : textoDeError(causa)),
     });
   },

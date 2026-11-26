@@ -67,8 +67,9 @@ export default function NieveNavidena() {
       const alto = window.innerHeight;
       const segundos = (ahora - inicio) / 1000;
       contexto.clearRect(0, 0, ancho, alto);
-      contexto.fillStyle = oscuro ? "#ffffff" : "#8fa3bf";
-      const alfaTema = oscuro ? 0.5 : 0.6;
+      // Más presente desde 2026-11-26: en claro casi no se notaba.
+      contexto.fillStyle = oscuro ? "#ffffff" : "#7088aa";
+      const alfaTema = oscuro ? 0.65 : 0.8;
       for (const copo of copos) {
         const { x, y } = posicionCopo(copo, segundos, ancho, alto);
         contexto.globalAlpha = copo.alfa * alfaTema;
