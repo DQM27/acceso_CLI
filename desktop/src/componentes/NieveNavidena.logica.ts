@@ -36,7 +36,7 @@ export function crearCopos(cantidad: number, semilla = 1225): Copo[] {
     x: azar(),
     fase: azar(),
     velocidad: 1 / (25 + azar() * 20),
-    radio: 1 + azar() * 1.8,
+    radio: 1.2 + azar() * 2.2,
     alfa: 0.35 + azar() * 0.65,
     vaivenAncho: 0.004 + azar() * 0.01,
     vaivenRitmo: 0.3 + azar() * 0.5,
@@ -44,9 +44,10 @@ export function crearCopos(cantidad: number, semilla = 1225): Copo[] {
 }
 
 // Cuántos copos para una ventana de `ancho` x `alto` px CSS: la misma
-// densidad en cualquier tamaño, con techo para monitores grandes.
+// densidad en cualquier tamaño, con techo para monitores grandes. Más
+// densa desde 2026-11-26 (pedido del usuario, igual que en el teléfono).
 export function cantidadCopos(ancho: number, alto: number): number {
-  return Math.min(140, Math.max(20, Math.round((ancho * alto) / 16000)));
+  return Math.min(190, Math.max(25, Math.round((ancho * alto) / 11000)));
 }
 
 // Dónde está el copo a los `segundos`, en px CSS. Arranca un poco por

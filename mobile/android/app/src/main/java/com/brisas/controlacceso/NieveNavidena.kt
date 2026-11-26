@@ -27,7 +27,7 @@ import kotlin.random.Random
 /// (`poner` en el parche de fines de noviembre, `quitar` en el de
 /// principios de enero), sin fechas en el código (pedido del usuario
 /// 2026-10-29: un parche que se pone y se quita, nada más).
-internal const val NAVIDAD_ACTIVA = false
+internal const val NAVIDAD_ACTIVA = true
 
 /// Nieve muy sutil sobre la barra de arriba (pedido del usuario
 /// 2026-10-29): los copos caen por la franja del título y los
@@ -54,13 +54,14 @@ internal fun NieveNavidena(altoBarra: Dp? = null, modifier: Modifier = Modifier)
     if (animacionesApagadas) return
 
     val oscuro = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    // En claro la nieve blanca no se ve: gris azulado tenue.
-    val color = if (oscuro) Color.White else Color(0xFF8FA3BF)
-    val alfaMaxima = if (oscuro) 0.55f else 0.6f
+    // En claro la nieve blanca no se ve: gris azulado. Más presente desde
+    // 2026-11-26 (pedido del usuario): en claro casi no se notaba.
+    val color = if (oscuro) Color.White else Color(0xFF7088AA)
+    val alfaMaxima = if (oscuro) 0.7f else 0.8f
     val pantallaCompleta = altoBarra == null
     val copos = remember(pantallaCompleta) {
-        if (pantallaCompleta) crearCopos(cantidad = 45, segundosMin = 22f, segundosMax = 40f)
-        else crearCopos(cantidad = 22, segundosMin = 9f, segundosMax = 18f)
+        if (pantallaCompleta) crearCopos(cantidad = 65, segundosMin = 22f, segundosMax = 40f)
+        else crearCopos(cantidad = 32, segundosMin = 9f, segundosMax = 18f)
     }
     val segundos = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
@@ -119,7 +120,7 @@ private fun crearCopos(cantidad: Int, segundosMin: Float, segundosMax: Float): L
             x = azar.nextFloat(),
             fase = azar.nextFloat(),
             velocidad = 1f / (segundosMin + azar.nextFloat() * (segundosMax - segundosMin)),
-            radio = 1f + azar.nextFloat() * 1.6f,
+            radio = 1.2f + azar.nextFloat() * 2f,
             alfa = 0.35f + azar.nextFloat() * 0.65f,
             vaivenAncho = 0.005f + azar.nextFloat() * 0.015f,
             vaivenRitmo = 0.4f + azar.nextFloat() * 0.6f,
@@ -128,6 +129,18 @@ private fun crearCopos(cantidad: Int, segundosMin: Float, segundosMax: Float): L
 }
 
 private const val ENTRADA_PX = 12f
+
+/// Alto del encabezado de las pantallas que se abren encima ("‹ Volver" y el
+/// título grande): por ahí cae la nieve en Avisos y Ayuda.
+internal val ALTO_ENCABEZADO_NIEVE = 96.dp
+
+/// El texto de una confirmación con un copo al final, sólo en temporada
+/// ("Ingreso registrado · Ana Mora ❄️").
+internal fun textoDeTemporada(texto: String): String = if (NAVIDAD_ACTIVA) "$texto ❄️" else texto
+
+/// El saludo de temporada bajo el título del inicio de sesión; `null` fuera
+/// de temporada.
+internal val SALUDO_DE_TEMPORADA: String? get() = if (NAVIDAD_ACTIVA) "¡Felices fiestas!" else null
 
 /// Cuánto baja la nieve por debajo de la barra: apenas el borde de arriba de
 /// la primera tarjeta.

@@ -49,8 +49,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 64
-        versionName = "1.8.19"
+        versionCode = 65
+        versionName = "1.8.20"
 
         buildConfigField("String", "DSN_ERRORES", "\"$dsnErrores\"")
 

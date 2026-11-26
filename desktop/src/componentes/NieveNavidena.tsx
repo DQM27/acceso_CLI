@@ -11,7 +11,7 @@ import {
 // (`poner` en el parche de fines de noviembre, `quitar` en el de
 // principios de enero), sin fechas en el código (pedido del usuario
 // 2026-10-29: un parche que se pone y se quita, nada más).
-export const NAVIDAD_ACTIVA = false;
+export const NAVIDAD_ACTIVA = true;
 
 /** ~30 cuadros por segundo (ver `dibujar`). */
 const MS_ENTRE_CUADROS = 1000 / 30;
@@ -67,8 +67,9 @@ export default function NieveNavidena() {
       const alto = window.innerHeight;
       const segundos = (ahora - inicio) / 1000;
       contexto.clearRect(0, 0, ancho, alto);
-      contexto.fillStyle = oscuro ? "#ffffff" : "#8fa3bf";
-      const alfaTema = oscuro ? 0.5 : 0.6;
+      // Más presente desde 2026-11-26: en claro casi no se notaba.
+      contexto.fillStyle = oscuro ? "#ffffff" : "#7088aa";
+      const alfaTema = oscuro ? 0.65 : 0.8;
       for (const copo of copos) {
         const { x, y } = posicionCopo(copo, segundos, ancho, alto);
         contexto.globalAlpha = copo.alfa * alfaTema;

@@ -7,6 +7,7 @@ import { cambiarPasswordSupabase, esErrorLogin, login } from "../api";
 import type { UsuarioSesion } from "../api";
 import { esquemaLogin, esquemaCambioObligatorio } from "./Login.logica";
 import UnidadOperativa from "../componentes/UnidadOperativa";
+import { SALUDO_DE_TEMPORADA } from "../componentes/temporada";
 import { useVersionApp } from "../componentes/useVersionApp";
 
 type ValoresLogin = z.infer<typeof esquemaLogin>;
@@ -179,6 +180,10 @@ export default function Login({
             <h1 className="text-xl font-normal text-texto">
               Acceso <strong className="font-bold">Escritorio</strong>
             </h1>
+            {/* En temporada, un saludo bajo el título (pedido del usuario 2026-11-26). */}
+            {SALUDO_DE_TEMPORADA && (
+              <p className="text-sm font-semibold text-error">{SALUDO_DE_TEMPORADA}</p>
+            )}
             <UnidadOperativa className="login-unidad" />
           </div>
         </div>

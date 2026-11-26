@@ -13,9 +13,9 @@ describe("NieveNavidena.logica", () => {
   });
 
   it("la cantidad sigue el tamaño de la ventana, con piso y techo", () => {
-    expect(cantidadCopos(1920, 1080)).toBe(130);
-    expect(cantidadCopos(200, 200)).toBe(20);
-    expect(cantidadCopos(7680, 4320)).toBe(140);
+    expect(cantidadCopos(1920, 1080)).toBe(189);
+    expect(cantidadCopos(200, 200)).toBe(25);
+    expect(cantidadCopos(7680, 4320)).toBe(190);
   });
 
   it("cada copo cae dentro de la ventana y vuelve a empezar arriba", () => {

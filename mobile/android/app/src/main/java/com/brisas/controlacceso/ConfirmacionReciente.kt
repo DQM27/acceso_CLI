@@ -49,7 +49,7 @@ internal fun ReenviarConfirmaciones(avisos: AvisosBreves, vararg confirmaciones:
             LaunchedEffect(actual?.id) {
                 if (actual == null) return@LaunchedEffect
                 hapticos(Haptico.CONFIRMAR)
-                avisos.mostrar(actual.texto, TipoEstado.EXITO)
+                avisos.mostrar(textoDeTemporada(actual.texto), TipoEstado.EXITO)
                 confirmacion.ocultar(actual.id)
             }
         }
